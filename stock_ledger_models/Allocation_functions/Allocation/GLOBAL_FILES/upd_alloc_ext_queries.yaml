@@ -1,0 +1,61 @@
+update_alloc_ext:
+  Q_sel_alloc_rule: "select * from alloc_rule where alloc_no=%s;"
+  
+  Q_sel_date_status: "SELECT release_date from alloc_head where alloc_no=%s;"
+          
+  Q_upd_date: "update alloc_item_source_dtl set release_date=%s where alloc_no=%s;"
+
+  Q_chck_calc_data: " SELECT 1 chck from alloc_calc_source_temp WHERE alloc_no = %s; "
+          
+  Q_upd_date_itemloc: "UPDATE alloc_item_location
+                         SET release_date = GREATEST(%s,release_date)
+                       WHERE alloc_no =%s
+                         AND release_date IS NOT NULL;"
+  
+  Q_upd_alc_loc: "UPDATE alloc_location al SET release_date = NULL
+                WHERE EXISTS (SELECT 1
+                                FROM alloc_loc_group_detail algt
+                               WHERE alloc_no = %s
+                                 AND al.loc_group_id=algt.loc_group_id)
+                         AND release_date IS NOT NULL 
+                         AND release_date <= %s;"
+                    
+  Q_merge: "INSERT INTO alloc_head (ALLOC_NO
+                         ,ALLOC_CRITERIA
+                         ,STATUS
+                         ,ALLOC_DESC
+                         ,ALLOC_TYPE
+                         ,ALLOC_LEVEL
+                         ,CONTEXT
+                         ,PROMOTION
+                         ,RELEASE_DATE
+                         ,RECALC_IND
+                         ,CREATE_ID
+                         ,CREATE_DATETIME) 
+                VALUES (%s
+                        ,%s
+                        ,%s
+                        ,%s
+                        ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s)
+                ON DUPLICATE KEY UPDATE 
+                       alloc_criteria = COALESCE(%s,alloc_criteria),
+                       context        = COALESCE(%s,context),
+                       alloc_desc     = COALESCE(%s,alloc_desc),
+                       promotion      = COALESCE(%s,promotion),
+                       alloc_type     = COALESCE(%s,alloc_type),
+                       alloc_level    = COALESCE(%s,alloc_level),
+                       release_date   = COALESCE(%s,release_date),
+                       last_update_datetime = current_timestamp(),
+                       recalc_ind           = CASE WHEN release_date <> %s
+                  AND recalc_ind = 'N'
+                  AND status <> 'APV' 
+                    THEN  'Y'
+                    ELSE coalesce(%s,recalc_ind) 
+                    END;"

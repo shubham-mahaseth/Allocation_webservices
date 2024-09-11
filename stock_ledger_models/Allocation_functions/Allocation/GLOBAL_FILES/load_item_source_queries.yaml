@@ -1,0 +1,264 @@
+load_item_source:
+  Q_sel_record: "select * from alloc_rule where alloc_no=%s;"
+
+  Q_alloc_level: "select alloc_level from alloc_head where alloc_no=%s;"
+
+  Q_del_alloc_item_src_tmp: "DELETE FROM alloc_like_item_source alis
+                            WHERE EXISTS (SELECT 1
+                                            FROM alloc_item_source_dtl aisd
+                                            WHERE aisd.alloc_no=%s
+                                              AND aisd.alloc_no=alis.alloc_no
+                                              AND aisd.item_source_id =alis.item_source_id
+                                   AND NOT EXISTS (SELECT 1
+                                             FROM alloc_itm_search_dtl tmp
+                                            WHERE tmp.alloc_no =%s
+                                              AND tmp.alloc_no = aisd.alloc_no
+                                              AND tmp.alloc_no = alis.alloc_no
+                                              AND tmp.item = aisd.item_id
+                                              AND ifnull(tmp.diff_id,'$') = ifnull(aisd.diff1_id,'$')
+                                              AND tmp.loc = aisd.wh_id
+                                              AND ifnull(tmp.ref_1, '$') = ifnull(aisd.order_no, '$')
+                                              AND tmp.sel_ind = 'Y')); "
+
+  Q_del_item_source: "with it as (SELECT it.*
+                           FROM alloc_item_source_dtl  it
+                          WHERE     it.alloc_no = %s)
+                         DELETE  FROM alloc_item_source_dtl
+                          WHERE item_source_id IN
+                        (SELECT item_source_id
+                           FROM it
+                          WHERE it.alloc_no = %s
+                                AND NOT EXISTS
+                                        (SELECT 1
+                                           FROM alloc_itm_search_dtl
+                                                tmp
+                                          WHERE     tmp.alloc_no =
+                                                    it.alloc_no
+                                                AND tmp.item = it.item_id
+                                                AND COALESCE(tmp.diff_id,'$') = COALESCE(it.diff1_id,'$')
+                                                AND tmp.loc = it.wh_id
+                                                AND COALESCE(tmp.ref_1, '$') =
+                                                    COALESCE(it.order_no, '$')
+                                                AND tmp.sel_ind = 'Y'));"
+
+  Q_merge: "WITH src AS
+         (SELECT tmp.alloc_no
+                ,tmp.item
+                ,tmp.diff_id
+                ,tmp.loc
+                ,tmp.ref_1
+                ,max(tmp.holdback_qty) holdback_qty
+                ,max(case when tmp.holdback_type='U' then 'N' else tmp.holdback_type END) as holdback_type
+                ,max(tmp.som_qty) som_qty
+                ,max(tmp.avail_qty) available_qty
+                ,max(tmp.som_type) calc_multiple
+            FROM alloc_itm_search_dtl tmp
+           WHERE alloc_no = %s 
+             AND tmp.sel_ind = 'Y'
+           GROUP BY tmp.alloc_no,
+                      tmp.item,
+                      tmp.diff_id,
+                      tmp.loc,
+                      tmp.ref_1)
+          UPDATE alloc_item_source_dtl tgt,src SET
+                tgt.hold_back_value = src.holdback_qty,
+                tgt.hold_back_pct_flag = CASE WHEN src.holdback_type = 'P'
+                                              THEN 'Y'
+                                              WHEN src.holdback_type = 'N'
+                                              THEN 'N'
+                                         END,
+                tgt.som_qty = src.som_qty,
+                tgt.avail_qty = src.available_qty,
+                tgt.calc_multiple = src.calc_multiple
+           WHERE src.alloc_no = tgt.alloc_no
+             AND src.item = tgt.item_id
+             AND ifnull(src.diff_id,'$') = ifnull(tgt.diff1_id,'$')  
+             AND src.loc = tgt.wh_id
+             AND ifnull (src.ref_1, '$') = ifnull (tgt.order_no, '$')
+             AND ((ifnull (tgt.hold_back_value, 99999) <>
+                  ifnull (src.holdback_qty, 99999))
+              OR (ifnull (tgt.hold_back_pct_flag, '$') <>
+                 ifnull (src.holdback_type, '$'))
+              OR (ifnull (tgt.avail_qty, -99999999999) <>
+                 ifnull (src.available_qty, -99999999999))
+              OR (ifnull (tgt.calc_multiple, '$') <>
+                 ifnull (src.calc_multiple, '$'))
+              OR (ifnull (tgt.som_qty, 999999) <>
+                 ifnull (src.som_qty, 999999)));"
+
+  Q_ins_item_source: "INSERT INTO alloc_item_source_dtl(ALLOC_NO
+                                                     ,ITEM_ID
+                                                     ,DEFAULT_LEVEL
+                                                     ,PACK_IND
+                                                     ,HOLD_BACK_PCT_FLAG
+                                                     ,HOLD_BACK_VALUE
+                                                     ,SOM_QTY
+                                                     ,AVAIL_QTY
+                                                     ,RELEASE_DATE
+                                                     ,SOURCE_TYPE
+                                                     ,ORDER_NO
+                                                     ,WH_ID
+                                                     ,DIFF1_ID
+                                                     ,DIFF1_DESC
+                                                     ,DIFF2_ID
+                                                     ,INNER_SIZE
+                                                     ,CASE_SIZE
+                                                     ,PALLET
+                                                     ,CALC_MULTIPLE
+                                                     ,ON_HAND_QTY
+                                                     ,FUTURE_ON_HAND_QTY
+                                                     ,MIN_AVAIL_QTY
+                                                     ,THRESHOLD_PERCENT)
+                    SELECT  tmp.alloc_no,
+                   tmp.item_id,
+                   tmp.default_level,
+                   tmp.pack_ind,
+                   tmp.hold_back_pct_flag,
+                   tmp.hold_back_value,
+                   tmp.som_qty,
+                   tmp.avail_qty,
+                   tmp.release_date,
+                   tmp.source_type,
+                   tmp.order_no,
+                   tmp.wh_id,
+                   tmp.diff1_id,
+                   tmp.diff1_desc,
+                   tmp.diff2_id,
+                   tmp.inner_size,
+                   tmp.case_size,
+                   tmp.pallet,
+                   tmp.calc_multiple,
+                   tmp.on_hand_qty,
+                   tmp.future_on_hand_qty,
+                   tmp.min_avail_qty,
+                   tmp.threshold_percent
+              FROM (SELECT
+                           %s               alloc_no,      
+                           tmp.item                 item_id,    
+                           1                        default_level,
+                           CASE
+                               WHEN %s='T'
+                               THEN 'N'
+                               ELSE tmp.pack_ind
+                           END as pack_ind,
+                           CASE WHEN MAX(holdback_type) = 'P'
+                                THEN 'Y'
+                                WHEN MAX(holdback_type) = 'U'
+                                THEN 'N'
+                           END hold_back_pct_flag,
+                           MAX(tmp.holdback_qty)         hold_back_value,
+                           MAX(tmp.som_qty)              som_qty,      
+                           MAX(tmp.avail_qty)        avail_qty,    
+                           curdate()                release_date,
+                           tmp.alloc_criteria                     source_type,
+                           tmp.ref_1               order_no,      
+                           tmp.loc                  wh_id,            
+                           tmp.diff_id              diff1_id,      
+                           NULL                     diff1_desc,  
+                           NULL                     diff2_id,    
+                           MAX(tmp.inner_size) inner_size,                    
+                           MAX(tmp.case_size) case_size,                        
+                           1                        pallet,        
+                           MAX(tmp.som_type) calc_multiple,                
+                           0                        on_hand_qty,
+                           0                        future_on_hand_qty,
+                           0                        min_avail_qty,
+                           0                        threshold_percent
+                      FROM alloc_itm_search_dtl tmp
+                     WHERE tmp.alloc_no = %s AND tmp.sel_ind = 'Y'
+                     GROUP BY tmp.item,
+                           tmp.pack_ind,
+                           tmp.alloc_criteria,
+                           tmp.ref_1,
+                           tmp.loc,
+                           tmp.diff_id)
+                   tmp
+             WHERE NOT EXISTS
+                       (SELECT 1
+                          FROM alloc_item_source_dtl it
+                         WHERE     it.alloc_no = tmp.alloc_no
+                               AND it.item_id = tmp.item_id
+                               AND coalesce(it.diff1_id,'$') =  coalesce(tmp.diff1_id,'$')  
+                               AND it.wh_id = tmp.wh_id
+                               AND coalesce(it.order_no, '$') =
+                                   coalesce(tmp.order_no, '$'));"
+
+  Q_upd_pack_ind: "WITH ist AS (SELECT DISTINCT tmp.item item
+                                            ,tmp.alloc_no
+                                            ,(CASE WHEN tmp.pack_ind='Y'  AND id.sellable_ind='Y' THEN 'SP' 
+                                              WHEN tmp.pack_ind='Y' and id.sellable_ind='N' THEN 'NS' 
+                                              WHEN tmp.pack_ind='N' THEN 'N'
+                                               END)  pack_ind
+                              FROM alloc_itm_search_dtl tmp join
+                                   item_dtl id 
+                             WHERE tmp.alloc_no=%s
+                               AND tmp.item=id.item)
+                             UPDATE alloc_item_source_dtl T1,ist SET T1.PACK_IND=ist.pack_ind 
+                             WHERE ist.ALLOC_NO=T1.ALLOC_NO AND ist.ITEM=T1.ITEM_ID;"
+  #Changes by Shubham for Pack Start#
+  # Q_del_qty: "WITH qty_tmp AS (SELECT alloc_no,
+                                      # item_id,
+                                      # location_id
+                                 # FROM alloc_quantity_limits ql
+                                # WHERE alloc_no = %s
+                                  # AND NOT EXISTS (SELECT tmp.alloc_no,
+                                                         # tmp.tran_item      item_id,
+                                                         # tmp.to_loc    location_id
+                                                    # FROM (SELECT alc.alloc_no,
+                                                                 # alc.tran_item,
+                                                                 # alc.to_loc
+                                                            # FROM alloc_calc_allitemloc alc
+                                                           # WHERE alloc_no = %s
+                                                             # AND COALESCE(item_type,'$') = 'NSFSP'
+                                                           # UNION
+                                                          # SELECT alloc_no,
+                                                                 # tran_item,
+                                                                 # to_loc
+                                                            # FROM alloc_calc_allitemloc
+                                                           # WHERE alloc_no = %s
+                                                             # AND coalesce(item_type,'$') <> 'NSFSP') tmp
+                                                    # WHERE tmp.tran_item != ql.item_id AND tmp.to_loc != ql.location_id AND tmp.alloc_no = ql.alloc_no))
+             # DELETE FROM alloc_quantity_limits aql
+                                                    # WHERE EXISTS (SELECT 1
+                                                         # FROM qty_tmp
+                                                        # WHERE qty_tmp.alloc_no = aql.alloc_no
+                                                          # AND qty_tmp.item_id = aql.item_id
+                                                          # AND qty_tmp.location_id = aql.location_id);"
+
+  Q_del_qty: "WITH src AS (SELECT quantity_limits_id,alloc_no
+                             FROM alloc_quantity_limits gtt
+                            WHERE alloc_no = %s
+                              AND (alloc_no, item_id, location_id) IN
+                                  (SELECT alloc_no,
+                                          item_id,
+                                          location_id
+                                     FROM alloc_quantity_limits ql
+                                    WHERE alloc_no = %s
+                                      AND NOT EXISTS (SELECT tmp.alloc_no,
+                                                             tmp.tran_item           item_id,
+                                                             tmp.to_loc    location_id
+                                                        FROM (SELECT tmp.alloc_no,
+                                                                     coalesce(pi.item,tmp.tran_item) tran_item,
+													                 tmp.to_loc
+											                    FROM alloc_calc_allitemloc tmp,
+													                 packitem pi
+											                   WHERE tmp.alloc_no = %s
+												                 AND pi.pack_no = tmp.source_item
+												                 AND tmp.item_type = 'NSFSP'
+												               UNION
+											                  SELECT alloc_no,
+													                 tran_item,
+													                 to_loc
+												                FROM alloc_calc_allitemloc
+												               WHERE alloc_no = %s
+												                 AND coalesce(item_type,'$') <> 'NSFSP') tmp
+                                                       WHERE tmp.alloc_no = %s
+									                     AND tmp.alloc_no = ql.alloc_no
+									                     AND tmp.tran_item = ql.item_id
+										                 AND tmp.to_loc = ql.location_id)))
+                DELETE FROM alloc_quantity_limits ql
+                      WHERE EXISTS (select 1 
+                                    FROM src 
+                                     WHERE ql.alloc_no = src.alloc_no
+                                       AND ql.quantity_limits_id = src.quantity_limits_id);"    
+  #Changes by Shubham for Pack End# 

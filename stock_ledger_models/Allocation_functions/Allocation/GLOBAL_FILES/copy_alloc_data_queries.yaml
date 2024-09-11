@@ -1,0 +1,692 @@
+func_copy_alloc:
+
+   Q_get_alloc_type: " SELECT alloc_type,
+                              alloc_level   
+                         FROM alloc_head
+                        WHERE alloc_no = %s; "
+
+   Q_alloc_criteria: " SELECT alloc_criteria  
+                         FROM alloc_itm_search_dtl
+                        WHERE alloc_no = %s; "
+
+   Q_wh_last_up_inv_sku: " SELECT SUM(GREATEST((GREATEST((CASE WHEN ilc.status in ('A','C') THEN ilc.item_soh ELSE 0 END),0))
+                                               - (GREATEST (CASE WHEN ilc.status in ('A','C') THEN ilc.reserved_qty ELSE 0 END,0)
+                                                  + GREATEST (CASE WHEN ilc.status in ('A','C') THEN ilc.rtv_qty ELSE 0 END,0)
+                                                  + GREATEST (CASE WHEN ilc.status in ('A','C') THEN ilc.non_sellable_qty ELSE 0 END,0)
+                                                  + GREATEST (COALESCE(CASE WHEN ilc.status in ('A','C') THEN ilc.cust_resv_qty ELSE 0 END,0),0))
+                                               - (SELECT COALESCE(SUM(GREATEST(d.distro_qty,0)),0)
+                                                    FROM alloc_sku_head h,
+                                                         po_item_loc ol,
+                                                         po_dtl oh,
+                                                         alloc_dtl d,
+                                                         item_location ilc1
+                                                   WHERE h.item = ilc.item
+                                                     AND h.wh = gtt.loc
+                                                     AND ilc1.location = gtt.loc
+                                                     AND ilc1.item = ilc.item
+                                                     AND ilc1.status in ('A','C')  
+                                                     AND h.status IN ('A', 'R')
+                                                     AND h.order_no IS NOT NULL
+                                                     AND ol.po_no = h.order_no
+                                                     AND ol.item = h.item
+                                                     AND ol.location = h.wh
+                                                     AND ol.received_qty > 0
+                                                     AND oh.po_no = ol.po_no
+                                                     AND oh.status IN ('A', 'C')
+                                                     AND d.alloc_no = h.alloc_no
+                                                     AND d.alloc_qty > 0
+                                                     AND d.alloc_qty > COALESCE(d.tsf_qty,0)),0)) avail_qty,
+                                 SUM(COALESCE(GREATEST((GREATEST((CASE WHEN ilc.status in ('I') THEN ilc.item_soh  ELSE 0 END),0))
+                                               - (GREATEST ((CASE WHEN ilc.status in ('I') THEN ilc.reserved_qty ELSE 0 END),0)
+                                                  + GREATEST ((CASE WHEN ilc.status in ('I') THEN ilc.rtv_qty ELSE 0 END),0)
+                                                  + GREATEST ((CASE WHEN ilc.status in ('I') THEN ilc.non_sellable_qty ELSE 0 END),0)
+                                                  + GREATEST (COALESCE(CASE WHEN ilc.status in ('I') THEN ilc.cust_resv_qty ELSE 0 END,0),0))
+                                               - (SELECT COALESCE(SUM(GREATEST (d.distro_qty,0)),0)
+                                                    FROM alloc_sku_head h,
+                                                         po_item_loc ol,
+                                                         po_dtl oh,
+                                                         alloc_dtl d,
+                                                         item_location ilc1
+                                                   WHERE h.item = ilc.item
+                                                     AND h.wh = gtt.loc
+                                                     AND ilc1.location = gtt.loc
+                                                     AND ilc1.item = ilc.item
+                                                     AND ilc1.status in ('I')
+                                                     AND h.status IN ('A', 'R')
+                                                     AND h.order_no IS NOT NULL
+                                                     AND ol.po_no = h.order_no
+                                                     AND ol.item = h.item
+                                                     AND ol.location = h.wh
+                                                     AND ol.received_qty > 0
+                                                     AND oh.po_no = ol.po_no
+                                                     AND oh.status IN ('A', 'C')
+                                                     AND d.alloc_no = h.alloc_no
+                                                     AND d.alloc_qty > 0
+                                                     AND d.alloc_qty > COALESCE(d.tsf_qty,0)),0),0)) inactive_qty
+                            FROM alloc_itm_search_dtl gtt,
+                                 item_location ilc
+                           WHERE gtt.alloc_no = %s
+                             AND ilc.item = gtt.item
+                             AND ilc.location = gtt.loc
+                             AND ilc.status IN ('A', 'C', 'I'); "
+
+   Q_new_alloc_no: " SELECT MAX(alloc_no)+1 as new_alloc_no FROM alloc_seq; "
+
+   Q_ins_alloc_head: " INSERT INTO alloc_head(alloc_no,
+                                              po_no,
+                                              alloc_criteria,
+                                              status,
+                                              alloc_desc,
+                                              alloc_type,
+                                              alloc_level,
+                                              context,
+                                              promotion,
+                                              wh_store_rel_ind,
+                                              def_auto_pre_min_ind,
+                                              rule_template_id,
+                                              loc_template_id,
+                                              release_date,
+                                              recalc_ind,
+                                              create_id,
+                                              create_datetime,
+                                              last_update_datetime,
+                                              parent_id, 
+                                              batch_ind, 
+                                              process_ind)
+                                       select %s new_alloc_no,
+                                              po_no,
+                                              alloc_criteria,
+                                              0 status,
+                                              concat('copy of ',0,' _ ',alloc_desc) alloc_desc,
+                                              alloc_type,
+                                              alloc_level,
+                                              context,
+                                              promotion,
+                                              wh_store_rel_ind,
+                                              def_auto_pre_min_ind,
+                                              rule_template_id,
+                                              loc_template_id,
+                                              release_date,
+                                              recalc_ind,
+                                              create_id,
+                                              create_datetime,
+                                              current_timestamp() last_update_datetime,
+                                              parent_id, 
+                                              batch_ind, 
+                                              process_ind
+                                         FROM alloc_head
+                                        WHERE alloc_no = %s; "
+
+   Q_ins_alloc_rule: " INSERT INTO alloc_rule(rule_no,
+                                              alloc_no,
+                                              template_no,
+                                              rule_type,
+                                              rule_level,
+                                              exact_ind,
+                                              size_profile_ind,
+                                              cascade_ind,
+                                              net_need_ind,
+                                              use_rule_level_on_hand_ind,
+                                              include_clearance_stock_ind,
+                                              regular_sales_ind,
+                                              promo_sales_ind,
+                                              clearance_sales_ind,
+                                              include_inv_in_min_ind,
+                                              include_inv_in_max_ind,
+                                              on_order_commit_date,
+                                              on_order_commit_weeks,
+                                              iwos_weeks,
+                                              weeks_this_year,
+                                              weeks_last_year,
+                                              weeks_future,
+                                              start_date1,
+                                              end_date1,
+                                              start_date2,
+                                              end_date2,
+                                              corporate_rule_id,
+                                              include_mid_tier_on_hand_ind,
+                                              enforce_pres_min_ind,
+                                              lead_time_need_ind,
+                                              lead_time_need_rule_type,
+                                              lead_time_need_start_date,
+                                              lead_time_need_end_date,
+                                              convert_to_pack,
+                                              create_id,
+                                              create_datetime,
+                                              last_update_id, 
+                                              last_update_datetime)
+                                       SELECT rule_no,
+                                              %s alloc_no,
+                                              template_no,
+                                              rule_type,
+                                              rule_level,
+                                              exact_ind,
+                                              size_profile_ind,
+                                              cascade_ind,
+                                              net_need_ind,
+                                              use_rule_level_on_hand_ind,
+                                              include_clearance_stock_ind,
+                                              regular_sales_ind,
+                                              promo_sales_ind,
+                                              clearance_sales_ind,
+                                              include_inv_in_min_ind,
+                                              include_inv_in_max_ind,
+                                              on_order_commit_date,
+                                              on_order_commit_weeks,
+                                              iwos_weeks,
+                                              weeks_this_year,
+                                              weeks_last_year,
+                                              weeks_future,
+                                              start_date1,
+                                              end_date1,
+                                              start_date2,
+                                              end_date2,
+                                              corporate_rule_id,
+                                              include_mid_tier_on_hand_ind,
+                                              enforce_pres_min_ind,
+                                              lead_time_need_ind,
+                                              lead_time_need_rule_type,
+                                              lead_time_need_start_date,
+                                              lead_time_need_end_date,
+                                              convert_to_pack,
+                                              create_id,
+                                              CURRENT_TIMESTAMP() create_datetime,
+                                              last_update_id, 
+                                              CURRENT_TIMESTAMP() last_update_datetime
+                                         FROM alloc_rule
+                                        WHERE alloc_no = %s; "
+
+   Q_ins_loc_gtt: " INSERT INTO alloc_location_temp(alloc_no,
+                                                    loc,
+                                                    loc_desc,
+                                                    loc_type,
+                                                    default_wh,
+                                                    group_id,
+                                                    group_desc,
+                                                    like_loc,
+                                                    like_loc_desc,
+                                                    weight_pct,
+                                                    clearance_ind,
+                                                    item_loc_status,
+                                                    release_date,
+                                                    del_ind)
+                                            WITH 
+                                                src
+                                                AS
+                                                   (select %s alloc_no,
+                                                           %s loc,
+                                                           %s loc_desc,
+                                                           %s loc_type,
+                                                           %s default_wh,
+                                                           %s group_id,
+                                                           %s group_desc,
+                                                           %s like_loc,
+                                                           %s like_loc_desc,
+                                                           %s weight_pct,
+                                                           %s clearance_ind,
+                                                           %s item_loc_status,
+                                                           %s release_date,
+                                                           %s del_ind)
+                                            SELECT src.alloc_no,
+                                                   src.loc,
+                                                   src.loc_desc,
+                                                   src.loc_type,
+                                                   src.default_wh,
+                                                   src.group_id,
+                                                   src.group_desc,
+                                                   src.like_loc,
+                                                   src.like_loc_desc,
+                                                   src.weight_pct,
+                                                   src.clearance_ind,
+                                                   src.item_loc_status,
+                                                   src.release_date,
+                                                   src.del_ind
+                                              FROM src
+                                             WHERE EXISTS (SELECT 1 
+                                                             FROM store st
+                                                            WHERE src.loc = st.store
+                                                              AND st.close_ord_date IS NULL
+                                                              AND st.stock_holding_ind = 'Y'
+                                                              AND st.status = 'C'); "
+
+   Q_del_gtt_alloc_no: " DELETE FROM alloc_location_temp WHERE alloc_no = %s; "
+
+   Q_get_like_item_fnd: " SELECT 1 chck
+                            FROM alloc_like_item_source
+                           WHERE alloc_no = %s
+                             AND like_source_item IS NOT NULL; "
+
+   Q_ins_like_item_ext: " INSERT INTO alloc_like_item_source (item_source_id,
+                                                              alloc_no,
+                                                              item_type,
+                                                              source_item,
+                                                              source_item_level,
+                                                              source_tran_level,
+                                                              source_pack_ind,
+                                                              source_diff1_id,
+                                                              source_diff2_id,
+                                                              source_diff3_id,
+                                                              source_diff4_id,
+                                                              hier1,
+                                                              hier2,
+                                                              hier3,
+                                                              pack_no,
+                                                              like_source_item,
+                                                              like_source_item_level,
+                                                              like_source_tran_level,
+                                                              like_source_pack_ind,
+                                                              like_source_diff1_id,
+                                                              like_source_diff2_id,
+                                                              like_source_diff3_id,
+                                                              like_source_diff4_id,
+                                                              like_hier1,
+                                                              like_hier2,
+                                                              like_hier3,
+                                                              like_pack_no,
+                                                              like_item_weight,
+                                                              like_size_prof_ind,
+                                                              create_id,
+                                                              create_datetime,
+                                                              last_update_id,
+                                                              last_update_datetime)
+                                              SELECT DISTINCT item_source_id,
+                                                     alloc_no,
+                                                     item_type,
+                                                     source_item,
+                                                     source_item_level,
+                                                     source_tran_level,
+                                                     source_pack_ind,
+                                                     source_diff1_id,
+                                                     source_diff2_id,
+                                                     source_diff3_id,
+                                                     source_diff4_id,
+                                                     hier1,
+                                                     hier2,
+                                                     hier3,
+                                                     pack_no,
+                                                     like_source_item,
+                                                     like_source_item_level,
+                                                     like_source_tran_level,
+                                                     like_source_pack_ind,
+                                                     like_source_diff1_id,
+                                                     like_source_diff2_id,
+                                                     like_source_diff3_id,
+                                                     like_source_diff4_id,
+                                                     like_hier1,
+                                                     like_hier2,
+                                                     like_hier3,
+                                                     like_pack_no,
+                                                     like_item_weight,
+                                                     like_size_prof_ind,
+                                                     create_id,
+                                                     create_datetime,
+                                                     last_update_id,
+                                                     current_timestamp() last_update_datetime  
+                                               FROM alloc_calc_source_temp tmp
+                                              WHERE tmp.alloc_no = %s
+                                                AND NOT EXISTS (SELECT 1
+                                                                  FROM alloc_like_item_source ais
+                                                                 WHERE ais.alloc_no = tmp.alloc_no
+                                                                   AND ais.item_source_id = tmp.item_source_id
+                                                                   AND ais.source_item = tmp.source_item); "
+   Q_merge_like_item: " WITH 
+                            src 
+                                AS 
+                                    (SELECT source_item,
+                                            source_diff1_id,
+                                            source_diff2_id, 
+                                            source_diff3_id, 
+                                            source_diff4_id, 
+                                            MAX(like_source_item) like_source_item,
+                                            MAX(like_source_diff1_id) like_source_diff1_id,
+                                            MAX(like_item_weight) like_item_weight,
+                                            MAX(like_size_prof_ind) like_size_prof_ind
+                                       FROM alloc_like_item_source ae
+                                      WHERE alloc_no = %s
+                                        AND like_source_item IS NOT NULL
+                                   GROUP BY source_item, 
+                                            source_diff1_id,
+                                            source_diff2_id,
+                                            source_diff3_id,
+                                            source_diff4_id)
+                                    UPDATE alloc_like_item_source tgt,src
+                                       SET tgt.like_source_item = src.like_source_item,
+                                           tgt.like_source_diff1_id = src.like_source_diff1_id,
+                                           tgt.like_item_weight = src.like_item_weight,
+                                           tgt.like_size_prof_ind = src.like_size_prof_ind
+                                     WHERE tgt.alloc_no = %s
+                                       AND tgt.source_item = src.source_item
+                                       AND COALESCE(tgt.source_diff1_id, '$') = COALESCE(src.source_diff1_id, '$')
+                                       AND COALESCE(tgt.source_diff2_id, '$') = COALESCE(src.source_diff2_id, '$')
+                                       AND COALESCE(tgt.source_diff3_id, '$') = COALESCE(src.source_diff3_id, '$')
+                                       AND COALESCE(tgt.source_diff4_id, '$') = COALESCE(src.source_diff4_id, '$'); "
+
+   Q_crt_diff_map_like: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_like_item_diff_map_temp
+                         (ALLOC_NO                   NUMERIC(15) NOT NULL
+                         ,ITEM                       VARCHAR(25)  
+                         ,ITEM_DESC                  VARCHAR(250)
+                         ,DIFF_ID                    VARCHAR(25)  
+                         ,MERCH_TYPE_CODE            VARCHAR(10)  
+                         ,MERCH_TYPE_VALUE           VARCHAR(25)  
+                         ,LIKE_ITEM                  VARCHAR(25)  
+                         ,LIKE_ITEM_DESC             VARCHAR(250)
+                         ,LIKE_ITEM_DIFF_ID          VARCHAR(25)  
+                         ,WEIGHT                     NUMERIC(20)  
+                         ,DEL_IND                    VARCHAR(1)  
+                         ,MAP_SIZE_PROF_IND          VARCHAR(1));"
+
+   
+   Q_crt_like_item_tmp: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_like_item_diff_temp
+                         (ALLOC_NO              NUMERIC(15) NOT NULL
+                         ,ITEM                 VARCHAR(25)  
+                         ,ITEM_DESC            VARCHAR(250)
+                         ,DIFF_ID              VARCHAR(25)  
+                         ,NO_OF_SIZES          NUMERIC(10)  
+                         ,SEL_IND              VARCHAR(1));"
+
+   Q_chk_diff_map_like: " SELECT count(1) chk
+                            FROM information_schema.tables
+                           WHERE table_schema = database()
+                             AND LOWER(table_name) = 'alloc_like_item_diff_map_temp'; "
+
+   Q_chk_like_map_like: " SELECT count(1) chk
+                            FROM information_schema.tables
+                           WHERE table_schema = database()
+                             AND LOWER(table_name) = 'alloc_like_item_diff_temp'; "
+
+   Q_ins_diff_map_like: " INSERT INTO alloc_like_item_diff_map_temp (alloc_no,
+                                                                     item,
+                                                                     item_desc,
+                                                                     diff_id,
+                                                                     like_item,
+                                                                     like_item_desc,
+                                                                     like_item_diff_id,
+                                                                     weight,
+                                                                     del_ind,
+                                                                     map_size_prof_ind)
+                                                              SELECT src.alloc_no,
+                                                                     src.item,
+                                                                     im.item_desc      item_desc,
+                                                                     src.diff_id,
+                                                                     src.like_item,
+                                                                     im.item_desc     like_item_desc,
+                                                                     src.like_item_diff_id,
+                                                                     src.weight * 100,
+                                                                     'N',
+                                                                     like_size_prof_ind
+                                                        FROM (SELECT DISTINCT
+                                                                     alloc_no,
+                                                                     source_item item,
+                                                                     COALESCE(source_diff1_id,
+                                                                               source_diff2_id,
+                                                                               source_diff3_id,
+                                                                               source_diff4_id) diff_id,
+                                                                     like_source_item like_item,
+                                                                     COALESCE(like_source_diff1_id,
+                                                                               like_source_diff2_id,
+                                                                               like_source_diff3_id,
+                                                                               like_source_diff4_id) like_item_diff_id,
+                                                                     like_item_weight weight,
+                                                                     like_size_prof_ind
+                                                                FROM alloc_like_item_source
+                                                               WHERE alloc_no = %s
+                                                                 AND like_source_item IS NOT NULL) src
+                                                           LEFT JOIN item_dtl im
+                                                                  ON (src.item = im.item
+                                                                      AND src.like_item = im.item); "
+
+   Q_ins_qnty_limits: "INSERT INTO alloc_quantity_limits(alloc_no,
+                                                         location_id,
+                                                         location_desc,
+                                                         hier1,
+                                                         hier2,
+                                                         hier3,
+                                                         item_id,
+                                                         MIN,
+                                                         MAX,
+                                                         treshold,
+                                                         trend,
+                                                         wos,
+                                                         min_need)
+                                                  SELECT %s alloc_no,
+                                                         location_id,
+                                                         location_desc,
+                                                         hier1,
+                                                         hier2,
+                                                         hier3,
+                                                         item_id,
+                                                         MIN,
+                                                         MAX,
+                                                         treshold,
+                                                         trend,
+                                                         wos,
+                                                         min_need
+                                                    FROM alloc_quantity_limits
+                                                   WHERE alloc_no = %s;"
+
+   Q_del_qnty_limits: " WITH 
+                            qty_tmp 
+                            AS  (SELECT alloc_no,
+                                        item_id,
+                                        location_id
+                                   FROM alloc_quantity_limits ql
+                                  WHERE alloc_no = %s
+                                    AND NOT EXISTS (SELECT tmp.alloc_no,
+                                                           tmp.tran_item      item_id,
+                                                           tmp.to_loc    location_id
+                                                      FROM (SELECT alc.alloc_no,
+                                                                   alc.tran_item,
+                                                                   alc.to_loc
+                                                              FROM alloc_calc_allitemloc alc
+                                                             WHERE alloc_no = %s
+                                                               AND COALESCE(item_type,'$') = 'NSFSP'
+                                                            UNION
+                                                            SELECT alloc_no,
+                                                                   tran_item,
+                                                                   to_loc
+                                                              FROM alloc_calc_allitemloc
+                                                             WHERE alloc_no = %s
+                                                               AND COALESCE(item_type,'$') <> 'NSFSP') tmp
+                                                      WHERE tmp.tran_item != ql.item_id 
+                                                        AND tmp.to_loc != ql.location_id 
+                                                        AND tmp.alloc_no = ql.alloc_no))
+                        DELETE
+                          FROM alloc_quantity_limits
+                         WHERE (alloc_no,item_id,location_id) IN (SELECT alloc_no,
+                                                                         item_id,
+                                                                         location_id
+                                                                     FROM qty_tmp); "
+
+func_copy_search:
+   Q_create_wh_tbl: " CREATE TEMPORARY TABLE IF NOT EXISTS alloc_whs_search_temp(WH NUMERIC(10)); "
+
+   Q_create_il_tbl: " CREATE TEMPORARY TABLE IF NOT EXISTS alloc_search_criteria_itm_temp(ITEM VARCHAR(25) ,
+                                                                                          LOCATION NUMERIC(15) ,
+                                                                                          ROLLUP_TYPE VARCHAR(25) ,
+                                                                                          ROLLUP_ITEM VARCHAR(25) ,
+                                                                                          ROLLUP_ITEM_DESC VARCHAR(250)); "
+
+   Q_create_items_tbl: " CREATE TEMPORARY TABLE IF NOT EXISTS alloc_items_srch_temp(ITEM VARCHAR(25) ,
+                                                                                    LOCATION NUMERIC(10) ,
+                                                                                    ROLLUP_TYPE VARCHAR(20) ,
+                                                                                    ROLLUP_ITEM VARCHAR(25) ,
+                                                                                    ROLLUP_ITEM_DESC VARCHAR(250) ,
+                                                                                    MULTI_COLOR_PACK_IND VARCHAR(1) ,
+                                                                                    COLOR_DIFF_ID VARCHAR(15) ,
+                                                                                    SELLING_UOM VARCHAR(5) ,
+                                                                                    INVENT_IND VARCHAR(1) ,
+                                                                                    HIER1 NUMERIC(4) ,
+                                                                                    HIER2 NUMERIC(4) ,
+                                                                                    HIER3 NUMERIC(4));"
+
+   Q_chck_wh_tbl: " SELECT count(1) chk
+                      FROM information_schema.tables
+                     WHERE table_schema = database()
+                       AND LOWER(table_name) = 'alloc_whs_search_temp'; "
+
+   Q_chck_il_tbl: " SELECT count(1) chk
+                      FROM information_schema.tables
+                     WHERE table_schema = database()
+                       AND LOWER(table_name) = 'alloc_search_criteria_itm_temp'; "
+
+   Q_chck_itms_tbl: " SELECT count(1) chk
+                      FROM information_schema.tables
+                     WHERE table_schema = database()
+                       AND LOWER(table_name) = 'alloc_items_srch_temp'; "
+
+   Q_insert_wh_tbl: " INSERT INTO alloc_whs_search_temp(WH) 
+                                                SELECT loc
+                                                  FROM alloc_itm_search_dtl
+                                                 WHERE alloc_no = %s; "
+
+   Q_insert_il_tbl: " INSERT INTO alloc_search_criteria_itm_temp(ITEM,
+                                                          LOCATION,
+                                                          ROLLUP_TYPE,
+                                                          ROLLUP_ITEM,
+                                                          ROLLUP_ITEM_DESC)
+                                                   SELECT DISTINCT item,
+                                                          loc,
+                                                          rollup_type,
+                                                          item_parent,
+                                                          item_desc 
+                                                     FROM (SELECT im.item,
+                                                                  tmp.loc,
+                                                                  CASE WHEN im.pack_ind = 'Y'
+                                                                       THEN 'PACK'
+                                                                       ELSE 'STYLE'
+                                                                  END rollup_type,
+                                                                  tmp.item item_parent,
+                                                                  tmp.item_desc,
+                                                                  SUM(COALESCE(GREATEST((GREATEST ((ils.item_soh),0))
+                                                                                         - (GREATEST (ils.reserved_qty,0)
+                                                                                         + GREATEST (ils.rtv_qty, 0)
+                                                                                         + GREATEST (ils.non_sellable_qty, 0)
+                                                                                         + GREATEST (COALESCE(ils.cust_resv_qty,0), 0))
+                                                                                         - (SELECT COALESCE(SUM(GREATEST(d.distro_qty,0)),0)
+                                                                                              FROM alloc_sku_head h,
+                                                                                                   po_item_loc    ol,
+                                                                                                   po_dtl         oh,
+                                                                                                   alloc_dtl      d
+                                                                                             WHERE h.item = im.item
+                                                                                               AND h.wh = tmp.loc
+                                                                                               AND h.status IN ('A', 'R')
+                                                                                               AND h.order_no IS NOT NULL
+                                                                                               AND ol.po_no = h.order_no
+                                                                                               AND ol.item = h.item
+                                                                                               AND ol.location = h.wh
+                                                                                               AND ol.received_qty > 0
+                                                                                               AND oh.po_no = ol.po_no
+                                                                                               AND oh.status IN ('A', 'C')
+                                                                                               AND d.alloc_no = h.alloc_no
+                                                                                               AND d.alloc_qty > 0
+                                                                                               AND d.alloc_qty > COALESCE (d.tsf_qty, 0)),0),0)) OVER (partition by tmp.item, SUBSTR(tmp.diff_id, 3),tmp.loc) avail
+                                                             FROM alloc_itm_search_dtl tmp, 
+                                                                  item_dtl im, 
+                                                                  item_location ils
+                                                            WHERE tmp.alloc_no = %s
+                                                              AND im.item = tmp.item
+                                                              AND (COALESCE(SUBSTR(tmp.diff_id, 3),'$') = COALESCE(im.diff1,'$')
+                                                                   OR COALESCE(SUBSTR(tmp.diff_id, 3),'$') = COALESCE(im.diff2,'$')
+                                                                   OR COALESCE(SUBSTR(tmp.diff_id, 3),'$') = COALESCE(im.diff3,'$')
+                                                                   OR COALESCE(SUBSTR(tmp.diff_id, 3),'$') = COALESCE(im.diff4,'$'))
+                                                              AND ils.item =im.item
+                                                              AND ils.location =tmp.loc) tmp
+                                                    WHERE avail > 0; "
+
+   Q_ins_il_sku_tbl: " INSERT INTO alloc_search_criteria_itm_temp(ITEM,
+                                                           LOCATION,
+                                                           ROLLUP_TYPE,
+                                                           ROLLUP_ITEM,
+                                                           ROLLUP_ITEM_DESC)
+                                                    SELECT DISTINCT im.item, 
+                                                           tmp.loc,
+                                                           CASE WHEN im.pack_ind = 'Y' THEN 'PACK' ELSE 'STYLE' END
+                                                           rollup_type,
+                                                           tmp.item,
+                                                           tmp.item_desc
+                                                      FROM alloc_itm_search_dtl tmp, item_dtl im
+                                                     WHERE tmp.alloc_no = %s
+                                                       AND im.item = tmp.item
+                                                       /*AND (COALESCE(SUBSTR(tmp.diff_id, 3),'$') = COALESCE(im.diff1,'$')
+                                                            OR COALESCE(SUBSTR(tmp.diff_id, 3),'$') = COALESCE(im.diff2,'$')
+                                                            OR COALESCE(SUBSTR(tmp.diff_id, 3),'$') = COALESCE(im.diff3,'$')
+                                                            OR COALESCE(SUBSTR(tmp.diff_id, 3),'$') = COALESCE(im.diff4,'$'));*/ "
+
+   Q_ins_items_sku_tbl: " INSERT INTO alloc_items_srch_temp(ITEM,
+                                                           LOCATION,
+                                                           ROLLUP_TYPE,
+                                                           ROLLUP_ITEM,
+                                                           ROLLUP_ITEM_DESC,
+                                                           MULTI_COLOR_PACK_IND,
+                                                           COLOR_DIFF_ID,
+                                                           SELLING_UOM,
+                                                           INVENT_IND,
+                                                           HIER1,
+                                                           HIER2,
+                                                           HIER3)
+                                                    SELECT gtt.item,
+                                                           gtt.location,
+                                                           MAX(CASE WHEN im.pack_ind = 'Y' THEN 'PACK' ELSE 'STYLE' END) rollup_type,
+                                                           im.item_parent rollup_item,
+                                                           (SELECT imp.item_desc
+                                                              FROM item_dtl imp
+                                                             WHERE imp.item = im.item_parent) rollup_item_desc,
+                                                           NULL     multi_color_pack_ind,
+                                                           im.diff1 color_diff_id,
+                                                           im.selling_uom,
+                                                           NULL invent_ind,
+                                                           im.hier1,
+                                                           im.hier2,
+                                                           im.hier3
+                                                      FROM alloc_search_criteria_itm_temp  gtt,
+                                                           item_dtl                        im
+                                                     WHERE im.item = gtt.item
+                                                       AND im.item_level = im.tran_level 
+                                                       AND im.status = 'A'
+                                                  GROUP BY gtt.item,
+                                                           gtt.location,
+                                                           im.item_parent,
+                                                           im.diff1,
+                                                           im.selling_uom,
+                                                           im.hier1,
+                                                           im.hier2,
+                                                           im.hier3; "
+
+   Q_upd_sel_ind: " WITH 
+                        src 
+                        AS 
+                            (SELECT *
+                                    FROM alloc_itm_search_dtl 
+                                   WHERE alloc_no = %s)
+                    UPDATE alloc_itm_search_dtl tgt, src
+                       SET tgt.sel_ind = src.sel_ind
+                     WHERE tgt.alloc_no = %s
+                       AND tgt.item = src.item
+                       AND tgt.loc = src.loc
+                       AND COALESCE(tgt.ref_1, '$') = COALESCE(src.ref_1, '$')
+                       AND ((COALESCE(tgt.alloc_criteria, '$') <> 'A')
+                             OR (COALESCE(tgt.alloc_criteria, '$') = 'A' 
+                                 AND COALESCE(tgt.ref_2, '$') = COALESCE(src.ref_2, '$')))
+                       AND COALESCE (tgt.alloc_criteria, '$') = COALESCE (src.alloc_criteria, '$')
+                       /*AND COALESCE(tgt.diff_id,'$') = COALESCE(src.diff_id,'$')*/; "
+
+   Q_del_dup_recs: "  WITH 
+                        src 
+                        AS 
+                            (SELECT *
+                               FROM alloc_itm_search_dtl 
+                              WHERE alloc_no = %s)
+                        DELETE 
+                          FROM alloc_itm_search_dtl tgt
+                         WHERE tgt.alloc_no = %s
+                           AND not EXISTS (SELECT 1
+                                             FROM src
+                                            WHERE alloc_no = 12345678
+                                              AND tgt.item = src.item
+                                              AND tgt.loc = src.loc
+                                              AND COALESCE(tgt.ref_1, '$') = COALESCE(src.ref_1, '$')
+                                              AND ((COALESCE(tgt.alloc_criteria, '$') <> 'A')
+                                                    OR (COALESCE(tgt.alloc_criteria, '$') = 'A' 
+                                                        AND COALESCE(tgt.ref_2, '$') = COALESCE(src.ref_2, '$')))
+                                              AND COALESCE (tgt.alloc_criteria, '$') = COALESCE (src.alloc_criteria, '$')
+                                              /*AND COALESCE(tgt.diff_id,'$') = COALESCE(src.diff_id,'$')*/); "

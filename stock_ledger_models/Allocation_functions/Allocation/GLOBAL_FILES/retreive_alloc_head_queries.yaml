@@ -1,0 +1,72 @@
+retreive_alloc_head:
+  Q_del_wi_alloc_dtl: "DELETE FROM alloc_what_if_detail
+								 WHERE alloc_no = %s
+								   AND order_no IN (SELECT order_no
+													  FROM alloc_what_if_head
+													 WHERE alloc_no = %s
+													   AND status <> 'P');"
+
+  Q_del_wi_alloc_head: "DELETE FROM alloc_what_if_head
+                                       WHERE alloc_no = %s
+                                         AND status <> 'P';"
+  
+  Q_sel_rec_gtt: "SELECT DISTINCT order_no
+                            FROM alloc_whatif_summary_temp tmp
+                           WHERE tmp.alloc_no = %s
+                             AND tmp.order_no IS NOT NULL;"
+
+  Q_ord_no_seq: "select po_order_seq +1 as po_order_seq from po_ord_no_seq;"
+
+  Q_upd_ord_seq: "update po_ord_no_seq set po_order_seq = %s;"
+
+  Q_ins_alloc_what_if_head: "INSERT INTO alloc_what_if_head (alloc_no,
+                                                order_no,
+                                                dummy_order_no,
+                                                order_type,
+                                                not_before_date,
+                                                supplier_site,
+                                                status,
+                                                error_desc,
+                                                create_id)
+                                         SELECT DISTINCT tmp.alloc_no,
+                                                %s                 order_no,
+                                                tmp.order_no       dummy_order_no,
+                                                CASE
+                                                   WHEN tmp.po_type = 'WH'
+                                                   THEN 'N/B'
+                                                   ELSE tmp.po_type
+                                                END as             order_type,
+                                                tmp.release_date   not_before_date,
+                                                tmp.supplier       supplier_site,
+                                                'N'                status,
+                                                NULL               error_desc,
+                                                current_user()     create_id
+                                           FROM alloc_whatif_summary_temp tmp
+                                          WHERE tmp.alloc_no = %s
+                                            AND tmp.order_no = %s
+                                            AND tmp.po_qty > 0;"
+
+  Q_ins_alloc_what_if_detail: "INSERT INTO alloc_what_if_detail (alloc_no,
+                                               order_no,
+                                               item,
+                                               supplier_site,
+                                               country_of_origin,
+                                               location_type,
+                                               location_id,
+                                               ord_qty,
+                                               create_id,
+                                               create_date)
+                                        select tmp.alloc_no,
+                                               %s                order_no,
+                                               tmp.tran_item     item,
+                                               tmp.supplier      supplier_site,
+                                               tmp.orig_country  country_of_origin,
+                                               tmp.loc_type      location_type,
+                                               tmp.loc           location_id,
+                                               tmp.po_qty        ord_qty,
+                                               current_user()              create_id,
+                                               current_date()           create_date
+                                          FROM alloc_whatif_summary_temp tmp
+                                         WHERE tmp.alloc_no = %s
+                                           AND tmp.order_no = %s
+                                           AND tmp.po_qty > 0;"

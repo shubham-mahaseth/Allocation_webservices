@@ -1,0 +1,3 @@
+worksheet:
+  Q_sel_status: "SELECT status FROM alloc_head WHERE alloc_no = %s;"
+  Q_upd_ind: "UPDATE alloc_head SET recalc_ind = 'Y', status = 'WS' WHERE alloc_no = %s;"

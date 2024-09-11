@@ -1,0 +1,187 @@
+#############################################################
+#Created By - Naveen Ramanathan                             #                
+#File Name  - setup_retreive_locations_queries.yaml         #
+#Purpose    - All queries for retreive_locations function   #
+#############################################################
+
+retreive_locations: 
+  
+  C_temp_tbl: "CREATE TEMPORARY TABLE alloc_location_temp
+               (ALLOC_NO             NUMERIC(15),    
+                LOC                  VARCHAR(25),  
+                LOC_DESC             VARCHAR(150), 
+                LOC_TYPE             VARCHAR(1),   
+                DEFAULT_WH           NUMERIC(4),     
+                GROUP_ID             VARCHAR(40),  
+                GROUP_DESC           VARCHAR(600), 
+                LIKE_LOC             NUMERIC(10),    
+                LIKE_LOC_DESC        VARCHAR(150), 
+                WEIGHT_PCT           NUMERIC(12),  
+                CLEARANCE_IND        VARCHAR(1),   
+                ITEM_LOC_STATUS      VARCHAR(1),   
+                RELEASE_DATE         DATE,          
+                DEL_IND              VARCHAR(1));"
+  
+  C_check_all_store:  "SELECT 1 AS check_all_store
+                         FROM alloc_location lg
+                        WHERE lg.alloc_no = %s
+                          AND lg.group_type = 6;"
+
+  C_check_location: "SELECT 1 AS check_location
+                         FROM alloc_location lg
+                        WHERE lg.alloc_no = %s
+                          AND lg.group_type = 7;"  
+                       
+  C_check_loc_trait: "SELECT 1 AS check_loc_trait
+                         FROM alloc_location lg
+                        WHERE lg.alloc_no = %s
+                          AND lg.group_type = 5;" 
+
+  C_check_loc_list: "SELECT 1 AS check_loc_list
+                         FROM alloc_location lg
+                        WHERE lg.alloc_no = %s
+                          AND lg.group_type = 1;"                        
+                
+  L_ins_1: "INSERT INTO alloc_location_temp (alloc_no,
+                                             loc,
+                                             loc_desc,
+                                             loc_type,
+                                             default_wh,
+                                             group_id,
+                                             group_desc,
+                                             like_loc,
+                                             like_loc_desc,
+                                             weight_pct,
+                                             clearance_ind,
+                                             item_loc_status,
+                                             release_date,
+                                             del_ind)
+                SELECT DISTINCT
+                       lg.alloc_no,
+                       lg.group_id,
+                       lg.group_desc,
+                       'L' loc_type,
+                       st.def_wh,
+                       CASE
+                           WHEN lg.group_type = '7' THEN NULL
+                           ELSE lg.group_id
+                       END    group_id,
+                       CASE
+                           WHEN lg.group_type = '7' THEN NULL
+                           ELSE lg.group_desc
+                       END    group_desc,
+                       lg.like_loc,
+                       lg.like_loc_desc,
+                       lg.weight_pct,
+                       lg.clearance_ind,
+                       lg.item_loc_status,
+                       lg.release_date,
+                       'N' del_ind
+                  FROM alloc_location lg,
+                       store st
+                 WHERE lg.alloc_no = %s
+                   AND lg.group_type = 7
+                   AND st.store = lg.group_id;" 
+
+  L_ins_2: "INSERT INTO alloc_location_temp (alloc_no,
+                                             loc,
+                                             loc_desc,
+                                             loc_type,
+                                             default_wh,
+                                             group_id,
+                                             group_desc,
+                                             like_loc,
+                                             like_loc_desc,
+                                             weight_pct,
+                                             clearance_ind,
+                                             item_loc_status,
+                                             release_date,
+                                             del_ind)
+                SELECT DISTINCT lg.alloc_no,
+                                lg.location,
+                                lg.loc_desc,
+                                'T' loc_type,
+                                st.def_wh,
+                                lg.group_id,
+                                lg.group_desc,
+                                lg.like_loc,
+                                lg.like_loc_desc,
+                                lg.weight_pct,
+                                lg.clearance_ind,
+                                lg.item_loc_status,
+                                lg.release_date,
+                                'N' del_ind
+                  FROM alloc_location lg,
+                       store st
+                 WHERE lg.alloc_no = %s
+                   AND lg.group_type = 1
+                   AND st.store = lg.group_id;"
+  
+  L_ins_3: "INSERT INTO alloc_location_temp (alloc_no,
+                                             loc,
+                                             loc_desc,
+                                             loc_type,
+                                             default_wh,
+                                             group_id,
+                                             group_desc,
+                                             like_loc,
+                                             like_loc_desc,
+                                             weight_pct,
+                                             clearance_ind,
+                                             item_loc_status,
+                                             release_date,
+                                             del_ind)
+                SELECT DISTINCT lg.alloc_no,
+                                lg.location,
+                                lg.loc_desc,
+                                'M' loc_type,
+                                st.def_wh,
+                                lg.group_id,
+                                lg.group_desc,
+                                lg.like_loc,
+                                lg.like_loc_desc,
+                                lg.weight_pct,
+                                lg.clearance_ind,
+                                lg.item_loc_status,
+                                lg.release_date,
+                                'N' del_ind
+                  FROM alloc_location lg,
+                       store st
+                 WHERE lg.alloc_no = %s
+                   AND lg.group_type = 5
+                   AND st.store = lg.group_id;"
+
+  L_ins_4: "INSERT INTO alloc_location_temp (alloc_no,
+                                             loc,
+                                             loc_desc,
+                                             loc_type,
+                                             default_wh,
+                                             group_id,
+                                             group_desc,
+                                             like_loc,
+                                             like_loc_desc,
+                                             weight_pct,
+                                             clearance_ind,
+                                             item_loc_status,
+                                             release_date,
+                                             del_ind)
+                SELECT DISTINCT lg.alloc_no,
+                                lg.location,
+                                lg.loc_desc,
+                                'A' loc_type,
+                                st.def_wh,
+                                lg.group_id,
+                                lg.group_desc,
+                                lg.like_loc,
+                                lg.like_loc_desc,
+                                lg.weight_pct,
+                                lg.clearance_ind,
+                                lg.item_loc_status,
+                                lg.release_date,
+                                'N' del_ind
+                  FROM alloc_location lg,
+                       store st
+                 WHERE lg.alloc_no = %s
+                   AND lg.group_type = 6
+                   AND st.store = lg.group_id;"  
+

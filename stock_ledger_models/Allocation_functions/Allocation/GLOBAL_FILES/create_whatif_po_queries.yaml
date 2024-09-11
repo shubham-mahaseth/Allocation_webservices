@@ -1,0 +1,49 @@
+create_whatif_po:
+  Q_get_po_hdr: "SELECT GREATEST(not_before_date,%s) not_before_date,  
+                                                                            order_no,
+                                                                            order_type,
+                                                                            supplier_site,
+                                                                            create_id,
+                                                                            dummy_order_no
+                                                                 FROM alloc_what_if_head
+                                                                WHERE alloc_no = %s
+                                                                  AND status ='N';"
+
+
+
+  Q_get_po_dtl: "SELECT item,
+                                      location_type,
+                                      location_id,
+                                      ord_qty,
+                                      country_of_origin
+                                 FROM alloc_what_if_detail
+                                WHERE order_no = %s
+                                  AND alloc_no = %s ;"
+
+  Q_chck_supplier: "SELECT IF(COALESCE(s.ship_window_days, -1), -1, alc_ship_window_days) AS alc_ship_window_days
+                                   FROM (SELECT s.supplier, sce.varchar2_4 AS ship_window_days, sce.number_11 AS excp_replen_order_days
+		                           FROM sups_cfa_ext sce
+                                  RIGHT JOIN sups s ON s.supplier = sce.supplier
+		                          WHERE sce.group_id = 3 AND s.supplier_parent IS NOT NULL) s
+                                  INNER JOIN aso_system_options aso ON s.supplier = %s
+                               ORDER BY s.supplier;"
+
+  Q_chck_alloc: "SELECT code FROM code_detail WHERE code_type='WIAL';"
+
+  Q_upd_wi_head: "UPDATE alloc_what_if_head SET error_desc=null, status='E' WHERE order_no = %s AND alloc_no = %s AND status='N';"
+
+  Q_upd_gtt: "UPDATE alloc_whatif_summary_temp SET error_desc = null WHERE alloc_no = %s AND order_no = %s;"
+
+  Q_ins_ord_cfx_head: "INSERT INTO ordhead_cfa_ext (order_no,group_id,varchar2_1) values (%s,21,1);"
+
+  Q_upd_head: "UPDATE alloc_what_if_head SET error_desc=NULL, status='P' WHERE order_no = %s AND alloc_no = %s AND status='N';"
+
+  Q_upd_gtt_1: "UPDATE alloc_whatif_summary_temp SET order_no = %s, error_desc = NULL WHERE alloc_no = %s AND order_no = %s;"
+
+  Q_ins_whatif_po_alloc: "INSERT INTO  alloc_whatif_po_alloc (what_if_alloc_id, alloc_id, order_no) VALUES (%s,%s,%s);"
+
+  Q_upd_head_1: "UPDATE alloc_what_if_head SET status='P' WHERE order_no = %s AND alloc_no = %s AND status='N';"
+
+  Q_sel_status: "select status from alloc_what_if_head where alloc_no = %s and status = 'P';"
+
+  Q_upd_status: "UPDATE alloc_head SET status='POC' WHERE alloc_no = %s;"

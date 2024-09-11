@@ -1,0 +1,8 @@
+create_alloc:
+  Q_sel_proces_id_head: "select alloc_sync_process_id from alloc_sync_header_temp where alc_alloc_id = %s;"
+
+  Q_sel_process_id_dtl: "select alloc_sync_process_id from alloc_sync_detail_temp where alc_alloc_id = %s;"
+
+  Q_del_sync_header: "delete from alloc_sync_header_temp where alloc_sync_process_id = %s"
+
+  Q_del_sync_dtl: "delete from alloc_sync_detail_temp where alloc_sync_process_id = %s"

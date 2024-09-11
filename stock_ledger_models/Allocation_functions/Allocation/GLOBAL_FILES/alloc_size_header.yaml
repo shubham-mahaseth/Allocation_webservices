@@ -1,0 +1,90 @@
+func_retreive_alloc_size_hdr:
+  Q_crt_tbl: " CREATE TEMPORARY TABLE IF NOT EXISTS alloc_item_loc_sku_hdr_tmp(ALLOC_NO	            NUMERIC(15),
+																				 WH_ID	            VARCHAR(40),
+																				 SOURCE_ITEM	    VARCHAR(25),
+																				 SOURCE_ITEM_DESC	VARCHAR(250),
+																				 DIFF_ID	        VARCHAR(10),
+																				 ORDER_NO	        VARCHAR(40),
+																				 AVAIL_QTY	        NUMERIC(20),
+																				 ALLOC_QTY	        NUMERIC(20),
+																				 REMAIN_QTY	        NUMERIC(20)); "
+
+  Q_chck_tbl: " SELECT count(1) chk
+                  FROM information_schema.tables
+                 WHERE table_schema = database()
+                   AND LOWER(table_name) = 'alloc_item_loc_sku_hdr_tmp'; "
+  
+  Q_chck_ac: " SELECT alloc_criteria
+                 FROM alloc_itm_search_dtl
+                WHERE alloc_no = %s 
+                LIMIT 1; "
+  
+  Q_del_hdr_tmp: " DELETE FROM alloc_item_loc_sku_hdr_tmp; "
+
+  Q_ins_hdr_tmp: " INSERT INTO alloc_item_loc_sku_hdr_tmp(alloc_no,
+  														wh_id,
+  														order_no,
+  														source_item,
+  														source_item_desc,
+  														diff_id,
+  														avail_qty,
+  														alloc_qty,
+  														remain_qty)
+                                                   SELECT DISTINCT tmp.alloc_no,
+                                                          CASE 
+                                                              WHEN %s = 'F' 
+                                                                  THEN NULL 
+                                                                  ELSE tmp.wh_id 
+                                                          END wh_id,                     
+                                                          tmp.order_no,
+                                                          tmp.source_item,
+                                                          im.item_desc source_item_desc,
+                                                          tmp.diff_id,
+                                                          (SELECT SUM(DISTINCT avail_qty)  
+                                                             FROM alloc_calc_item_loc 
+                                                            WHERE alloc_no = tmp.alloc_no 
+                                                              AND tmp.wh_id = wh_id 
+                                                              AND COALESCE(tmp.order_no,'$') = COALESCE(order_no,'$')
+                                                              AND tmp.source_item = source_item 
+														 GROUP BY alloc_no, wh_id, order_no, source_item) avail_qty,
+                                                          SUM(tmp.sku_calc_qty)
+                                                              OVER (PARTITION BY tmp.alloc_no,
+                                                                                 CASE WHEN %s = 'F' THEN NULL ELSE tmp.wh_id END,    
+                                                                                 tmp.source_item,
+                                                                                 tmp.diff_id) alloc_qty,
+                                                          GREATEST(CASE WHEN %s = 'F' THEN NULL ELSE    
+                                                                   (SELECT SUM(DISTINCT avail_qty)  
+                                                             FROM alloc_calc_item_loc 
+                                                            WHERE alloc_no = tmp.alloc_no 
+                                                              AND tmp.wh_id = wh_id 
+                                                              AND COALESCE(tmp.order_no,'$') = COALESCE(order_no,'$')
+                                                              AND tmp.source_item = source_item 
+														 GROUP BY alloc_no, wh_id, order_no, source_item)                       
+                                                                   - SUM(tmp.sku_calc_qty)
+                                                                         OVER (PARTITION BY tmp.alloc_no,
+                                                                                            CASE WHEN %s = 'F' THEN NULL ELSE tmp.wh_id END,  
+                                                                                            tmp.source_item,
+                                                                                            tmp.diff_id)
+                                                                   END,0) remain_qty 
+                                                     FROM alloc_calc_item_loc tmp,
+                                                          item_dtl im,
+                                                          item_location ils
+                                                    WHERE tmp.alloc_no = %s
+                                                      AND im.item = tmp.source_item
+                                                      AND ils.location=tmp.wh_id
+                                                      AND ils.item=tmp.tran_item; "
+
+  Q_tmp_hdr_data: " SELECT * 
+                      FROM alloc_item_loc_sku_hdr_tmp 
+                     WHERE alloc_no = %s
+                       AND wh_id    = COALESCE(%s,wh_id)
+                       AND COALESCE(order_no,'$') = COALESCE(%s,COALESCE(order_no,'$'))
+                       AND source_item = COALESCE(%s,source_item)
+                       AND diff_id     = COALESCE(%s,diff_id); "
+
+  Q_tmp_hdr_data_wif: " SELECT * 
+                          FROM alloc_item_loc_sku_hdr_tmp 
+                         WHERE alloc_no = %s
+                           AND COALESCE(order_no,'$') = COALESCE(%s,COALESCE(order_no,'$'))
+                           AND source_item = COALESCE(%s,source_item)
+                           AND diff_id     = COALESCE(%s,diff_id); "

@@ -1,0 +1,206 @@
+size_profile_queries:
+  Q_cre_size_prf_tbl: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_item_loc_size_prof_temp(ALLOC_NO         NUMERIC(15)    
+                                                                                          ,LOCATION_ID      VARCHAR(40)  
+                                                                                          ,LOCATION_DESC    VARCHAR(150) 
+                                                                                          ,SOURCE_ITEM      VARCHAR(25)  
+                                                                                          ,SOURCE_ITEM_DESC VARCHAR(250) 
+                                                                                          ,ITEM             VARCHAR(25)  
+                                                                                          ,ITEM_DESC        VARCHAR(250) 
+                                                                                          ,DIFF_ID          VARCHAR(10)  
+                                                                                          ,CONTRIB_PCT      DECIMAL(20,4)  
+                                                                                          ,SIZE_PROFILE_ID  VARCHAR(10)  
+                                                                                          ,SIZE_PROFILE_IND VARCHAR(1));"
+
+  Q_del_size_prf: "DELETE FROM alloc_item_loc_size_prof_temp
+                         WHERE alloc_no    = %s
+                           AND source_item = %s
+                           AND diff_id     = %s
+                           AND location_id = %s;"
+
+  Q_ins_size_prof: "INSERT INTO alloc_item_loc_size_prof_temp (alloc_no,
+                                                               location_id,
+                                                               location_desc,
+                                                               source_item,
+                                                               source_item_desc,
+                                                               item,
+                                                               item_desc,
+                                                               diff_id,
+                                                               contrib_pct)
+                           SELECT alloc_no,
+                                  to_loc,
+                                  NULL,
+                                  source_item,
+                                  NULL,
+                                  tran_item,
+                                  id.item_desc,
+                                  diff_id,
+                                  size_profile_qty
+                             FROM alloc_calc_item_loc ilc, 
+                                  item_dtl id
+                            WHERE alloc_no = {}
+                              AND source_item = {}
+                              AND diff_id = '{}'
+                              AND wh_id = {}
+                              AND COALESCE(order_no, '$') = COALESCE({}, COALESCE(order_no, '$'))
+                              AND to_loc = {}
+                              AND size_profile_ind IS NOT NULL
+                              AND id.item = ilc.tran_item;"
+
+  Q_fetch_size_prof: "SELECT * FROM alloc_item_loc_size_prof_temp WHERE alloc_no = %s;"
+
+retreive_alloc_size_details:
+  Q_source_dtl: "SELECT DISTINCT tmp.ALLOC_NO,
+                        ASSIGN_DEFAULT_WH, 
+                        WH_ID,
+                        ORDER_NO,
+                        TO_LOC, 
+                        CASE WHEN ld.group_type = '7' 
+                             THEN NULL 
+                             ELSE ld.group_id 
+                         END LOCATION_GROUP_ID,
+                        CASE WHEN ld.group_type = '7' 
+                             THEN NULL  
+                             ELSE ld.group_desc  
+                         END LOCATION_GROUP_DESC,
+                        SOURCE_ITEM,
+                        tmp.DIFF_ID DIFF_ID,
+                        TRAN_ITEM
+                        /*COALESCE(sku_avail_qty,0) SKU_AVAIL_QTY,
+                        SUM(sku_calc_qty) OVER(PARTITION BY tmp.alloc_no, 
+                                                            wh_id, 
+                                                            order_no, 
+                                                            source_item, 
+                                                            tran_item) AS TOTAL_SKU_CALC_QTY, 
+                        COALESCE(sku_calc_qty,0) SKU_CALC_QTY,
+                        COALESCE(stock_on_hand,0) STOCK_ON_HAND*/
+                        /*CASE WHEN  L_chk_manl_rule = 1 
+                             THEN NULL
+                             ELSE GREATEST((COALESCE(tmp.gross_need_no_own_ship,0)- COALESCE (tmp.stock_on_hand, 0)),0)
+                         END net_need*/ 
+                   FROM alloc_calc_item_loc tmp,
+                        item_dtl id, 
+                        alloc_loc_group_detail ld, 
+                        alloc_location al   
+                  WHERE tmp.alloc_no    = {}
+                    AND tmp.source_item = COALESCE('{}',tmp.source_item)
+                    AND tmp.diff_id     = COALESCE('{}',tmp.diff_id) 
+                    AND tmp.to_loc      = COALESCE({},tmp.to_loc) 
+                    AND tmp.wh_id       = COALESCE({},tmp.wh_id) 
+                    AND id.item         = tmp.tran_item  
+                    AND ld.alloc_no     = tmp.alloc_no 
+                    AND ld.loc_group_id = al.loc_group_id 
+                    AND tmp.to_loc      = al.location_id  
+                    AND COALESCE(tmp.order_no,'$') = COALESCE({},COALESCE(tmp.order_no,'$'));"
+
+  Q_get_tran_dtl: "SELECT DISTINCT * 
+                     FROM(SELECT TRAN_ITEM,
+                                 SOURCE_ITEM
+                            FROM alloc_calc_item_loc tmp   
+                           WHERE tmp.alloc_no    = {}
+                             AND tmp.source_item = COALESCE('{}',tmp.source_item)
+                             AND tmp.diff_id     = COALESCE('{}',tmp.diff_id)
+                             AND tmp.to_loc      = COALESCE({},tmp.to_loc)
+                             AND tmp.wh_id       = COALESCE({},tmp.wh_id)
+                             AND COALESCE(tmp.order_no,'$') = COALESCE({},COALESCE(tmp.order_no,'$'))
+                           )temp 
+                    WHERE temp.source_item = {};"
+
+  Q_get_tran_dtl1: "SELECT DISTINCT * 
+                     FROM(SELECT tmp.ALLOC_NO ALLOC_NO, 
+                                 WH_ID,
+                                 ORDER_NO,
+                                 TO_LOC, 
+                                 SOURCE_ITEM,
+                                 DIFF_ID, 
+                                 TRAN_ITEM
+                            FROM alloc_calc_item_loc tmp  
+                           WHERE tmp.alloc_no    = {}
+                             AND tmp.source_item = COALESCE('{}',tmp.source_item)
+                             AND tmp.diff_id     = COALESCE('{}',tmp.diff_id) 
+                             AND tmp.to_loc      = COALESCE({},tmp.to_loc) 
+                             AND tmp.wh_id       = COALESCE({},tmp.wh_id)
+                             AND COALESCE(tmp.order_no,'$') = COALESCE({},COALESCE(tmp.order_no,'$'))
+                           )temp 
+                    WHERE temp.source_item = {}
+                      AND temp.tran_item = {};"
+
+
+  Q_tran_dtl: "SELECT DISTINCT ALLOC_NO,
+                      TRAN_ITEM,
+                      DIFF_ID,
+                      TO_LOC,
+                      WH_ID,
+                      SOURCE_ITEM TRAN_SOURCE_ITEM,
+                     GREATEST((  SUM(  COALESCE(on_order,0)
+               		        + COALESCE(on_alloc,0)
+               		        + COALESCE(in_transit_qty,0)) 
+                      + SUM(GREATEST(  COALESCE(stock_on_hand,0)
+                                      - COALESCE(on_order,0)
+                                      - COALESCE(on_alloc,0)
+                                      - COALESCE(in_transit_qty,0),
+                                     0))
+                       ),0) AS 'OH_FF',
+               	   SUM(  gross_need_no_own_ship
+                          - COALESCE(stock_on_hand, 0)
+                          ) NET_NEED,
+                   
+                   GREATEST(CASE WHEN '{}' = 'F' 
+                                    THEN NULL 
+                                    ELSE    
+                                       (SELECT 
+                                              (  SUM(sku_avail_qty) OVER(PARTITION BY t1.tran_item,
+                                                                                      t1.diff_id,
+                                                                                      t1.wh_id,
+                                                                                      t1.alloc_no)
+                                               - SUM(sku_calc_qty)
+                                               )
+                                        FROM alloc_calc_item_loc t1
+                                        WHERE t1.alloc_no  = t2.alloc_no
+                                          AND t1.tran_item = t2.tran_item
+                                          AND t1.diff_id   = t2.diff_id
+                                          AND t1.wh_id     = t2.wh_id 
+                                        GROUP BY t1.tran_item,
+                                                 t1.diff_id,
+                                                 t1.wh_id,
+                                                 t1.alloc_no)
+                                END
+                               ,0) REMAIN_QTY,
+                  SUM(sku_calc_qty) CALC_QTY                      
+             FROM alloc_calc_item_loc t2
+            WHERE alloc_no  = {}
+              AND tran_item = '{}'
+              AND diff_id   = '{}'
+              AND to_loc    = {}
+              AND wh_id     = {}
+            GROUP BY tran_item,
+                     diff_id,
+                     wh_id,
+                     alloc_no;"
+
+  Q_tran_new_df: "SELECT DISTINCT il.alloc_no    AS ALLOC_NO,
+                         il.tran_item   AS TRAN_ITEM,
+                         il.source_item AS SOURCE_ITEM,
+                         id.aggr_diff_id AS TRAN_DIFF_ID
+                    FROM alloc_calc_item_loc il,
+                         item_dtl id 
+                   WHERE il.alloc_no    = %s
+                     AND id.item        = il.tran_item
+                     AND il.source_item = id.item_parent;"
+
+  Q_result: "SELECT sd.ASSIGN_DEFAULT_WH, 
+                    sd.ORDER_NO,
+                    sd.LOCATION_GROUP_ID,
+                    sd.LOCATION_GROUP_DESC,
+                    sd.SOURCE_ITEM,
+                    td.*
+               FROM alloc_src_dtl_dummy sd,
+                    alloc_tran_dtl_dummy td
+              WHERE sd.alloc_no  = td.alloc_no 
+                AND sd.tran_item = td.tran_item
+                AND sd.to_loc    = td.to_loc
+                AND sd.source_item    = td.tran_source_item
+                AND sd.wh_id     = td.wh_id;"
+
+  Q_merged: "SELECT * 
+                FROM alloc_size_tran_dtl_temp 
+               ORDER BY CAST(TO_LOC AS UNSIGNED);"

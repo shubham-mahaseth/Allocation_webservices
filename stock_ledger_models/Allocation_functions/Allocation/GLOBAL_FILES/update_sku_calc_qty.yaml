@@ -1,0 +1,546 @@
+update_calc_qty:
+  Q_chck_pack_data: " SELECT dt.source_item
+                        FROM alloc_calc_destination_temp dt
+                       WHERE dt.alloc_no    = %s
+                         AND dt.source_item = %s
+                         AND dt.to_loc      = %s; "
+
+  Q_chck_alloc_level: " SELECT alloc_level 
+                          FROM alloc_head
+                         WHERE alloc_no = %s; "
+
+  Q_round_adj_qty: " SELECT ROUND(%s/1,0) * 1 adj_qty; "
+
+  Q_upd_sku_calc_qty: " UPDATE alloc_calc_item_loc tmp
+                           SET tmp.sku_calc_qty = 0
+                         WHERE tmp.alloc_no     = %s
+                           AND tmp.source_item  = %s
+                           AND COALESCE(tmp.diff_id,'$')  = COALESCE(%s,COALESCE(tmp.diff_id,'$')) 
+                           AND COALESCE(tmp.order_no,'$') = COALESCE(%s,COALESCE(tmp.order_no,'$'))
+                           AND tmp.wh_id  = %s
+                           AND tmp.to_loc = %s
+                           AND tmp.sku_calc_qty <> 0; "
+
+  Q_chck_total_sku_calc_qty: " SELECT SUM(CASE WHEN to_loc <> %s THEN sku_calc_qty ELSE 0 END) total_tran_sku_calc_qty,
+                                      MIN(avail_qty) avail_qty,
+                                      SUM(CASE WHEN to_loc = %s THEN stock_on_hand ELSE 0 END) soh,
+                                      MIN(net_need_ind) net_need_ind
+                                 FROM alloc_calc_item_loc tmp
+                                WHERE alloc_no = %s
+                                  AND wh_id    = %s
+                                  AND COALESCE(order_no, '$') = COALESCE(%s,COALESCE(order_no,'$'))
+                                  AND source_item             = %s
+                                  AND COALESCE(diff_id,'$')   = COALESCE(%s,COALESCE(diff_id,'$')); "
+
+  Q_cur_spread_items: " SELECT alloc_no,
+                               wh_id,
+                               order_no,
+                               source_item,
+                               tran_item,
+                               org_sku_avail_qty,
+                               remain_qty    sku_avail_qty,
+                               total_tran_sku_calc_qty,
+                               som_qty,
+                               to_loc,
+                               CASE
+                                   WHEN size_profile_ind IS NOT NULL AND size_profile_qty = 0
+                                   THEN
+                                       0
+                                   WHEN size_profile_ind IS NOT NULL AND size_profile_qty <> 0
+                                   THEN
+                                       GREATEST(ROUND(((spread_qty * size_profile_qty)
+                                                - CASE
+                                                      WHEN %s = 'D' AND net_need_ind = 'Y'  
+                                                      THEN
+                                                          stock_on_hand
+                                                      ELSE
+                                                          0
+                                                      END)/ som_qty,0) * som_qty,0)                   
+                                   ELSE
+                                       GREATEST(CEIL(CEIL((sku_avail_qty * ((spread_qty * 100) / remain_qty) / 100)
+                                                        - CASE
+                                                              WHEN %s = 'D' AND net_need_ind = 'Y'  
+                                                              THEN
+                                                                  stock_on_hand
+                                                              ELSE
+                                                                  0
+                                                           END)/ som_qty) * som_qty,0)                   
+                               END adj_units,              
+                               spread_qty    sku_spread_qty
+                               FROM (SELECT DISTINCT
+                                            tmp.alloc_no,
+                                            tmp.wh_id,
+                                            tmp.order_no,
+                                            tmp.source_item,
+                                            tmp.tran_item,
+                                            tmp.diff_id,
+                                            size_profile_qty,
+                                            size_profile_ind,
+                                            tmp.sku_avail_qty org_sku_avail_qty,
+                                            tmp.sku_avail_qty
+                                            - SUM(tmp.sku_calc_qty)
+                                                  OVER (PARTITION BY tmp.alloc_no,
+                                                                     tmp.wh_id,
+                                                                     tmp.source_item,
+                                                                     tmp.tran_item) sku_avail_qty,
+                                            GREATEST(%s, 0) spread_qty,
+                                            SUM(tmp.sku_calc_qty)
+                                                OVER (PARTITION BY tmp.alloc_no,
+                                                                   tmp.wh_id,
+                                                                   tmp.order_no,
+                                                                   tmp.source_item,
+                                                                   tmp.tran_item) total_tran_sku_calc_qty,
+                                            (SELECT SUM(src.avail_qty)  
+                                               FROM (SELECT DISTINCT avail_qty,
+                                                            alloc_no,
+                                                            wh_id,
+                                                            source_item,
+                                                            diff_id 
+                                                       FROM alloc_calc_item_loc 
+                                                      WHERE alloc_no = %s
+                                                       AND source_item =  %s                             
+                                                       AND COALESCE(diff_id,'$')  = COALESCE(%s,COALESCE(diff_id,'$'))  
+                                                       AND COALESCE(order_no,'$') = COALESCE(%s,COALESCE (order_no,'$'))
+                                                       AND wh_id =  %s) src)
+                                            - SUM(tmp.sku_calc_qty)
+                                                  OVER (PARTITION BY tmp.alloc_no,
+                                                                     tmp.wh_id,
+                                                                     tmp.source_item,
+                                                                     tmp.diff_id) remain_qty,
+                                            COUNT(1)
+                                                  OVER (PARTITION BY tmp.alloc_no,
+                                                                     tmp.wh_id,
+                                                                     tmp.order_no,
+                                                                     tmp.source_item,
+                                                                     tmp.diff_id,
+                                                                     tmp.to_loc) no_of_skus,
+                                            tmp.som_qty,
+                                            to_loc,
+                                            stock_on_hand,
+                                            rule_type,
+                                            net_need_ind
+                                       FROM alloc_calc_item_loc tmp
+                                      WHERE alloc_no    = %s
+                                        AND source_item =  %s                             
+                                        AND COALESCE(diff_id,'$')  = COALESCE(%s,COALESCE(diff_id,'$'))  
+                                        AND COALESCE(order_no,'$') = COALESCE(%s,COALESCE (order_no,'$'))
+                                        AND wh_id =  %s) i
+                              WHERE org_sku_avail_qty > total_tran_sku_calc_qty
+                                AND spread_qty  >= som_qty
+                                AND ((rule_type = '7') OR rule_type <> '7')
+                                AND to_loc      =  %s; "
+
+  Q_upd_sprd_sku_calc_qty: " UPDATE alloc_calc_item_loc tmp
+                                SET sku_calc_qty = CASE
+                                                       WHEN GREATEST(ROUND(((GREATEST(%s,som_qty))) / som_qty,0) *  som_qty,0) 
+                                                            > ROUND(sku_avail_qty / som_qty,0)* som_qty
+                                                       THEN
+                                                           ROUND (sku_avail_qty / som_qty,0) * som_qty
+                                                       ELSE
+                                                           GREATEST(ROUND(((%s))/ som_qty,0) * som_qty,0)
+                                                   END,
+                                                   sku_spread_qty = %s
+                                             WHERE alloc_no    = %s
+                                               AND source_item = %s
+                                               AND COALESCE(order_no,'$') = COALESCE(%s,COALESCE(order_no,'$'))
+                                               AND wh_id     = %s
+                                               AND tran_item = %s
+                                               AND to_loc    = %s
+                                               AND sku_avail_qty <> 0; "
+
+  Q_rec_spread: "  SELECT tmp.*,
+                          CASE
+                             WHEN total_tran_sku_calc_qty > sku_avail_qty
+                             THEN
+                                 (total_tran_sku_calc_qty - sku_avail_qty)
+                             WHEN sku_spread_qty < total_tran_sku_loc_calc_qty
+                             THEN
+                                 (total_tran_sku_loc_calc_qty - sku_spread_qty)
+                             WHEN total_tran_diff_calc_qty - total_avail_Qty > 0
+                             THEN
+                                 total_tran_diff_calc_qty - total_avail_Qty
+                             ELSE
+                                  0
+                         END new_total_sku_calc_qty
+                    FROM (SELECT alloc_no,
+                                 wh_id,
+                                 order_no,
+                                 source_item,
+                                 tran_item,
+                                 to_loc,
+                                 gross_need,
+                                 exact_ind,
+                                 diff_id,
+                                 (SELECT SUM(src.avail_qty)  
+                                    FROM (SELECT DISTINCT avail_qty,
+                                                 alloc_no,
+                                                 wh_id,
+                                                 order_no,
+                                                 source_item
+                                            FROM alloc_calc_item_loc 
+                                           WHERE alloc_no = %s
+                                            AND source_item =  %s                             
+                                            AND COALESCE(diff_id,'$')  = COALESCE(%s,COALESCE(diff_id,'$'))  
+                                            AND COALESCE(order_no,'$') = COALESCE(%s,COALESCE (order_no,'$'))
+                                            AND wh_id =  %s) src) total_avail_Qty,
+                                 sku_avail_qty,
+                                 tmp.stock_on_hand,
+                                 sku_spread_qty,
+                                 sku_calc_qty sku_calc_qty,
+                                 SUM(sku_calc_qty)
+                                     OVER (PARTITION BY alloc_no,
+                                                        wh_id,
+                                                        order_no,
+                                                        source_item,
+                                                        diff_id,
+                                                        tran_item) total_tran_sku_calc_qty,
+                                 SUM(sku_calc_qty)
+                                     OVER (PARTITION BY alloc_no,
+                                                        wh_id,
+                                                        order_no,
+                                                        source_item,
+                                                        diff_id,
+                                                        to_loc) total_tran_sku_loc_calc_qty,
+                                 SUM(sku_calc_qty)
+                                     OVER (PARTITION BY alloc_no,
+                                                        wh_id,
+                                                        order_no,
+                                                        source_item,
+                                                        diff_id) total_tran_diff_calc_qty,
+                                 tmp.som_qty
+                            FROM alloc_calc_item_loc tmp
+                           WHERE alloc_no    = %s
+                             AND source_item = %s
+                             AND COALESCE(diff_id,'$')  = COALESCE(%s,COALESCE(diff_id,'$'))  
+                             AND COALESCE(order_no,'$') = COALESCE(%s,COALESCE(order_no,'$'))
+                             AND wh_id = %s
+                             AND sku_avail_qty <> 0
+                             AND sku_calc_qty  <> 0
+                             AND rule_type <> '7'
+                    ORDER BY gross_need_no_own_ship
+                             - CASE
+                                   WHEN net_need_ind = 'Y'
+                                   THEN
+                                       stock_on_hand
+                                   ELSE
+                                       0
+                             END ASC,
+                             sku_calc_qty DESC,
+                             alloc_no,
+                             wh_id,
+                             order_no,
+                             source_item,
+                             tran_item,
+                             to_loc) tmp
+                   WHERE ((total_tran_sku_calc_qty > sku_avail_qty)
+                           OR (sku_spread_qty < total_tran_sku_loc_calc_qty)
+                           OR (total_tran_diff_calc_qty > total_avail_Qty))
+                     AND to_loc = %s
+                  UNION ALL
+                  SELECT tmp.*,
+                         CASE
+                             WHEN total_tran_sku_calc_qty > sku_avail_qty
+                             THEN
+                                 (total_tran_sku_calc_qty - sku_avail_qty)
+                             WHEN sku_spread_qty < total_tran_sku_loc_calc_qty
+                             THEN
+                                 (total_tran_sku_loc_calc_qty - sku_spread_qty)
+                             WHEN total_tran_diff_calc_qty - total_avail_Qty > 0
+                             THEN
+                                 total_tran_diff_calc_qty - total_avail_Qty
+                             ELSE
+                                 0
+                         END new_total_sku_calc_qty
+                    FROM (SELECT alloc_no,
+                                 wh_id,
+                                 order_no,
+                                 source_item,
+                                 tran_item,
+                                 to_loc,
+                                 gross_need,
+                                 exact_ind,
+                                 diff_id,
+                                 (SELECT SUM(src.avail_qty)  
+                                    FROM (SELECT DISTINCT avail_qty,
+                                                 alloc_no,
+                                                 wh_id,
+                                                 order_no,
+                                                 source_item
+                                            FROM alloc_calc_item_loc 
+                                           WHERE alloc_no = %s
+                                            AND source_item =  %s                             
+                                            AND COALESCE(diff_id,'$')  = COALESCE(%s,COALESCE(diff_id,'$'))  
+                                            AND COALESCE(order_no,'$') = COALESCE(%s,COALESCE (order_no,'$'))
+                                            AND wh_id =  %s) src) total_avail_Qty,
+                                 sku_avail_qty,
+                                 tmp.stock_on_hand,
+                                 sku_spread_qty,
+                                 sku_calc_qty sku_calc_qty,
+                                 SUM(sku_calc_qty)
+                                     OVER (PARTITION BY alloc_no,
+                                                        wh_id,
+                                                        order_no,
+                                                        source_item,
+                                                        diff_id,
+                                                        tran_item) total_tran_sku_calc_qty,
+                                 SUM(sku_calc_qty)
+                                     OVER (PARTITION BY alloc_no,
+                                                        wh_id,
+                                                        order_no,
+                                                        source_item,
+                                                        diff_id,
+                                                        to_loc) total_tran_sku_loc_calc_qty,
+                                 SUM(sku_calc_qty)
+                                     OVER (PARTITION BY alloc_no,
+                                                        wh_id,
+                                                        order_no,
+                                                        source_item,
+                                                        diff_id) total_tran_diff_calc_qty,
+                                 tmp.som_qty
+                            FROM alloc_calc_item_loc tmp
+                           WHERE alloc_no    = %s
+                             AND source_item = %s
+                             AND COALESCE(diff_id,'$')  = COALESCE(%s,COALESCE(diff_id,'$'))  
+                             AND COALESCE(order_no,'$') = COALESCE(%s,COALESCE(order_no,'$'))
+                             AND wh_id = %s
+                             AND sku_avail_qty <> 0
+                             AND sku_calc_qty <> 0
+                             AND rule_type = '7'
+                        ORDER BY stock_on_hand DESC,
+                                 sku_calc_qty DESC,
+                                 alloc_no,
+                                 wh_id,
+                                 order_no,
+                                 source_item,
+                                 tran_item,
+                                 to_loc) tmp
+                   WHERE ((total_tran_sku_calc_qty > sku_avail_qty)
+                           OR (sku_spread_qty < total_tran_sku_loc_calc_qty)
+                           OR (total_tran_diff_calc_qty > total_avail_Qty))
+                      AND to_loc = %s; "
+
+  Q_chck_total_tran_sku_cal_qty: " SELECT CASE
+                                              WHEN total_tran_sku_calc_qty > sku_avail_qty
+                                              THEN
+                                                  (total_tran_sku_calc_qty - sku_avail_qty)
+                                              WHEN sku_spread_qty < total_tran_sku_loc_calc_qty
+                                              THEN
+                                                  (total_tran_sku_loc_calc_qty - sku_spread_qty)
+                                              WHEN total_tran_diff_calc_qty - total_avail_Qty > 0
+                                              THEN
+                                                  total_tran_diff_calc_qty - total_avail_Qty
+                                              ELSE
+                                              0
+                                          END new_total_sku_calc_qty
+                                     FROM (SELECT alloc_no,
+                                                  wh_id,
+                                                  order_no,
+                                                  source_item,
+                                                  tran_item,
+                                                  to_loc,
+                                                  gross_need,
+                                                  exact_ind,
+                                                  diff_id,
+                                                  (SELECT SUM(src.avail_qty)  
+                                                     FROM (SELECT DISTINCT avail_qty,
+                                                                  alloc_no,
+                                                                  wh_id,
+                                                                  order_no,
+                                                                  source_item
+                                                             FROM alloc_calc_item_loc 
+                                                            WHERE alloc_no   = %s
+                                                             AND source_item =  %s   
+                                                             AND exact_ind   = %s
+                                                             AND COALESCE(diff_id,'$')  = COALESCE(%s,COALESCE(diff_id,'$'))  
+                                                             AND COALESCE(order_no,'$') = COALESCE(%s,COALESCE (order_no,'$'))
+                                                             AND wh_id =  %s) src) total_avail_Qty,
+                                                  sku_avail_qty,
+                                                  tmp.stock_on_hand,
+                                                  sku_spread_qty,
+                                                  sku_calc_qty sku_calc_qty,
+                                                  SUM(sku_calc_qty)
+                                                      OVER (PARTITION BY alloc_no,
+                                                                         wh_id,
+                                                                         order_no,
+                                                                         source_item,
+                                                                         diff_id,
+                                                                         tran_item) total_tran_sku_calc_qty,
+                                                  SUM(sku_calc_qty)
+                                                      OVER (PARTITION BY alloc_no,
+                                                                         wh_id,
+                                                                         order_no,
+                                                                         source_item,
+                                                                         diff_id,
+                                                                         to_loc) total_tran_sku_loc_calc_qty,
+                                                  SUM(sku_calc_qty)
+                                                      OVER (PARTITION BY alloc_no,
+                                                                         wh_id,
+                                                                         order_no,
+                                                                         source_item,
+                                                                         diff_id)
+                                                  total_tran_diff_calc_qty,
+                                                  tmp.som_qty
+                                             FROM alloc_calc_item_loc tmp
+                                            WHERE alloc_no = %s
+                                              AND exact_ind = %s
+                                              AND wh_id = %s
+                                              AND COALESCE(order_no,'$') = COALESCE(%s,COALESCE(order_no,'$'))
+                                              AND source_item = %s
+                                              AND COALESCE(diff_id,'$') = COALESCE(%s,COALESCE(diff_id,'$')) 
+                                         ORDER BY gross_need_no_own_ship
+                                                  - CASE
+                                                        WHEN net_need_ind = 'Y' THEN stock_on_hand
+                                                        ELSE 0
+                                                  END ASC,
+                                                  alloc_no,
+                                                  wh_id,
+                                                  order_no,
+                                                  source_item,
+                                                  tran_item,
+                                                  to_loc) tmp
+                                    WHERE ((total_tran_sku_calc_qty > sku_avail_qty)
+                                            OR (sku_spread_qty < total_tran_sku_loc_calc_qty)
+                                            OR (total_tran_diff_calc_qty > total_avail_Qty))
+                                      AND to_loc = %s
+                                      AND tran_item = %s; "
+
+  Q_upd_new_sku_calc_qty: " UPDATE alloc_calc_item_loc
+                               SET sku_calc_qty = GREATEST(FLOOR((sku_calc_qty - %s) / %s) * %s,0)
+                             WHERE alloc_no    = %s
+                               AND source_item = %s
+                               AND tran_item   = %s
+                               AND diff_id = %s
+                               AND wh_id   = %s
+                               AND to_loc  = %s; "
+
+  Q_chck_open_adj_qty: " SELECT 1 final_chck
+                           FROM (SELECT alloc_no,
+                                        wh_id,
+                                        order_no,
+                                        source_item,
+                                        tran_item,
+                                        to_loc,
+                                        gross_need,
+                                        exact_ind,
+                                        diff_id,
+                                        SUM(avail_Qty)
+                                            OVER (PARTITION BY alloc_no,
+                                                               wh_id,
+                                                               order_no,
+                                                               source_item) total_avail_Qty,
+                                        sku_avail_qty,
+                                        tmp.stock_on_hand,
+                                        sku_spread_qty,
+                                        sku_calc_qty sku_calc_qty,
+                                        SUM(sku_calc_qty)
+                                            OVER (PARTITION BY alloc_no,
+                                                               wh_id,
+                                                               order_no,
+                                                               source_item,
+                                                               diff_id,
+                                                               tran_item) total_tran_sku_calc_qty,
+                                        SUM(sku_calc_qty)
+                                            OVER (PARTITION BY alloc_no,
+                                                               wh_id,
+                                                               order_no,
+                                                               source_item,
+                                                               diff_id,
+                                                               to_loc) total_tran_sku_loc_calc_qty,
+                                        SUM(sku_calc_qty)
+                                            OVER (PARTITION BY alloc_no,
+                                                               wh_id,
+                                                               order_no,
+                                                               source_item,
+                                                               diff_id) total_tran_diff_calc_qty,
+                                        tmp.som_qty
+                                   FROM alloc_calc_item_loc tmp
+                                  WHERE alloc_no    = %s 
+                                    AND source_item = %s 
+                                    AND COALESCE(diff_id,'$') = COALESCE(%s ,COALESCE(diff_id,'$'))  
+                                    AND COALESCE(order_no,'$') = COALESCE(%s ,COALESCE(order_no,'$'))
+                                    AND wh_id = %s 
+                                    AND sku_avail_qty <> 0
+                                    AND sku_calc_qty <> 0
+                               ORDER BY gross_need_no_own_ship
+                                        - CASE
+                                              WHEN net_need_ind = 'Y' THEN stock_on_hand
+                                              ELSE 0
+                                        END ASC,
+                                        alloc_no,
+                                        wh_id,
+                                        order_no,
+                                        source_item,
+                                        tran_item,
+                                        to_loc) tmp
+                                  WHERE ((total_tran_sku_calc_qty > sku_avail_qty)
+                                          OR (sku_spread_qty < total_tran_sku_loc_calc_qty)
+                                          OR (total_tran_diff_calc_qty > total_avail_Qty))
+                                     AND to_loc = %s 
+                                     AND CASE
+                                             WHEN total_tran_sku_calc_qty > sku_avail_qty
+                                             THEN
+                                                 (total_tran_sku_calc_qty - sku_avail_qty)
+                                             WHEN sku_spread_qty < total_tran_sku_loc_calc_qty
+                                             THEN
+                                                 (total_tran_sku_loc_calc_qty - sku_spread_qty)
+                                             WHEN total_tran_diff_calc_qty - total_avail_Qty >
+                                             0
+                                             THEN
+                                                 total_tran_diff_calc_qty - total_avail_Qty
+                                             ELSE
+                                                 0
+                                         END <> 0; "
+
+  Q_upd_sku_sprd_qty: " UPDATE alloc_calc_item_loc tmp
+                           SET sku_spread_qty = NULL, 
+                               alloc_sku_calc_qty = NULL
+                         WHERE alloc_no = %s
+                           AND source_item = %s
+                           AND COALESCE(order_no,'$') = COALESCE(%s,COALESCE(order_no,'$'))
+                           AND wh_id     = %s
+                           AND tran_item = %s
+                           AND to_loc    = %s
+                           AND sku_avail_qty <> 0; "
+
+  Q_alloc_qty: " SELECT calc_qty
+                   FROM (SELECT DISTINCT tmp.alloc_no,
+                                tmp.wh_id,
+                                tmp.order_no,
+                                tmp.to_loc,
+                                tmp.source_item,
+                                tmp.diff_id,
+                                SUM(tmp.sku_calc_qty)
+                                    OVER (PARTITION BY tmp.alloc_no,
+                                                       tmp.wh_id,
+                                                       tmp.source_item,
+                                                       tmp.diff_id,
+                                                       tmp.order_no,
+                                                       tmp.to_loc) calc_qty
+                           FROM alloc_calc_item_loc tmp
+                          WHERE alloc_no    = %s
+                            AND source_item = %s
+                            AND COALESCE(diff_id,'$') = COALESCE(%s,COALESCE(diff_id,'$')) 
+                            AND wh_id = %s
+                            AND COALESCE (order_no,'$') = COALESCE (%s,COALESCE(order_no, '$'))) i
+                  WHERE to_loc = %s; "
+
+  Q_diff_alloc_qty: " SELECT SUM(COALESCE(tmp.sku_calc_qty,0)) calc_qty
+                        FROM alloc_calc_item_loc tmp
+                       WHERE alloc_no   = %s
+                        AND source_item = %s
+                        AND COALESCE(diff_id,'$') = COALESCE(%s,COALESCE(diff_id,'$')) 
+                        AND wh_id = %s
+                        AND COALESCE(order_no,'$') = COALESCE(%s,COALESCE(order_no,'$'))
+                   GROUP BY tmp.alloc_no,
+                            tmp.wh_id,
+                            tmp.source_item,
+                            tmp.diff_id; "
+
+  Q_diff_tot_alloc_qty: " SELECT SUM(COALESCE(tmp.sku_calc_qty,0)) calc_qty
+                            FROM alloc_calc_item_loc tmp
+                           WHERE alloc_no   = %s
+                             AND source_item = %s
+                             AND COALESCE(diff_id,'$') = COALESCE(%s,COALESCE(diff_id,'$')) 
+                        GROUP BY tmp.alloc_no,
+                                 tmp.source_item,
+                                 tmp.diff_id; "

@@ -1,0 +1,938 @@
+as_fun_search_results:
+  Q_create_tmp_table   : " CREATE TEMPORARY TABLE IF NOT EXISTS alloc_summary(SELECTED VARCHAR(1),
+                                                                              ALLOC_NO NUMERIC(15, 0),
+                                                                              ALLOC_DESC VARCHAR(300), 
+                                                                              CONTEXT VARCHAR(10),
+                                                                              PROMOTION VARCHAR(200), 
+                                                                              ALLOCATED_QTY NUMERIC(12, 4),
+                                                                              CANCELED_QTY NUMERIC(12, 4),
+                                                                              RECEIVED_QTY NUMERIC(12, 4),
+                                                                              SHIPPED_QTY NUMERIC(12, 4),
+                                                                              STATUS_CODE VARCHAR(6), 
+                                                                              STATUS VARCHAR(40),
+                                                                              RELEASE_DATE DATE,
+                                                                              CREATED_DATE DATE,
+                                                                              CREATED_BY_USER_ID VARCHAR(120),
+                                                                              DTLCOUNT NUMERIC(10, 0), 
+                                                                              LOCCOUNT NUMERIC,
+                                                                              DOC_TYPE VARCHAR(3),
+                                                                              SELECTED_QTY NUMERIC,
+                                                                              ALLOC_LEVEL_CODE VARCHAR(10),
+                                                                              CALC_STATUS VARCHAR(15)); "
+
+  Q_create_status_tbl  : " CREATE TABLE IF NOT EXISTS alloc_status(STATUS VARCHAR(6), SEL_IND VARCHAR(1)); "
+
+  Q_delete_srch_results: " DELETE FROM alloc_summary; "
+
+  Q_alloc_status       : " SELECT COUNT(status) cnt FROM alloc_status WHERE sel_ind = 'Y'; "
+
+  Q_insert_srch_results: " INSERT INTO alloc_summary(alloc_no,
+                                                     alloc_desc,
+                                                     doc_type,
+                                                     context,
+                                                     promotion,
+                                                     loccount,                         
+                                                     allocated_qty,
+                                                     canceled_qty,
+                                                     received_qty,
+                                                     shipped_qty,
+                                                     selected_qty, 
+                                                     status_code,
+                                                     status,
+                                                     dtlcount,   
+                                                     release_date,
+                                                     alloc_level_code,                                        
+                                                     created_date,
+                                                     created_by_user_id,
+                                                       calc_status)
+                         WITH
+                            alloc_status
+                            AS  (SELECT status,sel_ind FROM alloc_status WHERE sel_ind= 'Y'),
+                            filtered_rec
+                            AS
+                                (SELECT ah.alloc_no,
+                                          ah.alloc_desc,
+                                          ah.context,
+                                          CASE 
+                                              WHEN ah.promotion IS NOT NULL
+                                              THEN 
+                                                  CONCAT(ah.promotion,' - ',IFNULL(ah.promo_desc,ah.promotion))
+                                              ELSE
+                                                  NULL
+                                          END promotion,
+                                          ax.allocated_qty,
+                                          ah.status status_code,
+                                          cd.code_desc status,
+                                          ah.release_date,
+                                          ah.alloc_level,            
+                                          ah.create_datetime,
+                                          IFNULL(usr.user_name,ah.create_id) created_by_user_id,
+                                          CASE 
+                                              WHEN %s = 'A' AND ah.parent_id IS NULL           
+                                              THEN 
+                                                  1
+                                              WHEN %s = 'C' AND ah.parent_id IS NOT NULL 
+                                              THEN 
+                                                  1
+                                              WHEN %s = 'S' 
+                                              THEN 
+                                                  1
+                                              ELSE 
+                                                  0
+                                          END eligible_ind,
+                                          ax.xref_alloc_no,
+                                          CASE
+                                            WHEN ah.batch_ind = 'Y' AND ah.process_ind = 'I' THEN 'WIP'                   
+                                            WHEN ah.batch_ind = 'Y' AND ah.process_ind = 'N' THEN 'In Queue'
+                                            WHEN ah.batch_ind = 'Y' AND ah.process_ind = 'Y' THEN 'Batched'
+                                            WHEN ah.batch_ind = 'Y' AND ah.process_ind = 'E' THEN 'Batched'
+                                            WHEN ah.batch_ind = 'N' THEN 'Not Calculated'
+                                            ELSE 'Online'
+                                          END calc_status
+                                     FROM alloc_head ah,
+                                          alloc_xref ax,
+                                          (SELECT user_name,
+                                                  user_id
+                                             FROM alloc_users
+                                            WHERE UPPER(user_name) = UPPER(IFNULL(%s,user_name))) usr,
+                                          code_detail cd
+                                    WHERE ah.alloc_no           = ax.alloc_no
+                                      AND ah.alloc_no           = IFNULL(%s, ah.alloc_no)
+                                      AND (%s = 0 OR (%s !=0 AND ah.status IN ( SELECT status FROM alloc_status WHERE sel_ind= 'Y')))
+                                      AND IFNULL(ah.alloc_type,'A') = %s
+                                      AND ah.alloc_desc LIKE COALESCE(%s,ah.alloc_desc)
+                                      AND ah.context              = IFNULL(%s,ah.context)
+                                      AND IFNULL(ah.promotion,-1) = IFNULL(%s,IFNULL(ah.promotion,-1))
+                                      AND DATE(ah.create_datetime) BETWEEN IFNULL(%s ,DATE(ah.create_datetime)) AND IFNULL(%s ,DATE(ah.create_datetime)) 
+                                      AND ah.create_id = usr.user_id
+                                                                    
+                                      AND DATE(ax.release_date) BETWEEN IFNULL(%s,DATE(ax.release_date)) AND IFNULL(%s,DATE(ax.release_date)) 
+                                      AND IFNULL(ax.order_no,-1)   = IFNULL(%s,IFNULL(ax.order_no,-1))  
+                                      AND COALESCE(ah.batch_ind,'$') = CASE WHEN %s = 'Y' THEN 'Y' ELSE COALESCE(ah.batch_ind,'$') END                       
+                                      AND (%s is NULL OR EXISTS (SELECT 1
+                                                                   FROM alloc_itm_search_dtl atx
+                                                                  WHERE ah.alloc_no = atx.alloc_no 
+                                                                    AND IFNULL(ax.order_no,-1) = atx.ref_1
+                                                                    AND atx.alloc_criteria = 'A'
+                                                                    AND %s = SUBSTR(atx.ref_2,instr(atx.ref_2,'/')+1,INSTR(SUBSTR(atx.ref_2,instr(atx.ref_2,'/')+1),'/')-1)
+                                                                   UNION
+                                                                 SELECT 1 
+                                                                   FROM alloc_item_loc_srch_temp_hst ahx
+                                                                  WHERE ah.alloc_no = ahx.alloc_no 
+                                                                    AND IFNULL(ax.order_no,-1) = ahx.doc_id
+                                                                    AND ahx.doc_type='A'
+                                                                    AND %s = substr(ahx.doc_desc,INSTR(ahx.doc_desc,'/')+1,INSTR(SUBSTR(ahx.doc_desc,INSTR(ahx.doc_desc,'/')+1),'/')-1))) 
+                                       AND (%s is NULL OR EXISTS (SELECT 1
+                                                                          FROM alloc_itm_search_dtl atx
+                                                                         WHERE ah.alloc_no = atx.alloc_no 
+                                                                           AND atx.alloc_criteria = 'T'
+                                                                           AND %s = SUBSTR(atx.ref_2,1,INSTR(atx.ref_2,'/')-1)  /* to add doc_desc */
+                                                                        UNION
+                                                                        SELECT 1 
+                                                                          FROM alloc_item_loc_srch_temp_hst ahx
+                                                                         WHERE ah.alloc_no = ahx.alloc_no 
+                                                                           AND ahx.doc_type='T'
+                                                                           AND %s = SUBSTR(ahx.doc_desc,1,INSTR(ahx.doc_desc,'/')-1)))
+                                       AND ax.wh_id              = IFNULL(%s,ax.wh_id)
+                                       AND cd.code_type          ='ALTS'
+                                       AND cd.code               = ah.status
+                                       AND EXISTS (SELECT 1 
+                                                     FROM item_dtl id
+                                                    WHERE ax.item_id = id.item
+                                                      AND id.hier1   = IFNULL(%s,id.hier1)
+                                                      AND id.hier2   = IFNULL(%s,id.hier2)
+                                                      AND id.hier3   = IFNULL(%s,id.hier3)                
+                                                    AND IFNULL(id.item_parent,'$') = IFNULL(%s,IFNULL(id.item_parent,'$'))  
+                                                      AND (%s IS NULL OR (   id.diff1 = %s
+                                                                                 OR id.diff2 = %s
+                                                                                 OR id.diff3 = %s
+                                                                                 OR id.diff4 = %s))
+                                                    AND id.item     = IFNULL(%s,id.item) 
+                                                      AND id.item     = IFNULL(%s,id.item))
+                                       AND (%s IS NULL OR EXISTS (SELECT 1
+                                                                       FROM alloc_itm_search_dtl ax
+                                                                      WHERE ah.alloc_no = ax.alloc_no 
+                                                                        AND UPPER(ax.vpn) = UPPER(%s)
+                                                                      UNION
+                                                                     SELECT 1 
+                                                                       FROM alloc_item_loc_srch_temp_hst ahx
+                                                                      WHERE ah.alloc_no = ahx.alloc_no
+                                                                        AND UPPER(ahx.vpn) = UPPER(%s)))
+                                       AND (%s IS NULL OR %s='ALL' OR EXISTS (SELECT 1
+                                                                                           FROM alloc_itm_search_dtl ax          
+                                                                                          WHERE ah.alloc_no = ax.alloc_no 
+                                                                                            AND IFNULL(ax.alloc_criteria,'$') = CASE WHEN %s = 'WH' THEN '$'
+                                                                                                                               ELSE %s
+                                                                                                                           END
+                                                                                          UNION
+                                                                                          SELECT 1 
+                                                                                            FROM alloc_item_loc_srch_temp_hst ahx
+                                                                                           WHERE ah.alloc_no = ahx.alloc_no
+                                                                                             AND IFNULL(ahx.doc_type,'$') = CASE WHEN %s = 'WH' THEN '$'
+                                                                                                                                 ELSE %s
+                                                                                                                            END))
+                                   UNION                        
+                                   SELECT ah.alloc_no,
+                                          ah.alloc_desc,
+                                          ah.context,
+                                          CASE 
+                                            WHEN ah.promotion IS NOT NULL
+                                            THEN 
+                                                CONCAT(ah.promotion,' - ',ah.promotion)
+                                              ELSE
+                                                NULL
+                                          END promotion,
+                                          0 allocated_qty,
+                                          ah.status status_code,
+                                          cd.code_desc status,
+                                          ah.release_date,
+                                          ah.alloc_level,                      
+                                          ah.create_datetime,
+                                          IFNULL(usr.user_name,ah.create_id) created_by_user_id,
+                                          CASE 
+                                            WHEN %s = 'A' AND ah.parent_id IS NULL 
+                                              THEN 
+                                                  1
+                                              WHEN %s = 'C' AND ah.parent_id IS NOT NULL 
+                                              THEN 
+                                                  1
+                                              WHEN %s = 'S' 
+                                              THEN 
+                                                  1
+                                              ELSE 
+                                                  0
+                                          END eligible_ind,
+                                          NULL xref_alloc_no,
+                                        CASE
+                                            WHEN ah.batch_ind = 'Y' AND ah.process_ind = 'I' 
+                                            THEN 
+                                                'WIP'
+                                            WHEN ah.batch_ind = 'Y' AND ah.process_ind = 'N' 
+                                            THEN 
+                                                'In Queue'
+                                            WHEN ah.batch_ind = 'Y' AND ah.process_ind = 'Y' 
+                                            THEN 
+                                                'Batched'
+                                            WHEN ah.batch_ind = 'Y' AND ah.process_ind = 'E' 
+                                            THEN 
+                                                  'Batched'
+                                            WHEN ah.batch_ind = 'N' 
+                                            THEN 
+                                                'Not Calculated'
+                                            ELSE 'Online'
+                                        END calc_status
+                                     FROM alloc_head ah,
+                                          alloc_itm_search_dtl ax,
+                                          (SELECT user_name,
+                                                  user_id
+                                             FROM alloc_users
+                                            WHERE UPPER(user_name) = UPPER(IFNULL(%s,user_name))) usr,
+                                          code_detail cd
+                                    WHERE ah.alloc_no = ax.alloc_no
+                                      AND (%s = 0 OR (%s!=0 AND ah.status IN ( SELECT status FROM alloc_status WHERE sel_ind = 'Y'))) 
+                                      AND IFNULL(ah.alloc_type,'A') = %s                                             
+                                      AND ah.alloc_no = IFNULL(%s, ah.alloc_no)
+                                      AND ah.alloc_desc LIKE COALESCE(%s,ah.alloc_desc)
+                                      AND ah.context = IFNULL(%s,ah.context)
+                                      AND IFNULL(ah.promotion,-1) = IFNULL(%s,IFNULL(ah.promotion,-1))
+                                      AND DATE(ah.create_datetime) BETWEEN IFNULL(%s ,DATE(ah.create_datetime)) AND IFNULL(%s ,DATE(ah.create_datetime)) 
+                                      AND ah.create_id = usr.user_id 
+                                      AND COALESCE(ah.batch_ind,'$') = CASE WHEN %s = 'Y' THEN 'Y' ELSE COALESCE(ah.batch_ind,'$') END  
+                                      AND ((%s ='S' AND ah.status in ('WS','SCHD')) OR (%s <> 'S' and ah.status IN ('WS','POC')))  
+                                      AND (%s IS NULL OR (ax.alloc_criteria IN ('A', 'P') AND ax.ref_1     = %s)) 
+                                      AND (%s IS NULL OR (ax.alloc_criteria = 'A' AND substr(ax.ref_2,instr(ax.ref_2,'/')+1,instr(substr(ax.ref_2,instr(ax.ref_2,'/')+1),'/')-1) = %s))
+                                      AND (%s IS NULL OR (ax.alloc_criteria = 'T' AND substr(ax.ref_2,1,instr(ax.ref_2,'/')-1) = %s))
+                                      AND ax.loc                = IFNULL(%s,ax.loc)
+                                      AND cd.code_type          ='ALTS'
+                                      AND cd.code               = ah.status
+                                      AND DATE(ah.release_date) BETWEEN IFNULL(%s,DATE(ah.release_date)) AND IFNULL(%s,DATE(ah.release_date)) 
+                                      AND ax.hier1              = IFNULL(%s,ax.hier1)
+                                      AND ax.hier2              = IFNULL(%s,ax.hier2)
+                                      AND ax.hier3              = IFNULL(%s,ax.hier3) 
+                                      AND (%s IS NULL OR EXISTS (SELECT 1
+                                                                              FROM item_dtl id
+                                                                             WHERE ax.item = id.item
+                                                                               AND CASE WHEN ah.alloc_level = 'T' THEN id.item_parent ELSE id.item END = %s ))
+                                      AND IFNULL(SUBSTR(ax.diff_id,INSTR(ax.diff_id,'~')+1),'$')  = IFNULL(%s,IFNULL(SUBSTR(ax.diff_id,INSTR(ax.diff_id,'~')+1),'$'))
+                                      AND (%s IS NULL OR (%s IS NOT NULL AND EXISTS (SELECT 1 
+                                                                                                       FROM item_dtl id
+                                                                                                      WHERE id.item = IFNULL(%s,id.item)  
+                                                                                                        AND ax.item = CASE WHEN ah.alloc_level= 'T' THEN id.item ELSE id.item_parent END 
+                                                                                                        AND (IFNULL(SUBSTR(ax.diff_id,INSTR(ax.diff_id,'~')+1),'$')   = IFNULL(id.diff1,'$')
+                                                                                                          OR IFNULL(SUBSTR(ax.diff_id,INSTR(ax.diff_id,'~')+1),'$') = IFNULL(id.diff2,'$') 
+                                                                                                          OR IFNULL(SUBSTR(ax.diff_id,INSTR(ax.diff_id,'~')+1),'$') = IFNULL(id.diff3,'$')
+                                                                                                          OR IFNULL(SUBSTR(ax.diff_id,INSTR(ax.diff_id,'~')+1),'$') = IFNULL(id.diff4,'$'))))) 
+                                      AND (%s IS NULL OR (%s IS NOT NULL AND EXISTS (SELECT 1 
+                                                                                                     FROM item_dtl id
+                                                                                                    WHERE id.item = IFNULL(%s,id.item)
+                                                                                                      AND ax.item = id.item)))                     
+                                      AND (%s IS NULL OR UPPER(ax.vpn) = UPPER(%s)) 
+                                      AND (%s IS NULL OR %s='ALL' OR IFNULL(ax.alloc_criteria,'$') = CASE 
+                                                                                                            WHEN %s = 'WH' 
+                                                                                                            THEN
+                                                                                                                  '$'
+                                                                                                              ELSE  
+                                                                                                                IFNULL(%s,ax.alloc_criteria)
+                                                                                                            END)
+                                      AND EXISTS (SELECT 1
+                                                    FROM alloc_head ah
+                                                   WHERE ah.alloc_no = ah.alloc_no) 
+                                   UNION
+                                   SELECT ah.alloc_no,
+                                          ah.alloc_desc,
+                                          ah.context,
+                                          CASE 
+                                              WHEN ah.promotion IS NOT NULL
+                                              THEN 
+                                                  CONCAT(ah.promotion,' - ',ah.promotion)
+                                              ELSE
+                                                  NULL
+                                          END promotion,
+                                          0 allocated_qty,
+                                          ah.status status_code,
+                                          cd.code_desc status,
+                                          ah.release_date,
+                                          ah.alloc_level,                      
+                                          ah.create_datetime,
+                                          IFNULL(usr.user_name,ah.create_id) created_by_user_id,
+                                          CASE 
+                                            WHEN %s ='A' AND ah.parent_id IS NULL 
+                                              THEN 
+                                                  1
+                                              WHEN %s ='C' AND ah.parent_id IS NOT NULL 
+                                              THEN 
+                                                  1
+                                              WHEN %s ='S' 
+                                              THEN 
+                                                  1
+                                              ELSE 
+                                                  0
+                                          END eligible_ind,
+                                          NULL xref_alloc_no,
+                                        CASE
+                                            WHEN ah.batch_ind = 'Y' AND ah.process_ind = 'I' THEN 'WIP'
+                                            WHEN ah.batch_ind = 'Y' AND ah.process_ind = 'N' THEN 'In Queue'
+                                            WHEN ah.batch_ind = 'Y' AND ah.process_ind = 'Y' THEN 'Batched'
+                                            WHEN ah.batch_ind = 'Y' AND ah.process_ind = 'E' THEN 'Batched'
+                                            WHEN ah.batch_ind = 'N' THEN 'Not Calculated'
+                                        ELSE 'Online'
+                                        END calc_status
+                                     FROM alloc_head ah, 
+                                          alloc_item_loc_srch_temp_hst ax,
+                                          (SELECT user_name,
+                                                  user_id
+                                             FROM alloc_users
+                                            WHERE UPPER(user_name) = UPPER(IFNULL(%s,user_name))) usr,
+                                          code_detail cd
+                                    WHERE ah.alloc_no = ax.alloc_no
+                                      AND (%s = 0 OR (%s !=0 AND ah.status IN (SELECT status FROM alloc_status WHERE sel_ind = 'Y')))
+                                      AND IFNULL(ah.alloc_type,'A') = %s                                             
+                                      AND ah.alloc_no               = IFNULL(%s, ah.alloc_no)
+                                      AND ah.alloc_desc LIKE COALESCE(%s,ah.alloc_desc)
+                                      AND ah.context                = IFNULL(%s,ah.context)
+                                      AND IFNULL(ah.promotion,-1)   = IFNULL(%s,IFNULL(ah.promotion,-1))
+                                      AND DATE(ah.create_datetime) BETWEEN IFNULL(%s ,DATE(ah.create_datetime)) AND IFNULL(%s ,DATE(ah.create_datetime)) 
+                                      AND ah.create_id = usr.user_id
+                                      AND COALESCE(ah.batch_ind,'$') = CASE WHEN %s = 'Y' THEN 'Y' ELSE COALESCE(ah.batch_ind,'$') END     
+                                      AND ((%s ='S' and ah.status in ('WS','SCHD')) OR (%s <> 'S' and ah.status IN ('WS','POC')))  
+                                      AND (%s IS NULL OR (ax.doc_type IN ('A', 'P') AND ax.doc_id = %s)) 
+                                      AND (%s IS NULL OR (ax.doc_type = 'A' AND substr(ax.doc_desc,instr(ax.doc_desc,'/')+1,instr(substr(ax.doc_desc,instr(ax.doc_desc,'/')+1),'/')-1) = %s))
+                                      AND (%s IS NULL OR (ax.doc_type = 'T' AND substr(ax.doc_desc,1,instr(ax.doc_desc,'/')-1) = %s))
+                                      AND ax.loc                = IFNULL(%s,ax.loc)
+                                      AND cd.code_type          ='ALTS'
+                                      AND cd.code               = ah.status
+                                      AND DATE(ah.release_date) BETWEEN IFNULL(%s,DATE(ah.release_date)) AND IFNULL(%s,DATE(ah.release_date)) 
+                                      AND ax.dept               = IFNULL(%s,ax.dept)
+                                      AND ax.class              = IFNULL(%s,ax.class)
+                                      AND ax.subclass           = IFNULL(%s,ax.subclass)
+                                      AND (%s IS NULL OR EXISTS (SELECT 1
+                                                                              FROM item_dtl id
+                                                                             WHERE ax.item = id.item
+                                                                               AND CASE WHEN ah.alloc_level= 'T' THEN id.item_parent ELSE id.item END = %s ))
+                                      AND IFNULL(SUBSTR(ax.diff_id,INSTR(ax.diff_id,'~')+1),'$')  = IFNULL(%s,IFNULL(SUBSTR(ax.diff_id,INSTR(ax.diff_id,'~')+1),'$'))
+                                      AND (%s IS NULL OR (%s IS NOT NULL AND EXISTS (SELECT 1 
+                                                                                                       FROM item_dtl id
+                                                                                                      WHERE id.item       = IFNULL(%s,id.item)
+                                                                                                        AND ax.item = CASE WHEN ah.alloc_level= 'T' THEN id.item ELSE id.item_parent END                                                                     
+                                                                                                        AND (IFNULL(SUBSTR(ax.diff_id,INSTR(ax.diff_id,'~')+1),'$') = IFNULL(id.diff1,'$')
+                                                                                                            OR IFNULL(SUBSTR(ax.diff_id,INSTR(ax.diff_id,'~')+1),'$') = IFNULL(id.diff2,'$')
+                                                                                                            OR IFNULL(SUBSTR(ax.diff_id,INSTR(ax.diff_id,'~')+1),'$') = IFNULL(id.diff3,'$')
+                                                                                                            OR IFNULL(SUBSTR(ax.diff_id,INSTR(ax.diff_id,'~')+1),'$') = IFNULL(id.diff4,'$')))))
+                                       AND (%s IS NULL OR (%s IS NOT NULL AND EXISTS (SELECT 1 
+                                                                                                      FROM item_dtl id
+                                                                                                     WHERE id.item       = IFNULL(%s,id.item)
+                                                                                                       AND ax.item       = id.item)))                                                                 
+                                       AND (%s is NULL OR UPPER(ax.vpn) = UPPER(%s)) 
+                                       AND (%s IS  NULL OR %s='ALL' OR IFNULL(ax.doc_type,'$') = CASE 
+                                                                                                WHEN %s = 'WH' THEN '$'
+                                                                                                ELSE IFNULL(%s,ax.doc_type)
+                                                                                                          END)
+                                       AND EXISTS (SELECT 1
+                                                     FROM alloc_head ah
+                                                    WHERE ah.alloc_no = ah.alloc_no)    
+                                   UNION
+                                   SELECT ah.alloc_no,
+                                          ah.alloc_desc,
+                                          ah.context,
+                                          CASE 
+                                            WHEN ah.promotion IS NOT NULL
+                                            THEN 
+                                                CONCAT(ah.promotion,' - ',ah.promotion)
+                                              ELSE
+                                                NULL
+                                          END promotion,
+                                          0 allocated_qty,
+                                          ah.status status_code,
+                                          cd.code_desc status,
+                                          ah.release_date,
+                                          ah.alloc_level,                            
+                                          ah.create_datetime,
+                                          IFNULL(usr.user_name,ah.create_id) created_by_user_id,
+                                          CASE 
+                                            WHEN %s ='A' AND ah.parent_id IS NULL 
+                                              THEN 
+                                                  1
+                                              WHEN %s ='C' AND ah.parent_id IS NOT NULL 
+                                              THEN 
+                                                  1
+                                              WHEN %s ='S' 
+                                              THEN 
+                                                  1
+                                              ELSE 
+                                                  0
+                                          END eligible_ind,
+                                          NULL xref_alloc_no,
+                                        CASE
+                                            WHEN ah.batch_ind = 'Y' AND ah.process_ind = 'I' 
+                                            THEN 
+                                                'WIP'
+                                            WHEN ah.batch_ind = 'Y' AND ah.process_ind = 'N' 
+                                            THEN 
+                                                'In Queue'
+                                            WHEN ah.batch_ind = 'Y' AND ah.process_ind = 'Y' 
+                                            THEN 
+                                                'Batched'
+                                            WHEN ah.batch_ind = 'Y' AND ah.process_ind = 'E' 
+                                            THEN 
+                                                'Batched'
+                                            WHEN ah.batch_ind = 'N' 
+                                            THEN 
+                                                'Not Calculated'
+                                            ELSE 'Online'
+                                        END calc_status
+                                    FROM alloc_head ah,                                                  
+                                         code_detail cd,
+                                         (SELECT user_name,
+                                                user_id
+                                           FROM alloc_users
+                                          WHERE UPPER(user_name) = UPPER(IFNULL(%s,user_name))) usr
+                                   WHERE ah.alloc_no = IFNULL(%s, ah.alloc_no)
+                                     AND (%s = 0 OR (%s !=0 AND ah.status IN ( SELECT status FROM alloc_status WHERE sel_ind= 'Y')))
+                                     AND IFNULL(ah.alloc_type,'A') = %s
+                                     AND ah.alloc_desc LIKE COALESCE(%s,ah.alloc_desc)
+                                     AND ah.context              = IFNULL(%s,ah.context)
+                                     AND IFNULL(ah.promotion,-1) = IFNULL(%s,IFNULL(ah.promotion,-1))
+                                     AND DATE(ah.create_datetime) BETWEEN IFNULL(%s ,DATE(ah.create_datetime)) AND IFNULL(%s ,DATE(ah.create_datetime)) 
+                                     AND ah.create_id  = usr.user_id 
+                                     AND COALESCE(ah.batch_ind,'$')  = CASE WHEN %s = 'Y' THEN 'Y' ELSE COALESCE(ah.batch_ind,'$') END
+                                                                             
+                                                                  
+                                     AND cd.code_type  ='ALTS'
+                                     AND cd.code       = ah.status
+                                     AND DATE(ah.release_date) BETWEEN IFNULL(%s,DATE(ah.release_date) ) AND IFNULL(%s,DATE(ah.release_date) ) 
+                                     AND %s IS NULL            
+                                     AND %s IS NULL          
+                                     AND %s IS NULL          
+                                     AND %s IS NULL      
+                                     AND %s IS NULL             
+                                     AND %s IS NULL    
+                                     AND %s IS NULL        
+                                     AND %s IS NULL
+                                     AND %s IS NULL  
+                                     AND %s IS NULL 
+                                     AND (%s IS NULL or %s='ALL') 
+                                     AND %s IS NULL  
+                                     AND %s IS NULL   
+                                     AND NOT EXISTS (SELECT 1
+                                                       FROM alloc_xref ax
+                                                      WHERE ah.alloc_no =ax.alloc_no)                                    
+                               )
+                               SELECT alc_rec.alloc_no,
+                                      alc_rec.alloc_desc,
+                                      IFNULL((SELECT alloc_criteria
+                                                FROM alloc_itm_search_dtl ax
+                                               WHERE alc_rec.alloc_no = ax.alloc_no LIMIT 1),
+                                             (SELECT doc_type 
+                                                FROM alloc_item_loc_srch_temp_hst aax
+                                               WHERE alc_rec.alloc_no = aax.alloc_no LIMIT 1)) doc_type,
+                                       alc_rec.context,
+                                       alc_rec.promotion,                      
+                                       0,               
+                                       alloc_rec.allocated_qty,
+                                       alloc_rec.cancel_qty,
+                                       alloc_rec.rec_qty,
+                                       alloc_rec.ship_qty,
+                                       alloc_rec.selected_qty,
+                                       alc_rec.status_code,
+                                       alc_rec.status,
+                                       0,               
+                                       alc_rec.release_date,
+                                       CASE 
+                                            WHEN alloc_level='T' 
+                                           THEN
+                                            'Sku' 
+                                           ELSE
+                                              'Style/Diff' 
+                                       END AS alloc_level,    
+                                       alc_rec.create_datetime,
+                                       alc_rec.created_by_user_id,
+                                       alc_rec.calc_status        
+                                  FROM (SELECT alloc_no,
+                                               alloc_desc,
+                                               context,
+                                               promotion,
+                                               CASE 
+                                                  WHEN status_code IN ('WS','POC')
+                                                  THEN
+                                                      NULL
+                                                  ELSE
+                                                      IFNULL(SUM(allocated_qty),0)
+                                               END allocated_qty,
+                                               status_code,
+                                               status,
+                                               MAX(release_date) release_date,
+                                             MAX(alloc_level) alloc_level,                          
+                                               create_datetime,
+                                               created_by_user_id,
+                                             calc_status
+                                          FROM filtered_rec
+                                         WHERE eligible_ind = 1
+                                      GROUP BY alloc_no,
+                                               alloc_desc,
+                                               context,
+                                               promotion,
+                                               status_code,
+                                               status,
+                                               create_datetime,
+                                               created_by_user_id,
+                                             calc_status) alc_rec 
+                                         LEFT JOIN
+                                       (SELECT fr.alloc_no,
+                                               SUM(IFNULL(ad.cancelled_qty,0)) cancel_qty,
+                                               SUM(IFNULL(ad.received_qty,0)) rec_qty,
+                                               SUM(IFNULL(ad.tsf_qty,0))      ship_qty,
+                                               SUM(IFNULL(ad.selected_qty,0)) selected_qty, 
+                                               SUM(IFNULL(ad.alloc_qty,0)) allocated_qty                                                  
+                                          FROM (SELECT DISTINCT fr.alloc_no,
+                                                     ax.xref_alloc_no,
+                                                     fr.eligible_ind
+                                                FROM alloc_xref ax,
+                                                     filtered_rec fr
+                                               WHERE ax.alloc_no = fr.alloc_no) fr,                                            
+                                               alloc_head ah,
+                                               alloc_dtl ad
+                                         WHERE fr.xref_alloc_no = ah.alloc_no
+                                           AND ah.alloc_no = ad.alloc_no
+                                           AND fr.eligible_ind = 1 
+                                      GROUP BY fr.alloc_no) alloc_rec 
+                                            ON (alc_rec.alloc_no = alloc_rec.alloc_no);"
+
+  Q_insert_alloc_no    : " INSERT INTO alloc_no_as(alloc_no)
+                                                   SELECT DISTINCT alloc_no
+                                                    FROM alloc_summary;"
+    
+  Q_update_srch_dtlcnt : " UPDATE alloc_summary aas
+                              SET dtlcount = (SELECT count(1)
+                                                FROM alloc_itm_search_dtl tmp
+                                               WHERE aas.alloc_no = tmp.alloc_no)
+                                                                                                                                                                      
+                                             +
+                                             (SELECT count(1)
+                                                FROM alloc_item_loc_srch_temp_hst hst
+                                               WHERE aas.alloc_no = hst.alloc_no); "
+
+  Q_update_srch_loccnt : " UPDATE alloc_summary aas
+                              SET loccount = (SELECT COUNT(DISTINCT to_loc) 
+                                                FROM alloc_calc_item_loc  tmp
+                                               WHERE tmp.alloc_no = aas.alloc_no 
+                                                 AND tmp.sku_calc_qty > 0)
+                                                                                                                                                                      
+                                             +
+                                             (SELECT COUNT(DISTINCT to_loc) 
+                                               FROM alloc_calc_item_loc_temp_hst  hst
+                                              WHERE hst.alloc_no = aas.alloc_no 
+                                                AND hst.sku_calc_qty > 0); "
+                                                                         
+
+  Q_search_results     : " SELECT * FROM alloc_summary; "
+
+as_fun_refresh_results:
+  Q_rfsh_summary_res : " SELECT COUNT(1) cnt FROM alloc_summary WHERE alloc_no = %s; "
+
+  Q_del_rfsh : " DELETE FROM alloc_sel_alloc_no; "
+
+  Q_sel_refresh_results: " INSERT INTO alloc_sel_alloc_no(selected,
+                                                          alloc_no,
+                                                          alloc_desc,
+                                                          doc_type,
+                                                          context,
+                                                          promotion,
+                                                          allocated_qty,
+                                                          canceled_qty,
+                                                          received_qty,
+                                                          shipped_qty,
+                                                          selected_qty, 
+                                                          status_code,
+                                                          status,
+                                                          dtlcount, 
+                                                          release_date,
+                                                          created_date,
+                                                          created_by_user_id,
+                                                          calc_status)    
+                                                   SELECT selected,
+                                                          alloc_no,
+                                                          alloc_desc,
+                                                          doc_type,
+                                                          context,
+                                                          promotion,
+                                                          allocated_qty,
+                                                          canceled_qty,
+                                                          received_qty,
+                                                          shipped_qty,
+                                                          selected_qty, 
+                                                          status_code,
+                                                          status,
+                                                          dtlcount, 
+                                                          release_date,
+                                                          created_date,
+                                                          created_by_user_id,
+                                                          calc_status     
+                                                         FROM alloc_summary; "
+
+  Q_del_alloc_summary: " DELETE FROM alloc_summary; "
+
+  Q_delete_alloc_no:   " DELETE FROM alloc_no_as; "
+
+  Q_ins_alloc_summary: " INSERT INTO alloc_summary(selected,
+                                                   alloc_no,
+                                                   alloc_desc,
+                                                   doc_type,
+                                                   context,
+                                                   promotion,
+                                                   allocated_qty,
+                                                   canceled_qty,
+                                                   received_qty,
+                                                   shipped_qty,
+                                                   selected_qty,  
+                                                   status_code,
+                                                   status,
+                                                   dtlcount, 
+                                                   release_date,
+                                                   alloc_level_code,
+                                                   created_date,
+                                                   created_by_user_id,
+                                                   calc_status) 
+                                WITH
+                                    filtered_rec 
+                                    AS 
+                                           (SELECT ah.alloc_no,
+                                                   ah.alloc_desc,
+                                                   ah.context,
+                                                   CASE 
+                                                        WHEN ah.promotion IS NOT NULL
+                                                        THEN 
+                                                            CONCAT(ah.promotion,' - ',COALESCE(ah.promo_desc,ah.promotion))
+                                                        ELSE
+                                                            NULL
+                                                   END promotion,
+                                                   ax.allocated_qty,
+                                                   ah.status status_code,
+                                                   cd.code_desc status,
+                                                   ah.release_date release_date,
+                                                   ah.alloc_level,                                  
+                                                   ax.xref_alloc_no,
+                                                   CASE
+                                                        WHEN ah.batch_ind = 'Y' AND ah.process_ind = 'I' THEN 'WIP'
+                                                        WHEN ah.batch_ind = 'Y' AND ah.process_ind = 'N' THEN 'In Queue'
+                                                        WHEN ah.batch_ind = 'Y' AND ah.process_ind = 'Y' THEN 'Batched'
+                                                        WHEN ah.batch_ind = 'Y' AND ah.process_ind = 'E' THEN 'Batched'
+                                                        WHEN ah.batch_ind = 'N' THEN 'Not Calculated'
+                                                        ELSE 'Online'
+                                                   END calc_status
+                                              FROM alloc_head ah 
+                                              LEFT JOIN alloc_xref ax 
+                                                   ON (ah.alloc_no = ax.alloc_no),
+                                                                                     
+                                                   code_detail cd 
+                                             WHERE cd.code_type ='ALTS'
+                                               AND cd.code  = ah.status
+                                                                                    
+                                               AND EXISTS (SELECT 1 
+                                                             FROM alloc_sel_alloc_no asa
+                                                            WHERE ah.alloc_no = asa.alloc_no))
+                                            SELECT asa.selected,
+                                                   alc_rec.alloc_no,
+                                                   alc_rec.alloc_desc,
+                                                   COALESCE((SELECT doc_type
+                                                               FROM alloc_itm_search_dtl ax
+                                                              WHERE alc_rec.alloc_no = ax.alloc_no limit 1),
+                                                            (select doc_type 
+                                                               FROM alloc_item_loc_srch_temp_hst aax
+                                                              WHERE alc_rec.alloc_no = aax.alloc_no limit 1)) doc_type,
+                                                   alc_rec.context,
+                                                   alc_rec.promotion,
+                                                   alc_rec.allocated_qty,
+                                                   alloc_rec.cancel_qty,
+                                                   alloc_rec.rec_qty,
+                                                   alloc_rec.ship_qty,
+                                                   alloc_rec.selected_qty, 
+                                                   alc_rec.status_code,
+                                                   alc_rec.status,
+                                                   dtlcount, 
+                                                   alc_rec.release_date,
+                                                   CASE 
+                                                        WHEN alloc_level='T' 
+                                                       THEN
+                                                               'Sku' 
+                                                       ELSE
+                                                            'Style/Diff' 
+                                                   END AS alloc_level,                                 
+                                                   asa.created_date,
+                                                   asa.created_by_user_id,
+                                                   alc_rec.calc_status    
+                                              FROM (SELECT alloc_no,
+                                                           alloc_desc,
+                                                           context,
+                                                           promotion,
+                                                           CASE 
+                                                              WHEN status_code IN ('WS','POC')
+                                                              THEN
+                                                                 NULL
+                                                               ELSE
+                                                                coalesce(SUM(allocated_qty),0)
+                                                           END allocated_qty,
+                                                           status_code,
+                                                           status,
+                                                           MAX(release_date) release_date,
+                                                           MAX(alloc_level) alloc_level, 
+                                                           calc_status                            
+                                                      FROM filtered_rec
+                                                  GROUP BY alloc_no,
+                                                           alloc_desc,
+                                                           context,
+                                                           promotion,
+                                                           status_code,
+                                                           status,
+                                                           calc_status) alc_rec 
+                                                      LEFT JOIN
+                                                           (SELECT fr.alloc_no,
+                                                                   SUM(coalesce(ad.cancelled_qty,0)) cancel_qty,
+                                                                   SUM(coalesce(ad.received_qty,0)) rec_qty,
+                                                                   SUM(coalesce(ad.tsf_qty,0)) ship_qty,
+                                                                   SUM(coalesce(ad.selected_qty,0)) selected_qty        
+                                                              FROM filtered_rec fr,
+                                                                   alloc_head ah,
+                                                                   alloc_dtl ad
+                                                             WHERE fr.xref_alloc_no = ah.alloc_no
+                                                                                   
+                                                               AND ah.alloc_no = ad.alloc_no
+                                                          GROUP BY fr.alloc_no) alloc_rec 
+                                                                ON (alc_rec.alloc_no = alloc_rec.alloc_no) 
+                                                   JOIN alloc_sel_alloc_no asa
+                                                     ON (alc_rec.alloc_no = asa.alloc_no); "
+
+
+  Q_ins_alloc_refresh_results: " INSERT INTO alloc_no_as(alloc_no)
+                                                   SELECT DISTINCT alloc_no
+                                                    FROM alloc_summary;"
+
+  Q_update_refresh_dtlcnt : " UPDATE alloc_summary aas
+                              SET dtlcount = (SELECT count(1)
+                                                FROM alloc_itm_search_dtl tmp
+                                               WHERE aas.alloc_no = tmp.alloc_no)
+                                                                                 
+                                             +
+                                             (SELECT count(1)
+                                                FROM alloc_item_loc_srch_temp_hst hst
+                                               WHERE aas.alloc_no = hst.alloc_no); "
+                                         
+
+  Q_update_refresh_loccnt : " UPDATE alloc_summary aas
+                              SET loccount = (SELECT COUNT(DISTINCT to_loc) 
+                                                FROM alloc_calc_item_loc tmp
+                                   
+                                               WHERE tmp.alloc_no = aas.alloc_no 
+                                                 AND tmp.sku_calc_qty > 0)
+                                             +
+                                             (SELECT COUNT(DISTINCT to_loc) 
+                                               FROM alloc_calc_item_loc_temp_hst  hst
+                                   
+                                              WHERE hst.alloc_no = aas.alloc_no 
+                                                AND hst.sku_calc_qty > 0); "
+  
+  Q_refresh_results     : " SELECT * FROM alloc_summary;"
+
+as_fun_alert_results:
+   Q_del_alloc_alert: " DELETE FROM alloc_summary; "
+
+   Q_ins_alloc_alert: " INSERT INTO alloc_summary(alloc_no,
+                                                  alloc_desc,
+                                                  doc_type,
+                                                  context,
+                                                  promotion,
+                                                  loccount,  
+                                                  allocated_qty,
+                                                  canceled_qty,
+                                                  received_qty,
+                                                  shipped_qty,
+                                                  selected_qty, 
+                                                  status_code,
+                                                  status,
+                                                  dtlcount,  
+                                                  release_date,
+                                                  alloc_level_code,    
+                                                  created_date,
+                                                  created_by_user_id,
+                                                  calc_status) 
+                                WITH 
+                                    filtered_rec
+                                    AS 
+                                          (SELECT ah.alloc_no,
+                                                  ah.alloc_desc,
+                                                  ah.context,
+                                                  CASE 
+                                                    WHEN ah.promotion IS NOT NULL
+                                                    THEN 
+                                                        CONCAT(ah.promotion,' - ',coalesce(ah.promo_desc,ah.promotion))
+                                                    ELSE
+                                                        NULL
+                                                  END promotion,
+                                                  ax.allocated_qty,
+                                                  ah.status status_code,
+                                                  cd.code_desc status,
+                                                  ah.release_date,
+                                                  ah.alloc_level,  
+                                                  ah.create_datetime,
+                                                  COALESCE(usr.user_name,char(ah.create_id)) create_id,
+                                                  ax.xref_alloc_no,
+                                                  CASE
+                                                      WHEN ah.batch_ind = 'Y' AND ah.process_ind = 'I' THEN 'WIP'
+                                                      WHEN ah.batch_ind = 'Y' AND ah.process_ind = 'N' THEN 'In Queue'
+                                                      WHEN ah.batch_ind = 'Y' AND ah.process_ind = 'Y' THEN 'Batched'
+                                                      WHEN ah.batch_ind = 'Y' AND ah.process_ind = 'E' THEN 'Batched'
+                                                      WHEN ah.batch_ind = 'N' THEN 'Not Calculated'
+                                                      ELSE 'Online'
+                                                  END calc_status
+                                             FROM alloc_head ah, 
+                                                  alloc_xref ax,
+                                                  (SELECT user_name,
+                                                          user_id
+                                                     FROM alloc_users
+                                                    WHERE user_name=USER()) usr,
+                                                  code_detail cd
+                                            WHERE ah.alloc_no           = ax.alloc_no                              
+                                              AND cd.code_type          ='ALTS'
+                                              AND cd.code               = ah.status
+                                              AND ah.create_id = usr.user_id 
+                                              AND ah.status = 'RSV'
+                                              AND EXISTS (SELECT 1 
+                                                                 FROM alloc_sku_head ah,
+                                                                      po_dtl oh 
+                                                                WHERE ah.order_no IS NOT NULL 
+                                                                  AND ah.order_no=oh.po_no
+                                                                  AND ah.alloc_no=ax.xref_alloc_no
+                                                                  AND ah.alloc_criteria IN ('PO','ASN')
+                                                                  AND oh.not_before_date BETWEEN (SELECT system_date FROM calendar_variables) AND ((SELECT system_date FROM calendar_variables)+7))) 
+                                           SELECT alc_rec.alloc_no,
+                                                  alc_rec.alloc_desc,
+                                                  COALESCE((SELECT doc_type
+                                                              FROM alloc_itm_search_dtl ax
+                                                             WHERE alc_rec.alloc_no = ax.alloc_no limit 1),
+                                                           (select doc_type 
+                                                              FROM alloc_item_loc_srch_temp_hst aax
+                                                             WHERE alc_rec.alloc_no = aax.alloc_no limit 1)) doc_type,
+                                                  alc_rec.context,
+                                                  alc_rec.promotion,
+                                                  0,           
+                                                  alc_rec.allocated_qty,
+                                                  alloc_rec.cancel_qty,
+                                                  alloc_rec.rec_qty,
+                                                  alloc_rec.ship_qty,
+                                                  alloc_rec.selected_qty, 
+                                                  alc_rec.status_code,
+                                                  alc_rec.status,
+                                                  0,              
+                                                  alc_rec.release_date,
+                                                  CASE 
+                                                       WHEN alloc_level='T' 
+                                                      THEN
+                                                             'Sku' 
+                                                       ELSE
+                                                           'Style/Diff' 
+                                                  END AS alloc_level,                                     
+                                                  alc_rec.create_datetime,
+                                                  alc_rec.create_id,
+                                                  alc_rec.calc_status        
+                                             FROM (SELECT alloc_no,
+                                                          alloc_desc,
+                                                          context,
+                                                          promotion,
+                                                          CASE 
+                                                            WHEN status_code IN ('WS','POC')
+                                                            THEN
+                                                               NULL
+                                                            ELSE
+                                                              coalesce(SUM(allocated_qty),0)
+                                                          END allocated_qty,
+                                                          status_code,
+                                                          status,
+                                                          MAX(release_date) release_date,
+                                                          MAX(alloc_level) alloc_level,  
+                                                          create_datetime,
+                                                          create_id,
+                                                          calc_status        
+                                                     FROM filtered_rec
+                                                 GROUP BY alloc_no,
+                                                          alloc_desc,
+                                                          context,
+                                                          promotion,
+                                                          status_code,
+                                                          status,
+                                                          create_datetime,
+                                                          create_id,
+                                                          calc_status) alc_rec 
+                                                     LEFT JOIN
+                                                          (SELECT fr.alloc_no,
+                                                                  SUM(coalesce(ad.cancelled_qty,0)) cancel_qty,
+                                                                  SUM(coalesce(ad.received_qty,0)) rec_qty,
+                                                                  SUM(coalesce(ad.tsf_qty,0)) ship_qty,
+                                                                  SUM(coalesce(ad.selected_qty,0)) selected_qty    
+                                                             FROM filtered_rec fr,
+                                                                  alloc_head ah,
+                                                                  alloc_dtl ad
+                                                            WHERE fr.xref_alloc_no = ah.alloc_no
+                                                              AND ah.alloc_no = ad.alloc_no
+                                                         GROUP BY fr.alloc_no) alloc_rec
+                                                               ON (alc_rec.alloc_no = alloc_rec.alloc_no); "
+
+   Q_update_alert_dtlcnt : " UPDATE alloc_summary aas
+                              SET dtlcount = (SELECT count(1)
+                                                FROM alloc_itm_search_dtl tmp
+                                               WHERE aas.alloc_no = tmp.alloc_no)
+                                             +
+                                             (SELECT count(1)
+                                                FROM alloc_item_loc_srch_temp_hst hst
+                                               WHERE aas.alloc_no = hst.alloc_no); "
+
+   Q_update_alert_loccnt : " UPDATE alloc_summary aas
+                              SET loccount = (SELECT COUNT(DISTINCT to_loc) 
+                                                FROM alloc_calc_item_loc  tmp
+                                               WHERE tmp.alloc_no = aas.alloc_no 
+                                                 AND tmp.sku_calc_qty > 0)
+                                             +
+                                             (SELECT COUNT(DISTINCT to_loc) 
+                                               FROM alloc_calc_item_loc_temp_hst  hst
+                                              WHERE hst.alloc_no = aas.alloc_no 
+                                                AND hst.sku_calc_qty > 0); "
+
+   Q_alert_results      : " SELECT * FROM alloc_summary; "

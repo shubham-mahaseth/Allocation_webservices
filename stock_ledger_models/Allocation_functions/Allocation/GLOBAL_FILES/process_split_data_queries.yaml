@@ -1,0 +1,576 @@
+func_load_split_data:
+  Q_chck_split: " SELECT 1 chck
+                    FROM alloc_itm_search_dtl tmp,
+                         po_dtl oh
+                   WHERE tmp.alloc_no = %s
+                       AND tmp.ref_1 = oh.po_no
+                     AND tmp.alloc_criteria = 'P'
+                     AND oh.status = 'S'
+                     AND tmp.ref_1 IS NOT NULL
+                     AND split_ind = 'Y'; "
+   
+  Q_create_tbl: " CREATE TEMPORARY TABLE IF NOT EXISTS alloc_item_loc_split_temp(SEL_IND             VARCHAR(1),
+                                                                                ALLOC_NO             NUMERIC(15),
+                                                                                ALLOC_CRITERIA       VARCHAR(3),
+                                                                                ITEM                 VARCHAR(25),
+                                                                                ITEM_DESC            VARCHAR(250),
+                                                                                DIFF_ID              VARCHAR(25),
+                                                                                LOC                  NUMERIC(10),
+                                                                                HIER1                VARCHAR(10),
+                                                                                HIER2                VARCHAR(10),
+                                                                                HIER3                VARCHAR(10),
+                                                                                PACK_IND             VARCHAR(1),
+                                                                                INNER_SIZE           DECIMAL(12,4),
+                                                                                CASE_SIZE            DECIMAL(12,4),
+                                                                                AVAIL_QTY            NUMERIC(12),
+                                                                                INACTIVE_QTY         NUMERIC(12),
+                                                                                HOLDBACK_QTY         NUMERIC(12),
+                                                                                HOLDBACK_TYPE        VARCHAR(4),
+                                                                                SIZE_PRF_IND         VARCHAR(1),
+                                                                                SUBSTITUTE_IND       VARCHAR(1),
+                                                                                CLEARANCE_IND        VARCHAR(1),
+                                                                                INVENT_IND           VARCHAR(1),
+                                                                                SPLIT_IND            VARCHAR(1),
+                                                                                SOM_TYPE             VARCHAR(5),
+                                                                                SOM_QTY              NUMERIC(10),
+                                                                                VPN                  VARCHAR(30),
+                                                                                SEASON               VARCHAR(250),
+                                                                                REF_1                VARCHAR(50),
+                                                                                REF_2                VARCHAR(150),
+                                                                                ERR_IND              VARCHAR(1),
+                                                                                ERR_MESSAGE          VARCHAR(500),
+                                                                                CREATE_ID            VARCHAR(20),
+                                                                                CREATE_DATETIME      DATE,
+                                                                                LAST_UPDATE_ID       VARCHAR(25),
+                                                                                LAST_UPDATE_DATETIME DATE); "
+  
+  Q_chck_tbl: " SELECT count(1) chk
+                  FROM information_schema.tables
+                 WHERE table_schema = database()
+                   AND LOWER(table_name) = 'alloc_item_loc_split_temp'; "
+
+  Q_del_split: " DELETE FROM alloc_item_loc_split_temp; "
+
+  Q_ins_split: " INSERT INTO alloc_item_loc_split_temp(sel_ind,                          
+                                                      alloc_no,                      
+                                                      alloc_criteria,                    
+                                                      item,                            
+                                                      item_desc,                      
+                                                      diff_id,                          
+                                                      loc,                              
+                                                      hier1,                          
+                                                      hier2,                          
+                                                      hier3,                          
+                                                      pack_ind,                      
+                                                      inner_size,                      
+                                                      case_size,                      
+                                                      avail_qty,                      
+                                                      inactive_qty,                 
+                                                      holdback_qty,                  
+                                                      holdback_type,                 
+                                                      size_prf_ind,                  
+                                                      substitute_ind,                  
+                                                      clearance_ind,                  
+                                                      invent_ind,                      
+                                                      split_ind,                        
+                                                      som_type,                      
+                                                      som_qty,                          
+                                                      vpn,                              
+                                                      season,
+                                                      ref_1,
+                                                      ref_2,                    
+                                                      err_ind,                            
+                                                      err_message,                      
+                                                      create_id,          
+                                                      create_datetime,      
+                                                      last_update_id,      
+                                                      last_update_datetime)
+                                                SELECT sel_ind,
+                                                       alloc_no,
+                                                       alloc_criteria,
+                                                       item,
+                                                       item_desc,
+                                                       diff_id,
+                                                       loc,
+                                                       hier1,
+                                                       hier2,
+                                                       hier3,
+                                                       pack_ind,
+                                                       0 inner_size,
+                                                       0 case_size,
+                                                       avail_qty,
+                                                       inactive_qty,
+                                                       holdback_qty,
+                                                       holdback_type,
+                                                       size_prf_ind,
+                                                       substitute_ind,
+                                                       clearance_ind,
+                                                       invent_ind,
+                                                       split_ind,
+                                                       som_type,
+                                                       som_qty,
+                                                       vpn,
+                                                       0 season,
+                                                       ref_1,
+                                                       ref_2,
+                                                       err_ind,
+                                                       err_message,
+                                                       create_id,
+                                                       create_datetime,
+                                                       last_update_id,
+                                                       CURRENT_TIMESTAMP() last_update_datetime
+                                                  FROM alloc_itm_search_dtl
+                                                 WHERE alloc_no = %s; "
+
+  Q_update_dtl: " UPDATE alloc_itm_search_dtl
+                      SET sel_ind = 'Y'
+                    WHERE alloc_no = %s; "
+
+func_clean_split:
+   Q_upd_size_prf_ind: " UPDATE alloc_rule
+                            SET size_profile_ind = (SELECT size_prf_ind 
+                                                      FROM alloc_itm_search_dtl 
+                                                     WHERE alloc_no = %s 
+                                                      AND size_prf_ind = 'Y')
+                          WHERE alloc_no = %s; "
+
+   Q_chck_wif: " SELECT DISTINCT alloc_criteria chck
+                   FROM alloc_head
+                  WHERE alloc_no = %s
+                    AND alloc_criteria = 'F'; "
+
+   Q_upd_alloc_head: " WITH
+                        src 
+                        AS 
+                            (SELECT alloc_no,
+                                    alloc_desc 
+                               FROM alloc_head 
+                              WHERE alloc_no = %s)
+                        UPDATE alloc_head tgt,src
+                           SET tgt.alloc_desc = CONCAT('Split Of ',src.alloc_no,'_' ,src.alloc_desc)
+                         WHERE tgt.alloc_no = %s; "
+
+   Q_del_calc_src_tmp_y: " DELETE FROM alloc_calc_source_temp
+                               WHERE item_source_id IN (SELECT ais.item_source_id
+                                                          FROM alloc_item_source_dtl ais,
+                                                               alloc_item_loc_split_temp ails
+                                                         WHERE ais.alloc_no = %s
+                                                           AND ais.alloc_no = ails.alloc_no
+                                                           AND ais.wh_id = ails.loc
+                                                           AND COALESCE(ais.diff1_id,'$') = COALESCE(ails.diff_id,'$')
+                                                           AND ais.item_id = ails.item
+                                                           AND COALESCE(ails.split_ind,'N') = 'Y'); "
+
+   Q_del_like_item_src_y: " DELETE FROM alloc_like_item_source
+                               WHERE item_source_id IN (SELECT ais.item_source_id
+                                                          FROM alloc_item_source_dtl ais,
+                                                               alloc_item_loc_split_temp ails
+                                                         WHERE ais.alloc_no = %s
+                                                           AND ais.alloc_no = ails.alloc_no
+                                                           AND ais.wh_id = ails.loc
+                                                           AND COALESCE(ais.diff1_id,'$') =  COALESCE(ails.diff_id,'$')
+                                                           AND ais.item_id = ails.item
+                                                           AND COALESCE(ails.split_ind,'N') = 'Y'); "
+
+   Q_del_item_src_dtl_y: " WITH
+                            src
+                            AS  (SELECT ais.item_source_id
+                                   FROM alloc_item_source_dtl ais,
+                                        alloc_item_loc_split_temp ails
+                                  WHERE ais.alloc_no = %s
+                                    AND ais.alloc_no = ails.alloc_no
+                                    AND ais.wh_id = ails.loc
+                                    AND COALESCE(ais.diff1_id,'$') = COALESCE(ails.diff_id,'$')
+                                    AND ais.item_id = ails.item
+                                    AND COALESCE(ails.split_ind,'N') = 'Y')
+                           DELETE FROM alloc_item_source_dtl
+                                 WHERE item_source_id IN (SELECT src.item_source_id
+                                                            FROM src); "
+   
+   Q_del_qnty_limits_n: " WITH
+                            src
+                            AS (SELECT aql.alloc_no,aql.item_id,aql.location_id
+                                  FROM alloc_quantity_limits aql, 
+                                       alloc_calc_allitemloc acat
+                                 WHERE aql.alloc_no = %s
+                                   AND aql.alloc_no = acat.alloc_no
+                                   AND aql.item_id = acat.tran_item
+                                   AND NOT EXISTS (SELECT 1
+                                                     FROM alloc_item_loc_split_temp ails
+                                                    WHERE ails.alloc_no = acat.alloc_no
+                                                      AND acat.source_item = ails.item
+                                                      AND (COALESCE(acat.source_diff1_id,'$')    = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$')
+                                                           OR COALESCE(acat.source_diff2_id,'$') = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$')
+                                                           OR COALESCE(acat.source_diff3_id,'$') = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$')
+                                                           OR COALESCE(acat.source_diff4_id,'$') = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$'))
+                                                      AND COALESCE(ails.split_ind,'N') = 'N'))
+                          DELETE FROM alloc_quantity_limits
+                                WHERE (alloc_no,item_id,location_id) IN (SELECT src.alloc_no,src.item_id,src.location_id
+                                                                           FROM src); "
+
+   Q_del_calc_allitem_n: " WITH
+                            src
+                            AS (SELECT acat.alloc_no,acat.source_item,acat.to_loc 
+                                  FROM alloc_item_loc_split_temp ails,
+                                       alloc_calc_allitemloc acat 
+                                 WHERE ails.alloc_no = %s
+                                   AND ails.alloc_no = acat.alloc_no
+                                   AND acat.source_item = ails.item
+                                   AND (COALESCE(acat.source_diff1_id,'$')    = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$')
+                                        OR COALESCE(acat.source_diff2_id,'$') = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$')
+                                        OR COALESCE(acat.source_diff3_id,'$') = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$')
+                                        OR COALESCE(acat.source_diff4_id,'$') = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$'))
+                                   AND COALESCE(ails.split_ind,'N') = 'N')
+                           DELETE FROM alloc_calc_allitemloc acat
+                                 WHERE acat.alloc_no = %s
+                                   AND NOT EXISTS (SELECT 1 
+                                                     FROM src
+                                                    WHERE src.alloc_no = acat.alloc_no 
+                                                      AND src.source_item = acat.source_item
+                                                      AND src.to_loc = acat.to_loc); "
+
+   Q_del_calc_src_tmp_n: " DELETE FROM alloc_calc_source_temp
+                                 WHERE item_source_id IN (SELECT ais.item_source_id
+                                                            FROM alloc_item_source_dtl ais, 
+                                                                 alloc_item_loc_split_temp ails
+                                                           WHERE ais.alloc_no = %s
+                                                             AND ais.wh_id = ails.loc
+                                                             AND COALESCE(ais.diff1_id,'$') = COALESCE(ails.diff_id,'$')
+                                                             AND ais.item_id = ails.item
+                                                             AND COALESCE(ails.split_ind,'N') = 'N'); "
+
+   Q_del_like_item_src_n: " DELETE FROM alloc_like_item_source
+                                 WHERE item_source_id IN (SELECT ais.item_source_id
+                                                            FROM alloc_item_source_dtl ais, 
+                                                                 alloc_item_loc_split_temp ails
+                                                           WHERE ais.alloc_no = %s
+                                                             AND ais.wh_id = ails.loc
+                                                             AND COALESCE(ais.diff1_id,'$') = COALESCE(ails.diff_id,'$')
+                                                             AND ais.item_id = ails.item
+                                                             AND COALESCE(ails.split_ind,'N') = 'N'); "
+
+   Q_del_item_src_dtl_n: " WITH
+                            src
+                            AS  (SELECT ais.item_source_id
+                                   FROM alloc_item_source_dtl ais,
+                                        alloc_item_loc_split_temp ails
+                                  WHERE ais.alloc_no = %s
+                                    AND ais.wh_id = ails.loc
+                                    AND COALESCE(ais.diff1_id,'$') = COALESCE(ails.diff_id,'$')
+                                    AND ais.item_id = ails.item
+                                    AND COALESCE(ails.split_ind,'N') = 'N')
+                           DELETE FROM alloc_item_source_dtl
+                                 WHERE item_source_id IN (SELECT src.item_source_id
+                                                            FROM src); "
+
+   Q_mrge_itm_srch_dtl_ca_sel_ind: "  WITH
+                                          src 
+                                          AS (SELECT *
+                                                FROM alloc_item_loc_split_temp src
+                                               WHERE alloc_no = %s) 
+                                        UPDATE alloc_itm_search_dtl tgt,src
+                                           SET tgt.sel_ind = src.sel_ind
+                                         WHERE tgt.alloc_no = %s
+                                           AND tgt.item = src.item
+                                           AND tgt.loc = src.loc
+                                           AND COALESCE(tgt.ref_1, '$') = COALESCE(src.ref_1, '$')
+                                           AND ((COALESCE(tgt.alloc_criteria, '$') <> 'A')
+                                                 OR (COALESCE(tgt.alloc_criteria, '$') = 'A' 
+                                                     AND SUBSTR(tgt.ref_2,INSTR(tgt.ref_2,'/')+1,INSTR(SUBSTR(tgt.ref_2,INSTR(tgt.ref_2,'/')+1),'/')-1) = SUBSTR(src.ref_2,INSTR(src.ref_2,'/')+1,INSTR(SUBSTR(src.ref_2,INSTR(src.ref_2,'/')+1),'/')-1)))
+                                           AND COALESCE (tgt.alloc_criteria, '$') = COALESCE (src.alloc_criteria, '$')
+                                           AND COALESCE(tgt.diff_id,'$') = COALESCE(src.diff_id,'$'); "
+
+   Q_mrge_itm_srch_dtl_ca_spt_ind: "  WITH
+                                        src 
+                                        AS (SELECT *
+                                              FROM alloc_item_loc_split_temp src
+                                             WHERE alloc_no = %s) 
+                                      DELETE FROM
+                                             alloc_itm_search_dtl tgt
+                                       WHERE tgt.alloc_no = %s
+                                         AND EXISTS (SELECT 1
+                                                       FROM src
+                                                      WHERE tgt.alloc_no = src.alloc_no
+                                                        AND tgt.item = src.item
+                                                        AND tgt.loc = src.loc
+                                                        AND COALESCE(tgt.ref_1, '$') = COALESCE(src.ref_1, '$')
+                                                        AND ((COALESCE(tgt.alloc_criteria, '$') <> 'A')
+                                                              OR (COALESCE(tgt.alloc_criteria, '$') = 'A' 
+                                                                  AND SUBSTR(tgt.ref_2,INSTR(tgt.ref_2,'/')+1,INSTR(SUBSTR(tgt.ref_2,INSTR(tgt.ref_2,'/')+1),'/')-1) = SUBSTR(src.ref_2,INSTR(src.ref_2,'/')+1,INSTR(SUBSTR(src.ref_2,INSTR(src.ref_2,'/')+1),'/')-1)))
+                                                        AND COALESCE (tgt.alloc_criteria, '$') = COALESCE (src.alloc_criteria, '$')
+                                                        AND COALESCE(tgt.diff_id,'$') = COALESCE(src.diff_id,'$')
+                                                        AND COALESCE(src.split_ind,'N') = 'Y'); "
+
+   Q_mrge_itm_srch_dtl_na_sel_ind: "  WITH
+                                          src 
+                                          AS (SELECT *
+                                                FROM alloc_item_loc_split_temp src
+                                               WHERE alloc_no = %s) 
+                                        UPDATE alloc_itm_search_dtl tgt,src
+                                           SET tgt.split_ind = src.split_ind
+                                         WHERE tgt.alloc_no = %s
+                                           AND tgt.item = src.item
+                                           AND tgt.loc = src.loc
+                                           AND COALESCE(tgt.ref_1, '$') = COALESCE(src.ref_1, '$')
+                                           AND ((COALESCE(tgt.alloc_criteria, '$') <> 'A')
+                                                 OR (COALESCE(tgt.alloc_criteria, '$') = 'A' 
+                                                     AND SUBSTR(tgt.ref_2,INSTR(tgt.ref_2,'/')+1,INSTR(SUBSTR(tgt.ref_2,INSTR(tgt.ref_2,'/')+1),'/')-1) = SUBSTR(src.ref_2,INSTR(src.ref_2,'/')+1,INSTR(SUBSTR(src.ref_2,INSTR(src.ref_2,'/')+1),'/')-1)))
+                                           AND COALESCE (tgt.alloc_criteria, '$') = COALESCE (src.alloc_criteria, '$')
+                                           AND COALESCE(tgt.diff_id,'$') = COALESCE(src.diff_id,'$'); "
+
+   Q_mrge_itm_srch_dtl_na_spt_ind: "  WITH
+                                        src 
+                                        AS (SELECT *
+                                              FROM alloc_item_loc_split_temp src
+                                             WHERE alloc_no = %s) 
+                                      DELETE FROM
+                                             alloc_itm_search_dtl tgt
+                                       WHERE tgt.alloc_no = %s
+                                         AND EXISTS (SELECT 2
+                                                       FROM src
+                                                      WHERE tgt.alloc_no <> src.alloc_no
+                                                        AND tgt.item = src.item
+                                                        AND tgt.loc = src.loc
+                                                        AND COALESCE(tgt.ref_1, '$') = COALESCE(src.ref_1, '$')
+                                                        AND ((COALESCE(tgt.alloc_criteria, '$') <> 'A')
+                                                              OR (COALESCE(tgt.alloc_criteria, '$') = 'A' 
+                                                                  AND SUBSTR(tgt.ref_2,INSTR(tgt.ref_2,'/')+1,INSTR(SUBSTR(tgt.ref_2,INSTR(tgt.ref_2,'/')+1),'/')-1) = SUBSTR(src.ref_2,INSTR(src.ref_2,'/')+1,INSTR(SUBSTR(src.ref_2,INSTR(src.ref_2,'/')+1),'/')-1)))
+                                                        AND COALESCE (tgt.alloc_criteria, '$') = COALESCE (src.alloc_criteria, '$')
+                                                        AND COALESCE(tgt.diff_id,'$') = COALESCE(src.diff_id,'$')
+                                                        AND COALESCE(src.split_ind,'N') <> 'Y'); "
+
+   Q_del_qnty_limits_wh_rel: " WITH 
+                                src
+                                AS (SELECT aql.alloc_no,aql.item_id,aql.location_id
+                                      FROM alloc_quantity_limits aql,
+                                           (SELECT tmp.alloc_no,
+												   COALESCE(pi.pack_no,tmp.source_item) source_item,
+                                                   COALESCE(pi.item,tmp.tran_item) tran_item,
+                                                   tmp.source_diff1_id,
+                                                   tmp.source_diff2_id,
+                                                   tmp.source_diff3_id,
+                                                   tmp.source_diff4_id,
+                                                   tmp.to_loc,
+                                                   assign_default_wh
+											  FROM alloc_calc_allitemloc tmp,
+                                                   packitem pi
+											 WHERE item_type <> 'NSFSP'
+                                            UNION
+                                            SELECT alloc_no,
+												   source_item,
+                                                   tran_item,
+                                                   source_diff1_id,
+                                                   source_diff2_id,
+                                                   source_diff3_id,
+                                                   source_diff4_id,
+                                                   to_loc,
+                                                   assign_default_wh
+                                              FROM alloc_calc_allitemloc acat
+                                             WHERE COALESCE(item_type,'$') <> 'NSFSP') acat
+                                     WHERE aql.alloc_no IN {}
+                                       AND aql.alloc_no = acat.alloc_no
+                                       AND aql.item_id = acat.tran_item
+                                       AND acat.to_loc = aql.location_id
+                                       AND NOT EXISTS(SELECT 1
+                                                        FROM alloc_itm_search_dtl ails
+                                                       WHERE ails.alloc_no = acat.alloc_no
+                                                         AND acat.source_item = ails.item
+                                                         AND (COALESCE(acat.source_diff1_id,'$')    = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$')
+                                                              OR COALESCE(acat.source_diff2_id,'$') = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$')
+                                                              OR COALESCE(acat.source_diff3_id,'$') = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$')
+                                                              OR COALESCE(acat.source_diff4_id,'$') = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$'))
+                                                         AND COALESCE(ails.sel_ind,'N') = 'Y'
+                                                         AND acat.assign_default_wh = ails.loc))
+                               DELETE FROM alloc_quantity_limits aql
+                                     WHERE (alloc_no,item_id,location_id) IN (SELECT src.alloc_no,src.item_id,src.location_id
+                                                                                FROM src
+                                                                               WHERE EXISTS (SELECT 1
+                                                                                               FROM alloc_calc_allitemloc acat
+                                                                                              WHERE acat.alloc_no IN {}
+                                                                                                AND acat.source_item = src.item_id
+                                                                                                AND acat.to_loc = src.location_id))
+                                        AND EXISTS (SELECT 1
+                                                      FROM alloc_head aa
+                                                     WHERE aa.alloc_no = aql.alloc_no
+                                                       AND aa.wh_store_rel_ind ='Y'); "
+
+   Q_del_qnty_lmts_wi_wh_rel: " WITH 
+                                src
+                                AS (SELECT aql.alloc_no,aql.item_id,aql.location_id
+                                      FROM alloc_quantity_limits aql,
+                                           (SELECT tmp.alloc_no,
+												   COALESCE(pi.pack_no,tmp.source_item) source_item,
+                                                   COALESCE(pi.item,tmp.tran_item) tran_item,
+                                                   tmp.source_diff1_id,
+                                                   tmp.source_diff2_id,
+                                                   tmp.source_diff3_id,
+                                                   tmp.source_diff4_id,
+                                                   tmp.to_loc,
+                                                   assign_default_wh
+											  FROM alloc_calc_allitemloc tmp,
+                                                   packitem pi
+											 WHERE item_type <> 'NSFSP'
+                                            UNION
+                                            SELECT alloc_no,
+												   source_item,
+                                                   tran_item,
+                                                   source_diff1_id,
+                                                   source_diff2_id,
+                                                   source_diff3_id,
+                                                   source_diff4_id,
+                                                   to_loc,
+                                                   assign_default_wh
+                                              FROM alloc_calc_allitemloc acat
+                                             WHERE COALESCE(item_type,'$') <> 'NSFSP') acat
+                                     WHERE aql.alloc_no IN {}
+                                       AND aql.alloc_no = acat.alloc_no
+                                       AND aql.item_id = acat.tran_item
+                                       AND acat.to_loc = aql.location_id
+                                       AND NOT EXISTS(SELECT 1
+                                                        FROM alloc_itm_search_dtl ails
+                                                       WHERE ails.alloc_no = acat.alloc_no
+                                                         AND acat.source_item = ails.item
+                                                         AND (COALESCE(acat.source_diff1_id,'$')    = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$')
+                                                              OR COALESCE(acat.source_diff2_id,'$') = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$')
+                                                              OR COALESCE(acat.source_diff3_id,'$') = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$')
+                                                              OR COALESCE(acat.source_diff4_id,'$') = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$'))
+                                                         AND COALESCE(ails.sel_ind,'N') = 'Y'))
+                               DELETE FROM alloc_quantity_limits aql
+                                     WHERE (alloc_no,item_id,location_id) IN (SELECT src.alloc_no,src.item_id,src.location_id
+                                                                                FROM src
+                                                                               WHERE EXISTS (SELECT 1
+                                                                                               FROM alloc_calc_allitemloc acat
+                                                                                              WHERE acat.alloc_no = {}
+                                                                                                AND acat.source_item = src.item_id
+                                                                                                AND acat.to_loc = src.location_id)); "
+
+   Q_del_calc_allitemloc_wh_rel: " DELETE FROM alloc_calc_allitemloc acat
+                                         WHERE acat.alloc_no IN {}
+                                           AND NOT EXISTS (SELECT 1
+                                                             FROM alloc_itm_search_dtl ails
+                                                            WHERE ails.alloc_no = acat.alloc_no
+                                                              AND acat.source_item = ails.item
+                                                              AND (COALESCE(acat.source_diff1_id,'$')    = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$')
+                                                                   OR COALESCE(acat.source_diff2_id,'$') = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$')
+                                                                   OR COALESCE(acat.source_diff3_id,'$') = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$')
+                                                                   OR COALESCE(acat.source_diff4_id,'$') = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$'))
+                                                              AND COALESCE(ails.sel_ind,'N') = 'Y'
+                                                              AND acat.assign_default_wh = ails.loc)
+                                           AND EXISTS (SELECT 1
+                                                         FROM alloc_itm_search_dtl ails
+                                                        WHERE ails.alloc_no = {}
+                                                          AND acat.source_item = ails.item
+                                                          AND (COALESCE(acat.source_diff1_id,'$')    = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$')
+                                                               OR COALESCE(acat.source_diff2_id,'$') = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$')
+                                                               OR COALESCE(acat.source_diff3_id,'$') = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$')
+                                                               OR COALESCE(acat.source_diff4_id,'$') = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$'))
+                                                          AND COALESCE(ails.sel_ind,'N') = 'Y'
+                                                          AND acat.assign_default_wh = ails.loc)
+                                           AND EXISTS (SELECT 1
+                                                         FROM alloc_head aa
+                                                        WHERE aa.alloc_no = acat.alloc_no
+                                                          AND wh_store_rel_ind ='Y'); "
+
+   Q_del_calc_allitemloc_wi_wh_rel: " DELETE FROM alloc_calc_allitemloc acat
+                                         WHERE acat.alloc_no IN {}
+                                           AND NOT EXISTS (SELECT 1
+                                                             FROM alloc_itm_search_dtl ails
+                                                            WHERE ails.alloc_no = acat.alloc_no
+                                                              AND acat.source_item = ails.item
+                                                              AND (COALESCE(acat.source_diff1_id,'$')    = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$')
+                                                                   OR COALESCE(acat.source_diff2_id,'$') = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$')
+                                                                   OR COALESCE(acat.source_diff3_id,'$') = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$')
+                                                                   OR COALESCE(acat.source_diff4_id,'$') = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$'))
+                                                              AND COALESCE(ails.sel_ind,'N') = 'Y'
+                                                              AND acat.assign_default_wh = ails.loc)
+                                           AND EXISTS (SELECT 1
+                                                         FROM alloc_itm_search_dtl ails
+                                                        WHERE ails.alloc_no = {}
+                                                          AND acat.source_item = ails.item
+                                                          AND (COALESCE(acat.source_diff1_id,'$')    = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$')
+                                                               OR COALESCE(acat.source_diff2_id,'$') = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$')
+                                                               OR COALESCE(acat.source_diff3_id,'$') = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$')
+                                                               OR COALESCE(acat.source_diff4_id,'$') = COALESCE(SUBSTR(ails.diff_id,INSTR(ails.diff_id, '~') + 1),'$'))
+                                                          AND COALESCE(ails.sel_ind,'N') = 'Y'
+                                                          AND acat.assign_default_wh = ails.loc); "
+
+copy_alloc_schl:
+   Q_merge_srch_dtl: " WITH 
+                        src 
+                        AS
+                            (SELECT *
+                               FROM alloc_item_loc_split_temp src
+                              WHERE alloc_no = %s)
+                        UPDATE alloc_itm_search_dtl tgt,src
+                           SET tgt.holdback_qty   = src.holdback_qty,
+                               tgt.holdback_type  = src.holdback_type,
+                               tgt.som_type       = src.som_type,
+                               tgt.som_qty        = src.som_qty,
+                               tgt.inner_size     = src.inner_size,
+                               tgt.case_size      = src.case_size
+                         WHERE tgt.alloc_no = %s
+                           AND tgt.item = src.item
+                           AND tgt.loc = src.loc
+                           AND COALESCE(tgt.ref_1, '$') = COALESCE(src.ref_1, '$')
+                           AND ((COALESCE(tgt.alloc_criteria, '$') <> 'A')
+                                 OR (COALESCE(tgt.alloc_criteria, '$') = 'A' 
+                                     AND SUBSTR(tgt.ref_2,INSTR(tgt.ref_2,'/')+1,INSTR(SUBSTR(tgt.ref_2,INSTR(tgt.ref_2,'/')+1),'/')-1) = SUBSTR(src.ref_2,INSTR(src.ref_2,'/')+1,INSTR(SUBSTR(src.ref_2,INSTR(src.ref_2,'/')+1),'/')-1)))
+                           AND COALESCE(tgt.alloc_criteria, '$') = COALESCE(src.alloc_criteria, '$')
+                           /*AND COALESCE(tgt.diff_id,'$') = COALESCE(src.diff_id,'$')*/; "
+
+   Q_merge_schdl_srch_dtl: " WITH 
+                                src 
+                                AS
+                                    (SELECT *
+                                       FROM alloc_itm_search_dtl src
+                                      WHERE alloc_no = %s)
+                                UPDATE alloc_itm_search_dtl tgt,src
+                                SET tgt.holdback_qty   = src.holdback_qty,
+                                    tgt.holdback_type  = src.holdback_type,
+                                    tgt.som_type       = src.som_type,
+                                    tgt.som_qty        = src.som_qty,
+                                    tgt.inner_size     = src.inner_size,
+                                    tgt.case_size      = src.case_size
+                              WHERE tgt.alloc_no = %s
+                                AND tgt.item = src.item
+                                AND tgt.loc = src.loc
+                                AND COALESCE(tgt.ref_1, '$') = COALESCE(src.ref_1, '$')
+                                AND ((COALESCE(tgt.alloc_criteria, '$') <> 'A')
+                                      OR (COALESCE(tgt.alloc_criteria, '$') = 'A' 
+                                          AND SUBSTR(tgt.ref_2,INSTR(tgt.ref_2,'/')+1,INSTR(SUBSTR(tgt.ref_2,INSTR(tgt.ref_2,'/')+1),'/')-1) = SUBSTR(src.ref_2,INSTR(src.ref_2,'/')+1,INSTR(SUBSTR(src.ref_2,INSTR(src.ref_2,'/')+1),'/')-1)))
+                                AND COALESCE(tgt.alloc_criteria, '$') = COALESCE(src.alloc_criteria, '$')
+                                /*AND COALESCE(tgt.diff_id,'$') = COALESCE(src.diff_id,'$')*/; "
+
+   Q_ins_qty_limits: " INSERT INTO alloc_quantity_limits(alloc_no,
+                                                         location_id,
+                                                         location_desc,
+                                                         hier1,
+                                                         hier2,
+                                                         hier3,
+                                                         item_id,
+                                                         MIN,
+                                                         MAX,
+                                                         treshold,
+                                                         trend,
+                                                         wos,
+                                                         min_need)
+                                                  SELECT %s alloc_no,
+                                                         location_id,
+                                                         location_desc,
+                                                         hier1,
+                                                         hier2,
+                                                         hier3,
+                                                         item_id,
+                                                         MIN,
+                                                         MAX,
+                                                         treshold,
+                                                         trend,
+                                                         wos,
+                                                         min_need
+                                                    FROM alloc_quantity_limits tgt
+                                                   WHERE tgt.alloc_no = %s
+                                                     AND NOT EXISTS (SELECT 1
+                                                                       FROM alloc_quantity_limits src
+                                                                      WHERE src.alloc_no = tgt.alloc_no
+                                                                        AND src.item_id = tgt.item_id 
+                                                                        AND src.location_id = tgt.location_id); "

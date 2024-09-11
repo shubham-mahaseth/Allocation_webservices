@@ -1,0 +1,101 @@
+no_of_skus:
+  Q_last_sunday: "SELECT 
+                        CASE
+                        WHEN DAYOFWEEK(%s) = 1
+                        THEN DATE(%s)
+                        ELSE DATE_SUB(%s, INTERVAL (DAYOFWEEK(%s) - 1) DAY)
+                         END AS last_sunday FROM dual;"
+
+  Q_diff_temp_1: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_like_item_diff_temp_1
+	                                AS 
+		                                SELECT * FROM alloc_like_item_diff_temp WHERE alloc_no = %s;"
+
+  Q_size_prof_week: "SELECT CAST(code_desc AS UNSIGNED) CODE_DESC FROM code_detail WHERE code_type='SPW' AND code='ASPW';"
+
+  Q_get_skus_no: "with t1 as ((SELECT item_parent,aggr_diff_id,request_date,end_date,create_datetime FROM alloc_size_profile sp
+                                             WHERE %s = 'Y'
+                                               AND sp.status = 'A'
+                                               AND sp.request_date BETWEEN (%s-(%s*7)) AND %s  
+                                               AND %s <= sp.end_date
+                                               AND %s <= sp.create_datetime
+							                    limit 1 )
+							                    union
+							(SELECT item_parent,aggr_diff_id,request_date,end_date,create_datetime
+                           FROM alloc_size_profile sp
+                          WHERE %s = 'N'
+                            AND NOT EXISTS (SELECT item_parent,aggr_diff_id,request_date,end_date,create_datetime
+                                              FROM alloc_size_profile sp2
+                                             WHERE sp2.status = 'A'
+                                               AND sp.item_parent=sp2.item_parent AND sp.aggr_diff_id = sp2.aggr_diff_id
+                                               AND sp2.request_date BETWEEN %s AND %s
+                                               AND %s <= sp2.end_date
+                                               AND %s <= sp2.create_datetime
+                                                limit 1))
+                            UNION                    
+                         SELECT null as item_parent,null as aggr_diff_id, null as request_date,null as end_date,null as create_datetime
+                           FROM dual
+                          WHERE %s = 'N'
+                            AND NOT EXISTS (SELECT item_parent,aggr_diff_id,request_date,end_date,create_datetime
+                                              FROM alloc_size_profile sp 
+                                             limit 1)) 
+                        (SELECT  di.diff_desc, COUNT(1) no_of_sizes
+                                    FROM item_dtl im, diffs di
+                                   WHERE     im.item_parent = %s
+                                         AND di.diff = im.aggr_diff_id  
+                                         AND %s IS NOT NULL
+                                         AND di.diff = %s
+                                         AND NOT EXISTS (select 1 from alloc_like_item_diff_temp gtt where gtt.alloc_no = %s and gtt.item=im.item_parent and gtt.diff_id=im.aggr_diff_id and gtt.sel_ind='Y')
+                                      AND (%s IS NULL
+                        					OR EXISTS (SELECT 1
+                                          FROM item_list_dtl sd, item_dtl im2
+                                         WHERE sd.item_list_no = %s
+                                           AND (sd.item= im2.item or sd.item= im2.item_parent) AND im2.item_parent=im.item_parent AND im2.aggr_diff_id = im.aggr_diff_id))                            
+                                   AND (%s IS NULL
+                                       OR EXISTS (SELECT 1 FROM t1 sp
+                        							WHERE sp.item_parent=im.item_parent AND sp.aggr_diff_id = im.aggr_diff_id)
+                                 AND (%s IS NULL
+                             OR (EXISTS (SELECT 1
+                                          FROM user_attr_item lov, item_dtl im2
+                                         WHERE lov.item = im2.item AND im2.item_parent = im.item_parent AND im2.aggr_diff_id = im.aggr_diff_id
+                                           AND lov.user_attr_id = %s
+                                           AND lov.user_attr_value = coalesce(%s,lov.user_attr_value))
+                                 AND(%s IS NULL
+                                         OR (EXISTS (SELECT 1
+                                                      FROM user_attr_item lov, item_dtl im2
+                                         WHERE lov.item = im2.item AND im2.item_parent = im.item_parent AND im2.aggr_diff_id = im.aggr_diff_id
+                                                       AND lov.user_attr_id = %s
+                                                       AND lov.user_attr_value = coalesce(%s,lov.user_attr_value))
+                                             AND(%s IS NULL
+                                                 OR (EXISTS (SELECT 1
+                                                               FROM user_attr_item lov, item_dtl im2
+                                         WHERE lov.item = im2.item AND im2.item_parent = im.item_parent AND im2.aggr_diff_id = im.aggr_diff_id
+                                                                AND lov.user_attr_id = %s
+                                                                AND lov.user_attr_value = coalesce(%s,lov.user_attr_value))))
+                                                                ))))
+                                         AND EXISTS
+                                                               ((SELECT 1
+                        												FROM item_location il,
+                        													(SELECT store
+                        													FROM store ST21
+                        													WHERE ST21.close_ord_date IS NULL
+                        														AND ST21.store_type = 'C'
+                        														AND ST21.stock_holding_ind = 'Y'
+                        														AND ST21.open_date IS NOT NULL
+                        														AND ST21.open_date <= DATE(NOW())
+                        														AND ST21.def_wh IS NOT NULL
+                        														AND ST21.store NOT IN (SELECT ST22.store
+                        																				FROM store
+                        																					ST22
+                        																				WHERE     ST22.open_date <=
+                        																						date(current_date)
+                        																					AND ST22.stock_holding_ind =
+                        																						'Y'
+                        																					AND ST22.store_type =
+                        																						'C'
+                        																						and store in (SELECT CAST(code AS SIGNED)
+                        																				FROM code_detail
+                        																				WHERE code_type =
+                        																					'ALAR'))) ST1
+                        												WHERE il.location = ST1.store
+                        													AND il.status IN ('A', 'C')
+                        												LIMIT 1))) GROUP BY di.diff_desc, di.diff);"

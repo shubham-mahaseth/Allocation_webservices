@@ -1,0 +1,13 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\stock_ledger_models",
+    "\\stock_ledger_models\\Allocation_functions",
+    "\\stock_ledger_models\\Allocation_functions\\Allocation",
+    "\\stock_ledger_models\\Allocation_functions\\Allocation\\ALLOCATION_DETAILS",
+    "\\stock_ledger_models\\Allocation_functions\\Allocation\\ALLOCATION_DETAILS\\__pycache__",
+    "\\stock_ledger_models\\Allocation_functions\\Allocation\\GLOBAL_FILES"
+  ],
+  "SelectedNode": "\\stock_ledger_models\\Allocation_functions\\Allocation\\ALLOCATION_DETAILS\\alloc_details_wrapper.py",
+  "PreviewInSolutionExplorer": false
+}

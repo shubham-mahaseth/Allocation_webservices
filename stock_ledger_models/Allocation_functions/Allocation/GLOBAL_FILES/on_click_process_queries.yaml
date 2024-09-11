@@ -1,0 +1,780 @@
+##################################################################################
+#Created By - Priyanshu Pandey                                                   #
+#File Name - on_click_process_queries.yaml                                       #
+#Purpose - Queries to process on click functionalities                           #
+##################################################################################
+
+populate_header:
+  Q_fetch_head: "SELECT * FROM alloc_head WHERE alloc_no = %s;"
+
+refresh_grid:
+  Q_del_itm_srch: "DELETE FROM alloc_itm_search_dtl WHERE alloc_no = %s;"
+
+  Q_del_itm_loc: "DELETE FROM alloc_calc_item_loc WHERE alloc_no = %s;"
+
+  Q_del_itm_src: "DELETE FROM alloc_calc_source_temp WHERE alloc_no = %s;"
+
+  Q_del_like_itm: "DELETE FROM alloc_like_item_source WHERE alloc_no = %s;"
+
+  Q_del_itm_src_dtl: "DELETE FROM alloc_item_source_dtl WHERE alloc_no = %s;"
+
+  Q_del_ql: "DELETE FROM alloc_quantity_limits WHERE alloc_no = %s;"
+
+  Q_del_calc_ql: "DELETE FROM alloc_calc_qty_limits_temp WHERE alloc_no = %s;"
+
+  Q_del_weight: "DELETE FROM alloc_rules_weight_temp WHERE alloc_no = %s;"
+
+  Q_del_allitmloc: "DELETE FROM alloc_calc_allitemloc WHERE alloc_no = %s;"
+
+  Q_del_loc: "DELETE FROM alloc_location al
+                    WHERE EXISTS(SELECT loc_group_id
+                                   FROM alloc_loc_group_detail alg
+                                  WHERE alg.alloc_no = %s
+                                    AND alg.loc_group_id = al.loc_group_id);"
+
+  Q_del_loc_grp: "DELETE FROM alloc_loc_group_detail WHERE alloc_no = %s;"
+
+  Q_del_rule: "DELETE FROM alloc_rule WHERE alloc_no = %s;"
+
+  Q_del_rule_dt: "DELETE FROM alloc_rule_date WHERE alloc_no = %s;"
+
+  Q_upd_head: "UPDATE alloc_head
+                  SET wh_store_rel_ind = 'Y',
+                      def_auto_pre_min_ind = 'N'
+                WHERE alloc_no = %s;"
+
+populate_error:
+  Q_cre_err_tbl: "CREATE  TABLE IF NOT EXISTS alloc_error_temp(ALLOC_NO       NUMERIC(15),     
+                                                                        SOURCE_ITEM    VARCHAR(250),  
+                                                                        DIFF_ID        VARCHAR(100),  
+                                                                        TRAN_ITEM      VARCHAR(250),  
+                                                                        TRAN_ITEM_DESC VARCHAR(1000), 
+                                                                        TO_LOC         NUMERIC(25),     
+                                                                        ERR_DESC       VARCHAR(200),
+                                                                        ERR_IND        VARCHAR(5));"
+
+  Q_del_tmp: "DELETE FROM alloc_error_temp WHERE alloc_no = %s;"
+
+  Q_chk_alloc: "SELECT alloc_criteria,
+                       alloc_level,
+                       wh_store_rel_ind
+                  FROM alloc_head
+                 WHERE alloc_no = %s;"
+                                                                        
+  Q_ins_error: "INSERT INTO alloc_error_temp(alloc_no,
+                                            source_item,
+                                            diff_id,
+                                            tran_item,
+                                            tran_item_desc,
+                                            to_loc,
+                                            err_desc,
+                                            err_ind)
+                        SELECT alloc_no,
+                                source_item,
+                                diff_id,
+                                tran_item,
+                                id.item_desc,
+                                to_loc,
+                                'There are some item/locations that will not be allocated due to item/location status.'    err_desc,
+                                'W' err_ind
+                            FROM (SELECT alloc_no,
+                                        source_item,
+                                        diff_id,
+                                        tran_item,
+                                        default_wh ,
+                                        to_loc
+                                    FROM (SELECT cs2.alloc_no,
+                                                 cs2.source_item,
+                                                 COALESCE(cs2.source_diff1_id,
+                                                         cs2.source_diff2_id,
+                                                         cs2.source_diff3_id,
+                                                         cs2.source_diff4_id) diff_id,
+                                                 cs2.tran_item,
+                                                 s1.loc to_loc,
+                                                 s1.default_wh
+                                            FROM alloc_calc_source_temp cs2,
+                                                 alloc_item_source_dtl ais,
+                                                 alloc_loc_group_detail alg,
+                                                 alloc_location al,
+                                                 (SELECT s2.store loc,
+                                                         'S' loc_type,
+                                                         s2.store_desc loc_name,
+                                                         s2.def_wh default_wh
+                                                     FROM store s2
+                                                 UNION ALL
+                                                 SELECT w.wh loc,
+                                                         'W' loc_type,
+                                                         w.wh_desc loc_name,
+                                                         w.wh default_wh
+                                                     FROM warehouse w) s1
+                                           WHERE cs2.alloc_no = %s
+                                             AND ais.item_source_id = cs2.item_source_id
+                                             AND alg.alloc_no = cs2.alloc_no
+                                             AND al.loc_group_id = alg.loc_group_id
+                                             AND s1.loc = al.location_id
+                                             AND ais.wh_id = s1.default_wh
+                                             AND NOT EXISTS(SELECT 1
+                                                              FROM alloc_calc_allitemloc cs3
+                                                             WHERE cs3.alloc_no = %s 
+                                                               AND cs3.alloc_no = cs2.alloc_no
+                                                               AND cs3.source_item =cs2.source_item
+                                                               AND COALESCE(cs3.source_diff1_id,cs3.source_diff2_id,cs3.source_diff3_id,cs3.source_diff4_id)
+                                                                   =COALESCE(cs2.source_diff1_id,cs2.source_diff2_id,cs2.source_diff3_id,cs2.source_diff4_id)
+                                                               AND cs3.tran_item = cs2.tran_item
+                                                               AND cs3.to_loc = s1.loc
+                                                               AND assign_default_wh = s1.default_wh)
+                                        )cs1
+                                )dr
+                            RIGHT JOIN item_location il
+                                    ON(    dr.tran_item =il.item
+                                        AND dr.to_loc=il.location
+                                        AND COALESCE(il.status,'I') ='I')
+                            RIGHT JOIN item_dtl id
+                                    ON(    dr.tran_item =id.item
+                                        AND il.item = id.item)
+                            WHERE EXISTS (SELECT 1
+                                            FROM alloc_calc_allitemloc itm
+                                            WHERE itm.alloc_no = dr.alloc_no
+                                            AND itm.source_item = dr.source_item
+                                            AND (COALESCE(itm.source_diff1_id,'$') = COALESCE(dr.diff_id,'$')
+                                                    OR COALESCE(itm.source_diff2_id,'$') = COALESCE(dr.diff_id,'$')
+                                                    OR COALESCE(itm.source_diff3_id,'$') = COALESCE(dr.diff_id,'$')
+                                                    OR COALESCE(itm.source_diff4_id,'$') = COALESCE(dr.diff_id,'$'))
+                                            AND itm.assign_default_wh = dr.default_wh
+                                            LIMIT 1);"
+
+  Q_inact_itm_loc_y: "INSERT INTO alloc_error_temp (alloc_no,
+                                                    source_item,
+                                                    diff_id,
+                                                    to_loc,
+                                                    err_desc,
+                                                    err_ind)
+                           SELECT tmp.alloc_no,
+                                  tmp.item,
+                                  tmp.diff_id diff_id,
+                                  NULL to_loc,
+                                  'There are no active item/locations on this allocation.' err_desc,
+                                  'E'
+                             FROM alloc_itm_search_dtl tmp
+                            WHERE tmp.alloc_no = %s
+                              AND tmp.sel_ind = 'Y'
+                              AND NOT EXISTS
+                                      (SELECT 1
+                                         FROM alloc_calc_allitemloc itm
+                                        WHERE itm.alloc_no = tmp.alloc_no
+                                          AND itm.source_item = tmp.item
+                                          AND (   COALESCE(itm.source_diff1_id,'$') = COALESCE(tmp.diff_id,'$')
+                                               OR COALESCE(itm.source_diff2_id,'$') = COALESCE(tmp.diff_id,'$')
+                                               OR COALESCE(itm.source_diff3_id,'$') = COALESCE(tmp.diff_id,'$')
+                                               OR COALESCE(itm.source_diff4_id,'$') = COALESCE(tmp.diff_id,'$'))
+                                          AND itm.assign_default_wh = tmp.loc);"
+
+  Q_inact_itm_loc_n: "INSERT INTO alloc_error_temp (alloc_no,
+                                                    source_item,
+                                                    diff_id,
+                                                    err_desc,
+                                                    err_ind)
+                           SELECT tmp.alloc_no,
+                                  tmp.item,
+                                  tmp.diff_id diff_id,
+                                  'There are no active item/locations on this allocation.' err_desc,
+                                  'E' err_ind
+                             FROM alloc_itm_search_dtl tmp
+                            WHERE tmp.alloc_no = %s
+                              AND tmp.sel_ind = 'Y'
+                              AND NOT EXISTS
+                                      (SELECT 1
+                                         FROM alloc_calc_allitemloc itm
+                                        WHERE itm.alloc_no = tmp.alloc_no
+                                          AND itm.source_item = tmp.item
+                                          AND (   COALESCE(itm.source_diff1_id,'$') = COALESCE(tmp.diff_id,'$')
+                                               OR COALESCE(itm.source_diff2_id,'$') = COALESCE(tmp.diff_id,'$')
+                                               OR COALESCE(itm.source_diff3_id,'$') = COALESCE(tmp.diff_id,'$')
+                                               OR COALESCE(itm.source_diff4_id,'$') = COALESCE(tmp.diff_id,'$')));"
+
+  Q_sku_inact_wh: "INSERT INTO alloc_error_temp (alloc_no,
+                                                source_item,
+                                                diff_id,
+                                                tran_item,
+                                                tran_item_desc,
+                                                to_loc,
+                                                err_desc,
+                                                err_ind)
+                        SELECT DISTINCT alloc_no,
+                                        item_parent,
+                                        diff_id,
+                                        item          tran_item,
+                                        item_desc     tran_item_desc,
+                                        loc to_loc,                             
+                                        'Some of the SKUs are inactive at the WH.' err_msg,
+                                        'W' err_ind
+                            FROM(SELECT tmp.alloc_no,
+                                        tmp.item item_parent,
+                                        id.item,
+                                        id.item_desc,
+                                        tmp.diff_id diff_id,
+                                        tmp.loc loc,
+                                        SUM(   GREATEST(COALESCE(GREATEST((CASE WHEN ilc.status in ('A','C') THEN ilc.item_soh ELSE 0 END), 0),0)
+                                            - (COALESCE(GREATEST(CASE WHEN ilc.status in ('A','C') THEN ilc.reserved_qty ELSE 0 END, 0),0)
+                                            + COALESCE(GREATEST(CASE WHEN ilc.status in ('A','C') THEN ilc.rtv_qty ELSE 0 END, 0),0)
+                                            + COALESCE(GREATEST(CASE WHEN ilc.status in ('A','C') THEN ilc.non_sellable_qty ELSE 0 END, 0),0)
+                                            + COALESCE(GREATEST(CASE WHEN ilc.status in ('A','C') THEN ilc.cust_resv_qty ELSE 0 END, 0),0))
+                                            - (SELECT COALESCE(SUM(GREATEST(d.distro_qty,0)),0)
+                                                FROM alloc_sku_head h,
+                                                        po_item_loc    ol,
+                                                        po_dtl         oh,
+                                                        alloc_dtl      d,
+                                                        item_location  ilc1
+                                                    WHERE h.item = id.item
+                                                    AND h.wh = tmp.loc
+                                                    AND ilc1.item = id.item
+                                                    AND ilc1.location = tmp.loc
+                                                    AND ilc1.status in ('A','C')
+                                                    AND h.status IN ('A', 'R')
+                                                    AND h.order_no IS NOT NULL
+                                                    AND ol.po_no = h.order_no
+                                                    AND ol.item = h.item
+                                                    AND ol.location = h.wh
+                                                    AND ol.received_qty > 0
+                                                    AND oh.po_no = ol.po_no
+                                                    AND oh.status IN ('A', 'C')
+                                                    AND d.alloc_no = h.alloc_no
+                                                    AND d.alloc_qty > 0
+                                                    AND d.distro_qty > 0),0)) available_qty,
+                                        SUM(GREATEST(COALESCE((GREATEST((CASE WHEN ilc.status in ('I') THEN ilc.item_soh ELSE 0 END), 0)),0)
+                                            - (GREATEST((CASE WHEN ilc.status in ('I') THEN ilc.reserved_qty ELSE 0 END), 0)
+                                            + GREATEST((CASE WHEN ilc.status in ('I') THEN ilc.rtv_qty ELSE 0 END), 0)
+                                            + GREATEST((CASE WHEN ilc.status in ('I') THEN ilc.non_sellable_qty ELSE 0 END), 0)
+                                            + GREATEST((CASE WHEN ilc.status in ('I') THEN ilc.cust_resv_qty ELSE 0 END), 0))
+                                            - (SELECT COALESCE(SUM(GREATEST(d.distro_qty,0)),0)
+                                                FROM alloc_sku_head h,
+                                                    po_item_loc    ol,
+                                                    po_dtl         oh,
+                                                    alloc_dtl      d,
+                                                    item_location  ilc1
+                                                WHERE h.item = id.item
+                                                AND h.wh = tmp.loc
+                                                AND ilc1.item = id.item
+                                                AND ilc1.location = tmp.loc
+                                                AND ilc1.status in ('I')
+                                                AND h.status IN ('A', 'R')
+                                                AND h.order_no IS NOT NULL
+                                                AND ol.po_no = h.order_no
+                                                AND ol.item = h.item
+                                                AND ol.location = h.wh
+                                                AND ol.received_qty > 0
+                                                AND oh.po_no = ol.po_no
+                                                AND oh.status IN ('A', 'C')
+                                                AND d.alloc_no = h.alloc_no
+                                                AND d.alloc_qty > 0
+                                                AND d.distro_qty > 0),0)) inactive_qty
+                                    FROM item_dtl id,
+                                        item_location ilc,
+                                        alloc_itm_search_dtl tmp
+                                WHERE tmp.alloc_no = %s
+                                    AND tmp.item = IF(%s='T',id.item,id.item_parent)
+				                    AND (   COALESCE(tmp.diff_id,'$') = COALESCE(diff1,'$')
+				  	                    OR COALESCE(diff2,'$') = COALESCE(tmp.diff_id,'$')
+				  	                    OR COALESCE(diff3,'$') = COALESCE(tmp.diff_id,'$')
+				                        OR COALESCE(diff4,'$') = COALESCE(tmp.diff_id,'$'))
+                                    AND ilc.item = id.item
+                                    AND ilc.location = tmp.loc
+                                    AND ilc.status IN ('A', 'C', 'I')
+                                GROUP BY tmp.alloc_no,
+                                        tmp.item ,
+                                        id.item,
+                                        tmp.diff_id,
+                                        tmp.loc )tmp 
+                          WHERE inactive_qty>0;"
+
+  Q_wif_loop1: "SELECT DISTINCT alloc_no,
+                       item,
+                       diff_id
+                   FROM alloc_itm_search_dtl
+                   WHERE alloc_no=%s
+                   AND sel_ind='Y';"
+
+  Q_cnt_tot_sku: "SELECT COUNT(*) total_sku
+                   FROM item_dtl 
+                  WHERE item = %s
+                    AND diff1 = %s;"
+
+  Q_cnt_tot_loc: "SELECT COUNT(*) total_loc
+                   FROM alloc_location 
+                  WHERE loc_group_id IN (SELECT loc_group_id
+                                           FROM alloc_loc_group_detail
+                                          WHERE alloc_no = %s);"
+
+  Q_cnt_tot_whs: "SELECT COUNT(DISTINCT def_wh) AS total_wh
+                   FROM alloc_location al,
+                        store st
+                  WHERE al.loc_group_id IN (SELECT loc_group_id
+                                              FROM alloc_loc_group_detail
+                                             WHERE alloc_no = %s)
+                    AND al.location_id = st.store;"
+
+  Q_loop_loc: "SELECT al.location_id  loc
+                FROM alloc_location al
+               WHERE EXISTS(SELECT 1
+                              FROM alloc_loc_group_detail alg
+                             WHERE alg.alloc_no    = %s
+                               AND al.loc_group_id = alg.loc_group_id);"
+
+  Q_inact_wif_loc: "INSERT INTO alloc_error_temp(alloc_no,
+                                                source_item,
+                                                diff_id,
+                                                tran_item,
+                                                tran_item_desc,
+                                                to_loc,
+                                                err_desc,
+                                                err_ind)
+                         SELECT alloc_no,
+                                item_parent,
+                                diff_id,
+                                item,
+                                item_desc,
+                                location,
+                                'Item is inactive/discontinued at some of the selected locations.',
+                                'W' err_ind
+                           FROM (SELECT DISTINCT tmp.alloc_no,
+                                         tmp.item item_parent,
+                                         tmp.diff_id,
+                                         ic.item,
+                                         id.item_desc,
+                                         ic.location,
+                                         /*COUNT((CASE WHEN ic.status='A' 
+                                                     THEN NULL 
+                                                     ELSE ic.item 
+                                                 END)
+                                              )OVER(PARTITION BY tmp.item, 
+                                                                 tmp.diff_id,
+                                                                 ic.location )*/ 1 inactive_item,
+                                         CASE WHEN ic.status='A' 
+                                              THEN 'N' 
+                                              ELSE 'Y' 
+                                          END sel_ind
+                                    FROM alloc_itm_search_dtl tmp,
+                                         item_location ic,
+                                         item_dtl id
+                                   WHERE tmp.alloc_no = %s
+                                     AND tmp.sel_ind = 'Y'
+                                     AND tmp.item  = %s   
+                                     AND id.item = tmp.item
+                                     AND ic.location_type='S'
+                                     AND ic.item  = id.item
+                                     AND ic.location = %s)t
+                          WHERE inactive_item = %s
+                            AND sel_ind ='Y';"
+
+  Q_tot_all_itm_loc: "SELECT COUNT(DISTINCT to_loc) all_item_locs
+                        FROM alloc_error_temp aet, 
+                             store st
+                       WHERE aet.to_loc = st.store
+                         AND err_desc IN ('All the items are inactive/discontinued at some of the selected locations.', 
+                                          'Item is inactive/discontinued at some of the selected locations.')
+                         AND source_item = %s
+                         AND diff_id = %s;"
+
+  Q_upd_err_desc_all_item: "UPDATE alloc_error_temp aet
+                               SET err_desc = 'Item is inactive/discontinued at all the selected locations.' ,
+                                   err_ind = 'E'
+                             WHERE err_desc = 'Item is inactive/discontinued at some of the selected locations.'
+                               AND source_item = %s
+                               AND COALESCE(diff_id,'$') = COALESCE(%s,'$')
+                               AND EXISTS(SELECT 1
+                                            FROM store str
+                                           WHERE aet.to_loc = str.store);"
+
+  Q_err_rec_loop: "SELECT DISTINCT tran_item,
+                         COUNT(DISTINCT to_loc) loc
+                    FROM alloc_error_temp aet, 
+                         store str
+                   WHERE aet.to_loc = str.store
+                     AND err_desc IN ('Some the items are inactive/discontinued at some of the selected locations.'
+                                      ,'All the items are inactive/discontinued at some of the selected locations.')
+                     AND source_item = %s
+                     AND COALESCE(diff_id,'$') = COALESCE(%s,'$') 
+                   GROUP BY tran_item;"
+
+  Q_upd_err_rec: "UPDATE alloc_error_temp aet
+                     SET err_desc ='Some of the items are inactive/discontinued at all the selected locations.',
+                         err_ind = 'E'
+                   WHERE err_desc ='Some the items are inactive/discontinued at some of the selected locations.'
+                     AND tran_item = %s
+                     AND EXISTS(SELECT 1
+                                  FROM store str
+                                 WHERE aet.to_loc = str.store);"
+
+  Q_whs_rec_loop: "SELECT DISTINCT def_wh wh
+                     FROM alloc_location al,
+                          store st
+                     WHERE al.location_id = st.store
+                       AND EXISTS (SELECT 1
+                                     FROM alloc_loc_group_detail alg
+                                    WHERE alloc_no = %s
+                                      AND al.loc_group_id = alg.loc_group_id);"
+
+  Q_wif_itm_wh: "INSERT INTO alloc_error_temp(alloc_no,
+                                              source_item,
+                                              diff_id,
+                                              tran_item,
+                                              tran_item_desc,
+                                              to_loc,
+                                              err_desc,
+                                              err_ind)                     
+                      SELECT alloc_no,
+                            item_parent,
+                            diff_id,
+                            item,
+                            item_desc,
+                            location,
+                            'Item is inactive/discontinued at some warehouse.',
+                            'W' err_ind
+                       FROM (SELECT DISTINCT tmp.alloc_no,
+                                    tmp.item item_parent,
+                                    tmp.diff_id,
+                                    ic.item,
+                                    id.item_desc,
+                                    ic.location,
+                                    /*COUNT((CASE WHEN ic.status='A' 
+                                                THEN NULL 
+                                                ELSE ic.item 
+                                            END)
+                                         )OVER(PARTITION BY tmp.item, 
+                                                            tmp.diff_id,
+                                                            ic.location )*/ 1 inactive_item,
+                                    CASE WHEN ic.status='A' THEN 'N' ELSE 'Y' END sel_ind
+                               FROM alloc_itm_search_dtl tmp,
+                                    item_location ic,
+                                    item_dtl id
+                              WHERE tmp.alloc_no = %s
+                                AND tmp.sel_ind = 'Y'
+                                AND tmp.item  = %s
+                                AND id.item = tmp.item
+                                AND ic.location_type = 'W'
+                                AND ic.item = id.item
+                                AND ic.location = %s)t
+                      WHERE inactive_item = %s
+                        AND sel_ind ='Y';"
+
+  Q_upd_all_wh_err: "UPDATE alloc_error_temp aet
+                        SET err_desc = 'Item is inactive/discontinued at all warehouse.',
+                            err_ind = 'E'
+                      WHERE err_desc = 'Item is inactive/discontinued at some warehouse.'
+                        AND source_item = %s
+                        AND COALESCE(diff_id,'$') = COALESCE(%s,'$')
+                        AND EXISTS(SELECT 1
+                                     FROM warehouse wh
+                                    WHERE aet.to_loc = wh.wh);"
+
+  Q_tot_all_itm_wh: "SELECT COUNT(DISTINCT to_loc) loc
+                       FROM alloc_error_temp aet, 
+                            warehouse wh
+                      WHERE aet.to_loc = wh.wh
+                        AND err_desc IN('All the items are inactive/discontinued at some warehouse.', 
+                                        'Item is inactive/discontinued at some warehouse.')
+                        AND source_item = %s
+                        AND diff_id = %s;"
+
+  Q_min_need_wif: "INSERT INTO alloc_error_temp(alloc_no,
+                                                source_item,
+                                                diff_id,
+                                                tran_item,
+                                                tran_item_desc,
+                                                to_loc,
+                                                err_desc,
+                                                err_ind)
+                          SELECT DISTINCT tmp.alloc_no,
+                                 tmp.tmp_item,
+                                 tmp.diff_id,
+                                 tmp.comp_item,
+                                 tmp.item_desc,
+                                 tmp.loc,
+                                 'Total Min/Min Need Quantity Limits is greater than available inventory.' err_msg,
+                                 'W' err_ind
+                            FROM (SELECT DISTINCT alloc_no,
+                                         tmp_item,
+                                         diff_id,
+                                         loc,
+                                         item_desc,
+                                         comp_item,
+                                         SUM(qty) OVER(PARTITION BY alloc_no,
+                                                                    comp_item,
+                                                                    loc
+                                                       ) qty
+                                    FROM (SELECT DISTINCT tmp.alloc_no,
+                                                 tmp.item tmp_item,
+                                                 tmp.diff_id,
+                                                 tmp.loc,
+                                                 tmp.item_desc,
+                                                 tmp.item comp_item,
+                                                 tmp.avail_qty - (CASE WHEN tmp.holdback_type = 'U'
+                                                                           THEN tmp.holdback_qty
+                                                                           WHEN tmp.holdback_type = 'P'
+                                                                           THEN (tmp.avail_qty * (tmp.holdback_qty/100))
+                                                                           ELSE 0
+                                                                       END) qty
+                                            FROM alloc_itm_search_dtl tmp,
+                                                 item_dtl id
+                                           WHERE alloc_no=%s
+                                             AND tmp.sel_ind = 'Y'
+                                             AND tmp.alloc_criteria = 'F'
+                                             AND tmp.avail_qty IS NOT NULL
+                                             AND tmp.item = id.item
+                                             AND sellable_ind='Y')t)tmp,
+                                 (SELECT gtt.alloc_no,
+                                         gtt.item_id,
+                                         SUM(GREATEST(COALESCE(gtt.min,0),COALESCE(gtt.min_need,0))) sum_min
+                                    FROM alloc_quantity_limits gtt
+                                   WHERE alloc_no = %s
+                                   GROUP BY gtt.alloc_no,
+                                         gtt.item_id)ql
+                           WHERE ql.alloc_no = tmp.alloc_no
+                             AND ql.item_id = tmp.comp_item
+                             AND sum_min >0
+                             AND qty<sum_min;"
+
+  Q_min_need: "INSERT INTO alloc_error_temp (alloc_no,
+                                             source_item,
+                                             diff_id,
+                                             tran_item,
+                                             tran_item_desc,
+                                             to_loc,
+                                             err_desc,
+                                             err_ind)
+                        SELECT DISTINCT tmp.alloc_no,
+                               tmp.tmp_item,
+                               tmp.diff_id,
+                               tmp.comp_item,
+                               tmp.item_desc,
+                               tmp.loc,
+                               'Total Min/Min Need Quantity Limits is greater than available inventory.'    err_msg,
+                               'W'
+                         FROM (SELECT DISTINCT alloc_no,
+                                      tmp_item,
+                                      diff_id,
+                                      loc,
+                                      item_desc,
+                                      comp_item,
+                                      SUM(qty) OVER(PARTITION BY alloc_no,comp_item,loc) qty
+                                 FROM (SELECT DISTINCT tmp.alloc_no,
+                                              tmp.item tmp_item,
+                                              tmp.diff_id  diff_id,
+                                              tmp.loc,
+                                              tmp.item_desc,
+                                              tmp.item comp_item,
+                                              tmp.avail_qty - (CASE WHEN tmp.holdback_type = 'U' THEN tmp.holdback_qty
+                                                                    WHEN tmp.holdback_type = 'P' THEN (tmp.avail_qty * (tmp.holdback_qty/100))
+                                                                    ELSE 0
+                                                                END) qty
+                                         FROM alloc_itm_search_dtl tmp,
+                                              item_dtl id
+                                        WHERE alloc_no=%s
+                                          AND tmp.sel_ind = 'Y'
+                                          AND COALESCE(tmp.alloc_criteria,'W') <> 'F'
+                                          AND tmp.item = id.item
+                                          AND sellable_ind='Y')t) tmp,
+                            (SELECT gtt.alloc_no,
+                                    gtt.item_id,
+                                    st.def_wh,
+                                    SUM(GREATEST(COALESCE(gtt.min,0),COALESCE(gtt.min_need,0))) sum_min
+                               FROM alloc_quantity_limits gtt,
+                                    store st
+                              WHERE alloc_no = %s
+                                AND st.store = gtt.location_id
+                              GROUP BY gtt.alloc_no,
+                                    gtt.item_id,
+                                    st.def_wh)ql
+                      WHERE ql.alloc_no = tmp.alloc_no
+                        AND ql.item_id = tmp.comp_item
+                        AND ql.def_wh = tmp.loc
+                        AND sum_min >0
+                        AND qty<sum_min; "
+
+  Q_min_need_n: "INSERT INTO alloc_error_temp (alloc_no,
+                                               source_item,
+                                               diff_id,
+                                               tran_item,
+                                               tran_item_desc,
+                                               to_loc,
+                                               err_desc,
+                                               err_ind)
+
+                        SELECT DISTINCT tmp.alloc_no,
+                               tmp.tmp_item,
+                               tmp.diff_id,
+                               tmp.comp_item,
+                               tmp.item_desc,
+                               tmp.loc,
+                               'Total Min/Min Need Quantity Limits is greater than available inventory.'    err_msg,
+                               'W' err_ind
+                         FROM (SELECT DISTINCT alloc_no,
+                                      tmp_item,
+                                      diff_id,
+                                      loc,
+                                      item_desc,
+                                      comp_item,
+                                      SUM(qty) OVER(PARTITION BY alloc_no,comp_item) qty
+                                FROM (SELECT DISTINCT tmp.alloc_no,
+                                            tmp.item tmp_item,
+                                            tmp.diff_id  diff_id,
+                                            tmp.loc,
+                                            tmp.item_desc,
+                                            tmp.item comp_item,
+                                            tmp.avail_qty - (CASE WHEN tmp.holdback_type = 'U' THEN tmp.holdback_qty
+                                                                  WHEN tmp.holdback_type = 'P' THEN (tmp.avail_qty * (tmp.holdback_qty/100))
+                                                                  ELSE 0
+                                                              END) qty
+                                        FROM alloc_itm_search_dtl tmp,
+                                            item_dtl id
+                                        WHERE alloc_no=%s
+                                        AND tmp.item = id.item
+                                        AND sellable_ind='Y')t) tmp,
+                            (SELECT gtt.alloc_no,
+                                    gtt.item_id,
+                                    SUM(GREATEST(COALESCE(gtt.min,0),COALESCE(gtt.min_need,0))) sum_min
+                                FROM alloc_quantity_limits gtt
+                                WHERE alloc_no = %s
+                                GROUP BY gtt.alloc_no,
+                                        gtt.item_id)ql
+                        WHERE ql.alloc_no = tmp.alloc_no
+                            AND ql.item_id = tmp.comp_item
+                            AND sum_min >0
+                            AND qty<sum_min; "
+
+  Q_holdback_u: "INSERT INTO alloc_error_temp (alloc_no,
+                                              source_item,
+                                              diff_id,
+                                              tran_item,
+                                              tran_item_desc,
+                                              to_loc,
+                                              err_desc,
+                                              err_ind)
+                        SELECT tmp.alloc_no,
+                               tmp.item,
+                               tmp.diff_id,
+                               tmp.ref_1 order_no,
+                               tmp.item_desc,
+                               tmp.loc,
+                               'Holdback quantity must be less than available quantity.'    err_msg,
+                               'E' err_ind
+                          FROM alloc_itm_search_dtl tmp
+                         WHERE tmp.alloc_no = %s
+                           AND tmp.sel_ind = 'Y'
+                           AND EXISTS
+                                   (SELECT 1
+                                      FROM alloc_itm_search_dtl tmp1
+                                     WHERE tmp.alloc_no = tmp1.alloc_no
+                                       AND tmp.sel_ind = tmp1.sel_ind
+                                       AND tmp.item = tmp1.item
+                                       AND COALESCE(tmp.diff_id,'$') = COALESCE(tmp1.diff_id,'$') 
+                                       AND tmp.loc = tmp1.loc
+					                   AND tmp.holdback_type = 'U'
+					                   AND tmp.holdback_qty IS NOT NULL
+					                   AND tmp.holdback_qty >= tmp1.avail_qty);"
+
+  Q_holdback_p: "INSERT INTO alloc_error_temp (alloc_no,
+                                              source_item,
+                                              diff_id,
+                                              tran_item,
+                                              tran_item_desc,
+                                              to_loc,
+                                              err_desc,
+                                              err_ind)
+                        SELECT tmp.alloc_no,
+                               tmp.item,
+                               tmp.diff_id,
+                               tmp.ref_1 order_no,
+                               tmp.item_desc,
+                               tmp.loc,
+                               'Holdback quantity must be less than available quantity.' err_msg,
+                               'E' err_ind
+                          FROM alloc_itm_search_dtl tmp
+                         WHERE tmp.alloc_no = %s
+                           AND tmp.sel_ind = 'Y'
+                           AND EXISTS
+                                   (SELECT 1
+                                      FROM alloc_itm_search_dtl tmp1
+                                     WHERE tmp.alloc_no = tmp1.alloc_no
+                                       AND tmp.sel_ind = tmp1.sel_ind
+                                       AND tmp.item = tmp1.item
+                                       AND COALESCE(tmp.diff_id,'$') = COALESCE(tmp1.diff_id,'$') 
+                                       AND tmp.loc = tmp1.loc
+					                   AND tmp.holdback_type = 'P'
+					                   AND tmp.holdback_qty IS NOT NULL
+					                   AND (tmp.holdback_qty/100)*tmp1.avail_qty >= tmp1.avail_qty);"
+
+  Q_itm_loc_status: "INSERT INTO alloc_error_temp (alloc_no,
+                                                   source_item,
+                                                   diff_id,
+                                                   tran_item,
+                                                   tran_item_desc,
+                                                   to_loc,
+                                                   err_desc,
+                                                   err_ind)
+                            SELECT alloc_no,
+                                   source_item,
+                                   diff_id,
+                                   tran_item,
+                                   item_desc,
+                                   location,
+                                   'There are some item/locations that will not be allocated due to item/location status.',
+                                   'W'
+                              FROM (SELECT DISTINCT tmp.alloc_no,
+                                           tmp.item source_item,
+                                           tmp.diff_id  diff_id,
+                                           il.item tran_item,
+                                           id.item_desc,
+                                           il.location
+                                      FROM alloc_itm_search_dtl tmp,
+                                           item_location il,
+                                           item_dtl id,
+                                           (SELECT location_id
+                                              FROM alloc_location
+                                             WHERE loc_group_id IN (SELECT loc_group_id
+                                                                      FROM alloc_loc_group_detail
+                                                                     WHERE alloc_no = 0)) loc
+                                     WHERE tmp.alloc_no    = %s
+                                           AND tmp.sel_ind = 'Y'
+                                           AND tmp.item    = il.item
+                                           AND tmp.item    = id.item
+                                           AND il.location = loc.location_id
+                                           AND il.status   = 'I')tmp;"
+
+  Q_fetch_err: "SELECT * FROM alloc_error_temp WHERE alloc_no = %s;"
+
+  Q_fetch_err1: "SELECT * FROM alloc_error_temp 
+                         WHERE alloc_no = {}
+                           AND UPPER(err_desc) LIKE '%{}%';"
+
+  Q_fetch_err2: "SELECT ALLOC_NO,
+                        ITEM SOURCE_ITEM,
+                        DIFF_ID,
+                        ITEM TRAN_ITEM,
+                        ITEM_DESC TRAN_ITEM_DESC,
+                        LOC TO_LOC,
+                        (SELECT ERROR_DESC FROM error_dtl WHERE UPPER(error_desc)  LIKE '%{}%') ERR_DESC,
+                        (SELECT ERROR_TYPE FROM error_dtl WHERE UPPER(error_desc)  LIKE '%{}%') ERR_IND
+                   FROM alloc_itm_search_dtl
+                  WHERE UPPER(err_message) LIKE '%{}%'
+                    AND DATE(last_update_datetime) BETWEEN '{}' AND '{}';"
+              #    UNION 
+              #   SELECT ALLOC_NO,
+              #          ITEM SOURCE_ITEM,
+              #          DIFF_ID,
+              #          ITEM TRAN_ITEM,
+              #          ITEM_DESC TRAN_ITEM_DESC,
+              #          NULL TO_LOC,
+              #          {} ERR_DESC
+              #     FROM alloc_itm_search_dtl
+              #    WHERE UPPER(err_message) LIKE '%{}%'
+              #    UNION
+              #   SELECT ALLOC_NO,
+              #          ITEM SOURCE_ITEM,
+              #          DIFF_ID,
+              #          ITEM TRAN_ITEM,
+              #          ITEM_DESC TRAN_ITEM_DESC,
+              #          NULL TO_LOC,
+              #          {} ERR_DESC
+              #     FROM alloc_itm_search_dtl
+              #    WHERE UPPER(err_message) LIKE '%{}%';"

@@ -1,0 +1,360 @@
+func_retreive_dtls:
+    Q_crt_hdr_tmp_tbl: " CREATE TEMPORARY TABLE IF NOT EXISTS alloc_wisummary_hdr_tmp(ALLOC_NO             VARCHAR(50),
+                                                                                      DIFF_ID             VARCHAR(10),
+                                                                                      FINAL_ALLOCATION     NUMERIC(12),
+                                                                                      FINAL_PO_QTY         NUMERIC(12),
+                                                                                      FUTURE_FULFILL_QTY NUMERIC(12),
+                                                                                      LOC_TYPE             VARCHAR(1),
+                                                                                      MULTI_WH_IND         VARCHAR(1),
+                                                                                      ORDER_NO             VARCHAR(50),
+                                                                                      ORDER_TYPE         VARCHAR(24),
+                                                                                      ORIGIN_COUNTRY_ID  VARCHAR(3),
+                                                                                      PO_QTY             NUMERIC(12),
+                                                                                      SEL_IND             VARCHAR(1),
+                                                                                      SOURCE_ITEM         VARCHAR(25),
+                                                                                      SOURCE_ITEM_DESC     VARCHAR(250),
+                                                                                      STOCK_ON_HAND         NUMERIC(12),
+                                                                                      SUPPLIER             NUMERIC(10),
+                                                                                      SUPPLIER_DESC         VARCHAR(300),
+                                                                                      WH_ID                 NUMERIC(10)); "
+
+    Q_crt_dtl_tmp_tbl: " CREATE TEMPORARY TABLE IF NOT EXISTS alloc_wisummary_dtl_tmp(ALLOC_NO             VARCHAR(50),
+                                                                                      DIFF_ID             VARCHAR(10),
+                                                                                      FINAL_ALLOCATION     NUMERIC(12),
+                                                                                      FUTURE_FULFILL_QTY NUMERIC(12),
+                                                                                      LOC_TYPE             VARCHAR(1),
+                                                                                      MESSAGE             VARCHAR(1000),
+                                                                                      ORDER_NO             VARCHAR(50),
+                                                                                      PO_QTY             NUMERIC(12),
+                                                                                      SOM_QTY             NUMERIC(20),
+                                                                                      SOURCE_ITEM         VARCHAR(25),
+                                                                                      STOCK_ON_HAND         NUMERIC(12),
+                                                                                      TRAN_ITEM             VARCHAR(25),
+                                                                                      TRAN_ITEM_DESC     VARCHAR(250),
+                                                                                      WH_ID                 NUMERIC(10)); "
+
+    Q_chck_wis_data: " SELECT CASE WHEN po_type ='DSD' THEN 'DSD' ELSE 'WH' END po_type,
+                              CASE WHEN %s ='DSD' THEN 'DSD' ELSE 'WH' END po_type1
+                         FROM alloc_whatif_summary
+                        WHERE alloc_no = %s
+                          AND order_no is not null; "
+    Q_chck_data: " SELECT 1
+                     FROM alloc_whatif_summary
+                    WHERE alloc_no = %s; "
+
+    Q_chck_cnt: " SELECT SUM(CASE WHEN order_no IS NOT NULL THEN 1 ELSE 0 END) count_of_order_rec,
+                         SUM(CASE WHEN
+                                    CASE WHEN %s = ('WH' OR 'CD') THEN 'W' ELSE 'S' END = CASE WHEN po_type = ('WH' OR 'CD') THEN 'W' ELSE 'S' END
+                                  THEN 0 
+                                  ELSE 1 
+                             END) count_of_rec
+                    FROM alloc_whatif_summary
+                   WHERE alloc_no = %s; "
+
+    Q_del_wis_data: " DELETE FROM alloc_whatif_summary
+                            WHERE alloc_no = %s; "
+
+    Q_ins_wis_hdr: " INSERT INTO alloc_wisummary_hdr_tmp(alloc_no,
+                                                         multi_wh_ind,
+                                                         source_item,
+                                                         source_item_Desc,
+                                                         diff_id,
+                                                         supplier,
+                                                         order_type,
+                                                         wh_id,
+                                                         loc_type,
+                                                         origin_country_id,
+                                                         order_no,
+                                                         stock_on_hand,
+                                                         future_fulfill_qty,
+                                                         final_allocation,
+                                                         po_qty,
+                                                         final_po_qty)
+                                                  SELECT alloc_no,
+                                                         CASE
+                                                            WHEN order_no IS NOT NULL
+                                                            THEN multi_wh
+                                                            ELSE %s
+                                                         END multi_wh ,
+                                                         source_item,
+                                                         item_desc,
+                                                         diff_id,
+                                                         supplier,
+                                                         CASE
+                                                            WHEN order_no IS NOT NULL
+                                                            THEN po_type
+                                                            ELSE %s
+                                                         END po_type,
+                                                         loc,
+                                                         loc_type,
+                                                         orig_country,
+                                                         order_no,
+                                                         stock_on_hand,
+                                                         future_fulfill,
+                                                         final_allocation,
+                                                         po_qty,
+                                                         CASE 
+                                                            WHEN final_po_qty = 0
+                                                            THEN NULL
+                                                            ELSE final_po_qty
+                                                         END final_po_qty
+                                                    FROM (SELECT tmp.alloc_no,
+                                                                 MAX(tmp.multi_wh) multi_wh,
+                                                                 tmp.source_item,
+                                                                 im.item_desc,
+                                                                 tmp.diff_id,
+                                                                 tmp.supplier,
+                                                                 MAX(tmp.po_type) po_type,
+                                                                 tmp.loc,
+                                                                 tmp.loc_type,
+                                                                 tmp.orig_country,
+                                                                 MAX(tmp.order_no) order_no,
+                                                                 SUM(tmp.soh) stock_on_hand,
+                                                                 SUM(tmp.future_fulfill) future_fulfill,
+                                                                 SUM(tmp.final_allocation) final_allocation,
+                                                                 SUM(tmp.po_qty) po_qty,
+                                                                 SUM(tmp.final_po_qty) final_po_qty  
+                                                            FROM alloc_whatif_summary tmp,
+                                                                 item_dtl im
+                                                           WHERE tmp.alloc_no = %s
+                                                             AND tmp.source_item = im.item
+                                                           GROUP BY tmp.alloc_no,
+                                                                    tmp.source_item,
+                                                                    im.item_desc,
+                                                                    tmp.diff_id,
+                                                                    tmp.supplier,
+                                                                    tmp.loc,
+                                                                    tmp.loc_type,
+                                                                    tmp.orig_country) tmp; "
+
+    Q_ins_wis_dtl: " INSERT INTO alloc_wisummary_dtl_tmp(alloc_no,
+                                                         wh_id,
+                                                         loc_type,
+                                                         order_no,
+                                                         source_item,
+                                                         tran_item,
+                                                         tran_item_desc,
+                                                         diff_id,
+                                                         final_allocation,
+                                                         stock_on_hand,
+                                                         future_fulfill_qty,
+                                                         po_qty,
+                                                         som_qty)
+                                                  SELECT tmp.alloc_no,
+                                                         tmp.loc,
+                                                         tmp.loc_type,
+                                                         tmp.order_no,
+                                                         tmp.source_item,
+                                                         tmp.tran_item,
+                                                         im.item_desc,
+                                                         tmp.diff_id,
+                                                         tmp.final_allocation,
+                                                         tmp.soh,
+                                                         tmp.future_fulfill,
+                                                         tmp.po_qty,
+                                                         tmp.som_qty
+                                                    FROM alloc_whatif_summary    tmp,
+                                                         item_dtl                 im
+                                                   WHERE tmp.alloc_no = %s
+                                                     AND tmp.tran_item = im.item; "
+
+    Q_ins_dtl: " INSERT INTO alloc_wisummary_dtl_tmp(alloc_no,
+                                                     wh_id,
+                                                     order_no,
+                                                     loc_type,
+                                                     source_item,
+                                                     tran_item,
+                                                     tran_item_desc,
+                                                     diff_id,
+                                                     final_allocation,
+                                                     stock_on_hand,
+                                                     future_fulfill_qty,
+                                                     po_qty,
+                                                     som_qty)
+                                              SELECT alloc_no,
+                                                     wh_id,
+                                                     order_no,
+                                                     loc_type,
+                                                     source_item,
+                                                     tran_item,
+                                                     tran_item_desc,
+                                                     diff_id,
+                                                     sku_calc_qty,
+                                                     stock_on_hand,
+                                                     future_fulfill_qty,
+                                                     CASE
+                                                        WHEN net_need_ind = 'N'
+                                                        THEN sku_calc_qty
+                                                        ELSE
+                                                            GREATEST (sku_calc_qty - ((CASE WHEN %s ='DSD' THEN 0 ELSE stock_on_hand END) - (CASE WHEN %s ='DSD' THEN 0 ELSE future_fulfill_qty END)),0)
+                                                     END po_qty, 
+                                                     som_qty
+                                                FROM (SELECT DISTINCT tmp.alloc_no,
+                                                             CASE
+                                                                WHEN %s ='DSD'
+                                                                THEN tmp.to_loc
+                                                                ELSE tmp.assign_default_wh
+                                                             END  AS wh_id,
+                                                             CASE
+                                                                WHEN %s ='DSD'
+                                                                THEN 'S'
+                                                                ELSE ils.location_type
+                                                             END  AS loc_type,
+                                                             tmp.order_no,
+                                                             tmp.source_item   source_item,
+                                                             tmp.tran_item      tran_item,
+                                                             im.item_desc      tran_item_desc,
+                                                             tmp.diff_id,
+                                                             tmp.som_qty,
+                                                             CASE
+                                                                WHEN %s ='DSD'
+                                                                THEN
+                                                                    SUM(GREATEST (COALESCE(tmp.stock_on_hand, 0)
+                                                                                  - COALESCE(tmp.on_order, 0)
+                                                                                  - COALESCE(tmp.on_alloc, 0)
+                                                                                  + COALESCE(tmp.alloc_out, 0)
+                                                                                  - COALESCE(tmp.in_transit_qty, 0),0))
+                                                                          OVER (PARTITION BY tmp.alloc_no,
+                                                                                             tmp.to_loc,
+                                                                                             tmp.source_item,
+                                                                                             tmp.diff_id,
+                                                                                             tmp.tran_item,
+                                                                                             tmp.order_no)
+                                                                 ELSE
+                                                                     MAX(GREATEST ((GREATEST ((ils.item_soh), 0))
+                                                                                    - (  GREATEST (ils.reserved_qty, 0)
+                                                                                         + GREATEST (ils.rtv_qty, 0)
+                                                                                         + GREATEST (ils.non_sellable_qty, 0)
+                                                                                         + GREATEST (ils.cust_resv_qty, 0)),0))
+                                                                                 OVER (PARTITION BY tmp.alloc_no,
+                                                                                                    tmp.assign_default_wh,
+                                                                                                    tmp.source_item,
+                                                                                                    tmp.diff_id,
+                                                                                                    tmp.tran_item,
+                                                                                                    tmp.order_no)
+                                                             END stock_on_hand,
+                                                             CASE
+                                                                WHEN %s ='DSD'
+                                                                THEN
+                                                                    SUM(COALESCE(tmp.on_order, 0)
+                                                                        + COALESCE(tmp.on_alloc, 0)
+                                                                        + COALESCE(tmp.in_transit_qty, 0))
+                                                                    OVER (PARTITION BY tmp.alloc_no,
+                                                                                       tmp.to_loc,
+                                                                                       tmp.source_item,
+                                                                                       tmp.diff_id,
+                                                                                       tmp.tran_item,
+                                                                                       tmp.order_no)
+                                                                ELSE
+                                                                     (SUM(COALESCE(tmp.wh_on_order_qty, 0)
+                                                                          + COALESCE(tmp.wh_on_alloc_qty,COALESCE(ils.expected_qty,0))
+                                                                          + COALESCE(ils.shipped_qty,0))
+                                                                     OVER (PARTITION BY tmp.alloc_no,
+                                                                                        tmp.assign_default_wh,
+                                                                                        tmp.source_item,
+                                                                                        tmp.diff_id,
+                                                                                        tmp.tran_item,
+                                                                                        tmp.order_no)/COUNT(tmp.to_loc)
+                                                                                                      OVER (PARTITION BY tmp.alloc_no,
+                                                                                                                         tmp.assign_default_wh,
+                                                                                                                         tmp.source_item,
+                                                                                                                         tmp.diff_id,
+                                                                                                                         tmp.tran_item,
+                                                                                                                         tmp.order_no))
+                                                             END future_fulfill_qty,
+                                                             CASE
+                                                                WHEN %s ='DSD'
+                                                                THEN
+                                                                    SUM(tmp.sku_calc_qty)
+                                                                    OVER (PARTITION BY tmp.alloc_no,
+                                                                                       tmp.to_loc,
+                                                                                       tmp.source_item,
+                                                                                       tmp.diff_id,
+                                                                                       tmp.tran_item,
+                                                                                       tmp.order_no)
+                                                                ELSE
+                                                                    SUM(tmp.sku_calc_qty)
+                                                                    OVER (PARTITION BY tmp.alloc_no,
+                                                                                       tmp.assign_default_wh,
+                                                                                       tmp.source_item,
+                                                                                       tmp.diff_id,
+                                                                                       tmp.tran_item,
+                                                                                       tmp.order_no)
+                                                             END sku_calc_qty,
+                                                             tmp.net_need_ind net_need_ind  
+                                                        FROM item_dtl                 im,
+                                                             alloc_calc_item_loc      tmp,
+                                                             item_location            ils
+                                                       WHERE tmp.alloc_no = %s
+                                                         AND tmp.tran_item = im.item                                       
+                                                         AND tmp.source_item = ils.item
+                                                         AND ils.item = tmp.tran_item
+                                                         AND ils.location=tmp.assign_default_wh) tmp; "
+
+    Q_ins_hdr: "INSERT INTO alloc_wisummary_hdr_tmp(alloc_no,
+                                                   multi_wh_ind,
+                                                   source_item,
+                                                   source_item_desc,
+                                                   diff_id,
+                                                   supplier,
+                                                   order_type,
+                                                   wh_id,
+                                                   loc_type,
+                                                   origin_country_id,
+                                                   stock_on_hand,
+                                                   future_fulfill_qty,
+                                                   final_allocation,
+                                                   po_qty,
+                                                   final_po_qty) 
+                                            SELECT alloc_no,
+                                                   multi_wh_ind,
+                                                   source_item,
+                                                   source_item_Desc,
+                                                   diff_id,
+                                                   supplier,
+                                                   order_type,
+                                                   wh_id,
+                                                   loc_type,
+                                                   origin_country_id,
+                                                   stock_on_hand,
+                                                   future_fulfill_qty,
+                                                   final_allocation,
+                                                   GREATEST(po_qty,0) po_qty, 
+                                                   NULL final_po_qty 
+                                              FROM (SELECT tmp.alloc_no,
+                                                           %s multi_wh_ind,
+                                                           tmp.source_item,
+                                                           im.item_desc source_item_desc,
+                                                           tmp.diff_id,
+                                                           isi.item_supp supplier,
+                                                           %s order_type,
+                                                           tmp.wh_id,
+                                                           tmp.loc_type,
+                                                           isc.origin_country_id,
+                                                           SUM(tmp.stock_on_hand)      stock_on_hand,
+                                                           SUM(tmp.future_fulfill_qty) future_fulfill_qty,
+                                                           SUM(tmp.final_allocation)   final_allocation,
+                                                           SUM(tmp.po_qty)  po_qty 
+                                                      FROM alloc_wisummary_dtl_tmp tmp,
+                                                           item_dtl                im,
+                                                           item_sups               isi,
+                                                           item_sup_location       isc
+                                                     WHERE tmp.alloc_no = %s
+                                                       AND tmp.source_item = im.item
+                                                       AND tmp.source_item = isi.item
+                                                       AND isi.primary_supp_ind ='Y'
+                                                       AND tmp.source_item  = isc.item
+                                                       AND isc.supplier = isi.item_supp
+                                                       AND isc.primary_country_ind ='Y'
+                                                  GROUP BY tmp.alloc_no,
+                                                           tmp.source_item,
+                                                           im.item_desc,
+                                                           tmp.diff_id,
+                                                           isi.item_supp,
+                                                           tmp.wh_id,
+                                                           tmp.loc_type,
+                                                           isc.origin_country_id) tmp; "
+
+    Q_wis_hdr_data: " SELECT * FROM alloc_wisummary_hdr_tmp WHERE alloc_no = %s; "
+
+    Q_wis_dtl_data: " SELECT * FROM alloc_wisummary_dtl_tmp WHERE alloc_no = %s; "

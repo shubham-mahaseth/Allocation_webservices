@@ -1,0 +1,25 @@
+sel_approve:
+  Q_create_tmp: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_validation_temp (ALLOC_NO NUMERIC(15,0),
+                                                                               ACTION VARCHAR(50),
+                                                                               VALIDATION VARCHAR(400));"
+
+  Q_sel_rec:  "SELECT count(1) count, MAX(alloc_no) alloc_no FROM alloc_summary WHERE selected='Y' AND alloc_no IS NOT NULL;"
+
+  Q_process_rec: "SELECT alloc_no, status_code FROM alloc_summary WHERE selected='Y';"
+
+  Q_chck_wi: "SELECT 1 FROM alloc_itm_search_dtl WHERE alloc_criteria='F'AND alloc_no=%s;"
+     
+  Q_ins_values: "INSERT INTO alloc_validation_temp(alloc_no,action,validation) VALUES(%s,%s,%s);"
+  
+  Q_chck_data: "SELECT release_date FROM alloc_head WHERE alloc_no = %s;"
+  
+  Q_upd_alloc_head: "UPDATE alloc_head SET status = 'APV' WHERE alloc_id = %s;"
+  
+  Q_df_temp_data: "select * from alloc_validation_temp"
+     
+  Q_fetch_alloc_type: "select alloc_no from alloc_summary where selected = 'Y'"
+  
+  Q_alloc_type: "select alloc_type from alloc_head where alloc_no = %s"
+  
+  Q_del_temp: "DELETE FROM alloc_validation_temp;"
+  

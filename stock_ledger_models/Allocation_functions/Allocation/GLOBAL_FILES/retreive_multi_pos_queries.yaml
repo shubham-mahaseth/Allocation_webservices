@@ -1,0 +1,115 @@
+retreive_multi_pos:
+  Q_create_tble: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_po_multi_temp(ALLOC_NO	   			NUMERIC(15,0),
+														                        ORDER_NO      			NUMERIC(8),
+														                        COMMENT_DESC  			VARCHAR(2000),
+														                        LOCATION      			NUMERIC(10),
+                                                                                ESTIMATED_INSTOCK_DATE  DATE,
+                                                                                SUPPLIER                NUMERIC(10),
+                                                                                SEL_IND                 VARCHAR(1));"
+
+  Q_del_gtt: "DELETE FROM alloc_po_multi_temp WHERE alloc_no = %s;"
+
+  Q_sel_multi_po: "SELECT  mn.*
+                            FROM (WITH
+                                        skulist 
+                                                AS
+                               (SELECT im.item
+                                  FROM item_list_dtl sd, item_dtl im
+                                 WHERE     item_list_no = %s /*I_item_list_id*/
+                                   AND im.item_parent = sd.item
+                                   AND sd.item_level = 1
+                                   AND sd.tran_level = 2
+                                   AND %s IS NOT NULL /*I_item_list_id*/
+                             UNION ALL
+                                SELECT sd.item
+                                  FROM item_list_dtl sd
+                                 WHERE     item_list_no = %s /*I_item_list_id*/
+                                   AND sd.item_level = sd.tran_level
+                                   AND %s IS NOT NULL) /*I_item_list_id*/
+                                SELECT
+                                       oh.po_no,
+                                       ol.location,
+                                       MAX(pt.po_type_desc)
+                                           comment_desc,
+                                       DATE(ol.instock_date)
+                                           instock_date,
+                                       oh.supplier_id,
+                                       SUM(ol.ordered_qty
+                                           - COALESCE(ol.received_qty, 0)
+                                           -  COALESCE(
+                                                 (SELECT SUM(ald.alloc_qty)
+                                                      FROM alloc_sku_head alh,
+                                                           alloc_dtl ald,
+                                                           alloc_xref  alx
+                                                     WHERE     alh.alloc_no = alx.xref_alloc_no
+                                                           AND ald.alloc_no = alh.alloc_no
+                                                           AND alh.item = ol.item
+                                                           AND alh.order_no = oh.po_no
+                                                           AND alh.wh = ol.location
+                                                  GROUP BY alh.item, alh.order_no),
+                                                 0))
+                                           available_qty
+                                  FROM po_dtl   oh
+                                       LEFT JOIN po_type pt ON COALESCE(oh.po_type, '$') = pt.po_type,
+                                       po_item_loc   ol
+                                       LEFT JOIN skulist sk ON ol.item = sk.item,
+                                       item_location  ilc,
+                                       item_dtl 		im,
+                                       sups       	sp
+                                 WHERE     oh.po_no = ol.po_no
+                                       AND oh.status = 'A'
+                                       AND oh.po_type != 'ARB'
+                                       AND ol.location = COALESCE(%s, ol.location) /*I_location*/
+                                       AND ilc.item = ol.item
+                                       AND ilc.location = ol.location
+                                       AND ilc.status IN ('A', 'C')
+                                       AND im.item = ol.item
+                                       AND im.hier1 = COALESCE(%s, im.hier1)  /*I_dept*/
+                                       AND im.hier2 = COALESCE(%s, im.hier2) /*I_class*/
+                                       AND im.hier3 = COALESCE(%s, im.hier3) /*I_subclass*/
+                                       AND oh.supplier_id = sp.supplier
+                                       AND oh.supplier_id = COALESCE(%s, oh.supplier_id)         /*I_supplier_site*/
+                                       AND sp.supplier_parent =COALESCE(%s, sp.supplier_parent)  /*I_supplier*/
+                                       AND COALESCE(im.item_parent,'$') = COALESCE(%s, COALESCE(im.item_parent,'$')) /*I_item_p*/
+                                       AND im.item = COALESCE(%s,im.item)     /*I_sku*/                                   
+                                       AND (   COALESCE(im.diff1, '$') = COALESCE(%s, COALESCE(im.diff1, '$')) /*I_diff_id*/
+                                            OR COALESCE(im.diff2, '$') = COALESCE(%s, COALESCE(im.diff2, '$')) /*I_diff_id*/
+                                            OR COALESCE(im.diff3, '$') = COALESCE(%s, COALESCE(im.diff3, '$')) /*I_diff_id*/
+                                            OR COALESCE(im.diff4, '$') = COALESCE(%s, COALESCE(im.diff4, '$'))) /*I_diff_id*/
+						            	  AND COALESCE(oh.po_type,'$') = COALESCE(COALESCE(%s,oh.po_type),'$')    /*I_po_type*/
+                                       AND COALESCE(DATE(oh.not_after_date),COALESCE(%s, %s/*vdate*/)) >=
+						            			 COALESCE(%s,COALESCE(DATE(oh.not_after_date),%s/*vdate*/))   /*I_not_after_date_from need to pass L_vdate */
+						            	 AND COALESCE(DATE(oh.not_after_date),COALESCE(%s, %s/*vdate*/)) <=
+						            			 COALESCE(%s,COALESCE(DATE(oh.not_after_date), %s/*vdate*/)) /*I_not_after_date_to need to pass L_vdate */
+						            	AND COALESCE(DATE(ol.instock_date),COALESCE(%s,%s/*vdate*/)) >=
+						            			 COALESCE(%s,COALESCE(DATE(ol.instock_date),%s/*vdate*/))  /*I_eisd_from need to pass L_vdate */ 
+						            	 AND COALESCE(DATE(ol.instock_date),COALESCE(%s, %s/*vdate*/)) <=
+						            		   COALESCE(%s,COALESCE(DATE(ol.instock_date),%s/*vdate*/)) /*I_eisd_to need to pass L_vdate*/
+						                 AND ((oh.po_origin_ind != 0)
+                                            OR (oh.po_origin_ind = 0
+                                                AND oh.contract_no IS NOT NULL))
+                                        AND (ol.ordered_qty
+                                            - COALESCE(ol.received_qty, 0)
+                                            -   COALESCE(
+                                                  (  SELECT 
+                                                            SUM(ald.alloc_qty)
+                                                       FROM alloc_sku_head alh,
+                                                            alloc_dtl ald,
+                                                            alloc_xref  alx
+                                                      WHERE     alh.alloc_no =
+                                                                alx.xref_alloc_no
+                                                            AND ald.alloc_no = alh.alloc_no
+                                                            AND alh.item = ol.item
+                                                            AND alh.order_no = oh.po_no
+                                                            AND alh.wh = ol.location
+                                                   GROUP BY alh.item, alh.order_no),
+                                                  0)) >= 1
+                                        GROUP BY oh.po_no,
+                                       ol.location,
+                                       DATE(ol.instock_date),
+                                       oh.supplier_id) mn
+                                        WHERE AVAILABLE_QTY > 0;"
+
+  Q_ins_temp: "INSERT INTO alloc_po_multi_temp (alloc_no,order_no,comment_desc,location,estimated_instock_date,supplier,sel_ind) values (%s,%s,%s,%s,%s,%s,'N');"
+
+  Q_fetch: "select * from alloc_po_multi_temp"

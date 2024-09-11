@@ -1,0 +1,20 @@
+remove_alloc:
+  Q_sel_alloc_no: "SELECT xref_alloc_no FROM alloc_xref WHERE alloc_no = %s;"
+
+  Q_sel_records: "SELECT h.alloc_no, h.status FROM alloc_xref x, alloc_sku_head h WHERE x.alloc_no = %s AND x.xref_alloc_no = h.alloc_no;"
+
+  Q_del_rcd_dtl: "DELETE FROM alloc_dtl WHERE alloc_no in (select xref_alloc_no from alloc_xref where alloc_no = %s);"
+
+  Q_del_rcd_hdr: "DELETE FROM alloc_sku_head WHERE alloc_no IN (select xref_alloc_no from alloc_xref where alloc_no = %s);"
+
+  Q_del_rcd_xref: "DELETE FROM alloc_xref WHERE xref_alloc_no IN ( SELECT xref_alloc_no FROM (SELECT xref_alloc_no FROM alloc_xref WHERE alloc_no = %s ) AS del);"
+
+
+cancel:
+  Q_sel_status: "SELECT status FROM alloc_head WHERE alloc_no = %s;"
+
+  Q_sel_alloc_id: "select alloc_no from alloc_head where alloc_no = %s;"
+
+  Q_upd_status: "UPDATE alloc_head SET status = CASE WHEN status = 'RSV' THEN 'WS'ELSE 'CNL'END WHERE alloc_no = %s;"
+
+

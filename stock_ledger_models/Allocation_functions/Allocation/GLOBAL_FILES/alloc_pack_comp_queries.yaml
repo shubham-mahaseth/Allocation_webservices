@@ -1,0 +1,249 @@
+alloc_pack_comp_dtl:
+  Q_crete_tbl: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_pack_comp_dtl_temp (ALLOC_NO	   NUMERIC(15,0),
+																                 PACK_NO	   VARCHAR(25),
+																                 ITEM	       VARCHAR(25),
+																                 ITEM_DESC     VARCHAR(250),
+																                 PACK_QTY	   DECIMAL(12,4));"
+
+  Q_del_gtt: "DELETE FROM alloc_pack_comp_dtl_temp WHERE alloc_no = %s "
+
+  Q_ins_pck_temp: "INSERT INTO alloc_pack_comp_dtl_temp (alloc_no,
+									  pack_no,
+                                      item,
+                                      item_desc,
+                                      pack_qty)
+               SELECT DISTINCT %s as alloc_no, 
+                                    pb.pack_no,
+                                    pb.item,
+									im1.item_desc,         
+                                    pb.pack_item_qty
+                          FROM packitem_breakout pb,
+                               item_dtl im,
+                               item_dtl im1        
+                         WHERE pb.pack_no  = %s
+                           AND im.item     = pb.pack_no  
+                           AND im1.item = pb.item     
+                           AND im.pack_ind = 'Y';"
+
+  Q_sel_rec: "SELECT * FROM alloc_pack_comp_dtl_temp WHERE alloc_no = %s"
+
+alloc_pack_store_dtl:
+  Q_crete_temp: "CREATE TABLE IF NOT EXISTS alloc_sku_dtl_temp (ALLOC_NO	            NUMERIC(15,0),
+														                               TRAN_ITEM	        VARCHAR(25),
+														                               ITEM_DESC	        VARCHAR(250),
+														                               WH	                NUMERIC(10,0),
+														                               AVAIL_QTY	        DECIMAL(12,4),
+														                               ALLOC_QTY	        DECIMAL(12,4),
+														                               REMAIN_QTY	        DECIMAL(12,4),
+														                               HIGHEST_CALC_QTY	    DECIMAL(12,4),
+														                               HIGHEST_QTY_STORE	NUMERIC(10,0));"
+
+  Q_sel_rec: "SELECT DISTINCT 1 alloc_criteria FROM alloc_itm_search_dtl WHERE alloc_no  = %s AND alloc_criteria = 'F';"
+
+  Q_del_gtt: "DELETE FROM alloc_sku_dtl_temp where alloc_no = %s"
+
+  Q_ins_gtt: "INSERT INTO alloc_sku_dtl_temp(alloc_no,
+                                             tran_item,
+                                             item_desc,
+                                             wh,
+                                             highest_calc_qty,
+                                             alloc_qty,
+										     avail_qty)          
+                                     SELECT DISTINCT alloc_no,
+                                            tmp.tran_item,
+                                            im.item_desc,
+                                            tmp.to_loc,
+                                            tmp.orig_sku_calc_qty,
+                                            tmp.sku_calc_qty,       
+                                 tmp.sku_calc_qty
+                                       FROM alloc_calc_item_loc tmp,
+                                            item_dtl im
+                                      WHERE tmp.alloc_no = %s   
+                                        AND tmp.tran_item = %s
+                                        AND tmp.wh_id = CASE WHEN %s = 1 THEN 100 ELSE COALESCE(%s,100) END
+                                        AND tmp.tran_item = im.item      
+                                        AND im.pack_ind = 'Y';"
+
+  Q_sel_rec_gtt: "SELECT * FROM alloc_sku_dtl_temp WHERE alloc_no = %s"
+
+restore_pck_alloc_qty:
+  Q_upd: "with src as (SELECT DISTINCT gtt.alloc_no,
+                                                    gtt.tran_item ,
+                                                    gtt.wh to_loc,
+                                                    gtt.avail_qty
+                                               FROM alloc_sku_dtl_temp gtt      
+                                              WHERE gtt.alloc_no = %s) 
+			                                 UPDATE alloc_calc_item_loc tgt,src
+                                                SET tgt.sku_calc_qty = src.avail_qty
+                                              WHERE tgt.alloc_no = src.alloc_no
+                                                AND tgt.tran_item = src.tran_item
+                                                AND tgt.to_loc = src.to_loc
+			                                    AND tgt.wh_id = %s;"
+
+upd_pack_alloc_qty:
+  Q_del_gtt: "DELETE FROM alloc_item_loc_details_temp WHERE alloc_no = %s"
+
+  Q_ins: "INSERT INTO alloc_item_loc_details_temp (alloc_no,
+                                                 wh_id,
+                                                 po_no,
+                                                 location_id,
+                                                 location_desc,
+                                                 GROUP_ID,
+                                                 group_desc,
+                                                 assign_default_wh,
+                                                 source_item,
+                                                 source_item_desc,
+                                                 diff_id,
+                                                 som_qty,
+                                                 gross_need,
+                                                 stock_on_hand,
+                                                 future_fulfill_qty,
+                                                 net_need,
+                                                 calc_qty,
+                                                 comp_calc_qty,
+                                                 alloc_qty,
+                                                 variance_pct,
+                                                 sel_ind,
+                                                 item_parent)
+                            SELECT temp.alloc_no                    alloc_no,
+                               temp.wh_id                       wh_id,
+                               temp.order_no                    order_no,
+                               temp.to_loc                       location_id,
+                               lc.location_desc   				  location_desc,
+                               CASE WHEN lg.group_type = '7' THEN NULL ELSE lg.group_id END group_id,
+                               CASE WHEN lg.group_type = '7' THEN NULL ELSE lg.group_desc END group_desc,
+                               temp.assign_default_wh           assign_default_wh,     
+                               temp.source_item                 source_item,
+                               temp.source_item_desc            source_item_desc,      
+                               temp.diff_id                     diff_id,   
+                               temp.som_qty                     som_qty,
+                               temp.sku_gross_need_no_own_ship  sku_gross_need_no_own_ship,
+                               temp.stock_on_hand               stock_on_hand,
+                               coalesce(temp.on_order + temp.on_alloc + temp.in_transit_qty,0) future_fulfill_qty,
+                               coalesce(temp.sku_gross_need_no_own_ship - temp.stock_on_hand - (temp.on_order + temp.on_alloc + temp.in_transit_qty),0) net_need,
+                               temp.orig_sku_calc_qty                calc_qty,    
+                               temp.comp_calc_qty               comp_calc_qty,    
+                               temp.sku_calc_qty               alloc_qty,        
+                               coalesce(((temp.orig_sku_calc_qty-temp.comp_calc_qty+temp.sku_calc_qty)  
+                                  - (temp.sku_gross_need_no_own_ship
+                                  - coalesce(temp.stock_on_hand, 0)
+                                  - coalesce(temp.on_order + temp.on_alloc + temp.in_transit_qty,0))
+                                 )/ NULLIF ( (temp.sku_gross_need_no_own_ship),0)* 100,0) variance_pct,
+                               'Y'                              sel_ind,
+                               temp.item_parent                 item_parent
+                              FROM (SELECT tmp.alloc_no         alloc_no,
+                                      tmp.wh_id                 wh_id,
+                                      tmp.source_item           source_item,
+                                      tmp.diff_id               diff_id,
+                                      tmp.order_no              order_no,
+                                      tmp.to_loc                to_loc,
+                                      tmp.assign_default_wh     assign_default_wh,
+                                      tmp.source_item_desc      source_item_desc,
+                                      MAX(tmp.som_qty)          som_qty,
+                                      tmp.item_parent        	 item_parent,
+                                      (CASE WHEN MAX(tmp.sku_gross_need_no_own_ship_1) = 0
+                                            THEN MAX(tmp.sku_gross_need_no_own_ship_2)
+                                            ELSE MAX(tmp.sku_gross_need_no_own_ship_1)
+                                      END)     sku_gross_need_no_own_ship,    
+                                      MAX(tmp.stock_on_hand)              stock_on_hand,         
+                                      MAX(tmp.on_order)                   on_order,
+                                      MAX(tmp.on_alloc)                   on_alloc,
+                                      MAX(tmp.in_transit_qty)             in_transit_qty,
+                                      SUM(tmp.sku_calc_qty)               sku_calc_qty,
+                                      SUM(tmp.comp_calc_qty)              comp_calc_qty,
+                                      SUM(tmp.orig_sku_calc_qty)          orig_sku_calc_qty               
+		                     FROM (SELECT tmp.alloc_no,
+		                    			   tmp.wh_id,
+		                    			   tmp.source_item,
+		                    			   tmp.diff_id,
+		                    			   tmp.order_no,
+		                    			   tmp.to_loc,
+		                    			   tmp.assign_default_wh assign_default_wh,
+		                    			   im.item_desc source_item_desc,
+		                    			   tmp.som_qty som_qty,
+		                    			   im.item_parent                 item_parent,
+                                            CASE WHEN im.pack_ind = 'Y' AND im.sellable_ind = 'Y'
+                                                 THEN tmp.gross_need_no_own_ship
+                                          ELSE coalesce(tmp.sku_gross_need_no_own_ship,tmp.gross_need_no_own_ship) 
+                                            END sku_gross_need_no_own_ship_1,   
+                                            0 sku_gross_need_no_own_ship_2,     
+                                            GREATEST (coalesce (tmp.stock_on_hand, 0),
+                                              - coalesce(tmp.on_order, 0)
+                                              - coalesce(tmp.on_alloc, 0)
+                                              - coalesce(tmp.IN_TRANSIT_QTY, 0),
+                                              0) stock_on_hand,
+                                            tmp.on_order,
+                                            tmp.on_alloc,
+                                            tmp.in_transit_qty,
+                                            tmp.sku_calc_qty,
+                                            tmp.orig_sku_calc_qty comp_calc_qty,  
+                                            tmp.orig_sku_calc_qty,
+                                            1 label
+                                           FROM alloc_calc_item_loc  tmp,
+                                                item_dtl                 im
+                                          WHERE tmp.alloc_no = %s                    
+                                            AND tmp.source_item = im.item
+                                            AND NOT (im.pack_ind = 'Y' AND im.sellable_ind = 'N')
+                                        UNION ALL
+                                        SELECT tmp.alloc_no,
+                                               tmp.wh_id,
+                                               pb.item,
+                                               aaim.aggr_diff_id diff_id,
+                                               tmp.order_no,
+                                               tmp.to_loc,
+                                         tmp.assign_default_wh assign_default_wh,
+                                         im1.item_desc source_item_desc,
+                                         1 som_qty,
+                                         im1.item_parent                        item_parent,
+                                               0 gross_need_no_own_ship_1,                                    
+                                        MAX(ils.gross_need) gross_need_no_own_ship_2, 
+                                         MAX(ils.stock_on_hand) stock_on_hand,                                                                       
+                                         MAX(ils.on_order) on_order,
+                                         MAX(ils.on_alloc) on_alloc,
+                                         MAX(ils.in_transit_qty) in_transit_qty,
+                                         0 sku_calc_qty,
+                                         0 comp_calc_qty,
+                                         SUM(tmp.sku_calc_qty*pb.ITEM_QTY),        
+		                    					2 label
+                                     FROM alloc_calc_item_loc  tmp,
+                                          packitem_breakout    pb,
+                                          item_dtl             im,
+                                          item_dtl             im1,
+                                          item_dtl             aaim,
+                                          alloc_comp_inv       ils     
+		                    		WHERE tmp.alloc_no = %s
+                                     AND tmp.source_item = im.item
+                                     AND pb.item = im1.item
+                                     AND im1.item = aaim.item
+                                     AND tmp.source_item = pb.pack_no
+                                     AND (im.pack_ind = 'Y' AND im.sellable_ind = 'N' AND im.orderable_ind = 'Y')
+                                     AND pb.item = ils.tran_item
+                                     AND ils.to_loc = tmp.to_loc
+                                     AND ils.alloc_no = tmp.alloc_no
+                                     GROUP BY tmp.alloc_no,
+                                           tmp.wh_id,
+                                           pb.item,
+                                           aaim.aggr_diff_id ,
+                                           tmp.order_no,
+                                           tmp.to_loc,
+                                           tmp.assign_default_wh ,
+                                           im1.item_desc ,
+                                           im1.item_parent) tmp
+                                    GROUP BY tmp.alloc_no,
+                                             tmp.wh_id,
+                                             tmp.source_item,
+                                             tmp.diff_id,
+                                             tmp.order_no,
+                                             tmp.to_loc,
+                                             tmp.assign_default_wh,
+                                             tmp.source_item_desc,
+                                             tmp.item_parent)temp,
+                                   alloc_loc_group_detail        lg,
+                                   alloc_location                lc
+                            WHERE lg.alloc_no = temp.alloc_no
+                              AND lc.loc_group_id = lg.loc_group_id
+                              AND lc.location_id = temp.to_loc
+                              AND lc.group_id = lg.group_id; "
+
+
+

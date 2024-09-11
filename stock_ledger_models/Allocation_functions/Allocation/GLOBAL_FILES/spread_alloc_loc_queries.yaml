@@ -1,0 +1,458 @@
+#############################################################
+#Created By - Priyanshu Pandey                              #
+#File Name  - spread_alloc_loc_queries.yaml                 #
+#Purpose    - All queries for location spread quantity      #
+#############################################################
+
+spread_alloc_loc_dtl:
+  Q_get_spread_item: "SELECT DISTINCT tmp.alloc_no,
+                            tmp.wh_id,
+                            tmp.order_no,
+                            tmp.source_item,
+                            tran_item,
+                            tmp.remain_qty sku_avail_qty,
+                            total_tran_sku_calc_qty,
+                            tmp.som_qty,
+                            GREATEST(
+                                    CEIL(
+                                        CEIL(
+                                                (  sku_avail_qty
+                                                * (  (tmp.spread_qty * 100)
+                                                    / tmp.remain_qty)
+                                                / 100)
+                                            / (COUNT(1)
+                                                    OVER(
+                                                        PARTITION BY tmp.alloc_no,
+                                                                    tmp.wh_id,
+                                                                    tmp.order_no,
+                                                                    tmp.source_item,
+                                                                    tmp.tran_item)))
+                                        / tmp.som_qty)
+                                * tmp.som_qty,
+                                tmp.som_qty)    adj_units,
+                            ROUND(
+                                (  sku_avail_qty
+                                * ((tmp.spread_qty * 100) / tmp.remain_qty)
+                                / 100))        sku_spread_qty
+                                    FROM (SELECT tmp.to_loc,
+                                                tmp.alloc_no,
+                                                tmp.wh_id,
+                                                tmp.order_no,
+                                                tmp.source_item,
+                                                tmp.tran_item,
+                                                tmp.diff_id,
+                                                tmp.sku_avail_qty
+                                                    org_sku_avail_qty,
+                                                tmp.sku_avail_qty
+                                                - SUM(tmp.sku_calc_qty)
+                                                    OVER(PARTITION BY tmp.alloc_no,
+                                                                        tmp.wh_id,
+                                                                        tmp.source_item,
+                                                                        tmp.tran_item)
+                                                    sku_avail_qty,
+                                                gtt.spread_qty,
+                                                SUM(tmp.sku_calc_qty)
+                                                    OVER(PARTITION BY tmp.alloc_no,
+                                                                        tmp.wh_id,
+                                                                        tmp.order_no,
+                                                                        tmp.source_item,
+                                                                        tmp.tran_item)
+                                                    total_tran_sku_calc_qty,
+                                                /*SUM(tmp.AVAIL_QTY)
+                                                    OVER(PARTITION BY tmp.alloc_no,
+                                                                        tmp.wh_id,
+                                                                        tmp.source_item,
+                                                                        tmp.diff_id)*/
+                                                (SELECT SUM(DISTINCT avail_qty)  
+                                                   FROM alloc_calc_item_loc 
+                                                  WHERE alloc_no = tmp.alloc_no 
+                                                    AND tmp.wh_id=wh_id 
+                                                    AND COALESCE(tmp.diff_id,'$')=COALESCE(diff_id,'$')
+                                                    AND tmp.source_item=source_item 
+                                                  GROUP BY alloc_no,
+                                                           wh_id,
+                                                           order_no,
+                                                           source_item)
+                                                - SUM(tmp.sku_calc_qty)
+                                                    OVER(PARTITION BY tmp.alloc_no,
+                                                                        tmp.wh_id,
+                                                                        tmp.source_item,
+                                                                        tmp.diff_id)
+                                                    remain_qty,
+                                                COUNT(1)
+                                                    OVER(PARTITION BY tmp.alloc_no,
+                                                                        tmp.wh_id,
+                                                                        tmp.order_no,
+                                                                        tmp.source_item,
+                                                                        tmp.tran_item)
+                                                    no_of_stores,
+                                                tmp.som_qty
+                                            FROM alloc_calc_item_loc  tmp,
+                                                alloc_item_details_temp    gtt
+                                        WHERE     tmp.alloc_no = %s
+                                                AND tmp.sku_avail_qty <> 0
+                                                AND (   (    tmp.exact_ind IN ('N', 'Y')
+                                                        AND tmp.rule_type <> '7')
+                                                    OR tmp.rule_type = '7')
+                                                AND tmp.alloc_no = gtt.alloc_no
+                                                AND tmp.wh_id = gtt.wh_id
+                                                AND tmp.source_item = gtt.source_item
+                                                AND COALESCE(tmp.diff_id,'$') = COALESCE(gtt.diff_id,COALESCE(tmp.diff_id,'$'))  
+                                                AND gtt.spread_qty IS NOT NULL
+                                                AND (   (    tmp.size_profile_ind IS NOT NULL
+                                                        AND tmp.size_profile_qty <> 0)
+                                                    OR tmp.size_profile_ind IS NULL)) tmp,
+                                        alloc_item_loc_details_temp  glc
+                                WHERE org_sku_avail_qty > total_tran_sku_calc_qty
+                                    AND spread_qty                >= tmp.som_qty
+                                    AND glc.alloc_no              = tmp.alloc_no
+                                    AND glc.wh_id                 = tmp.wh_id
+                                    AND glc.source_item           = tmp.source_item
+                                    AND COALESCE(glc.diff_id,'$') = COALESCE(tmp.diff_id,'$')
+                                    AND COALESCE (glc.po_no, '$') = COALESCE (tmp.order_no, '$')
+                                    AND glc.sel_ind               = 'Y'
+                                    AND glc.location_id           = tmp.to_loc;"
+
+  Q_chk_tot_tran_sku_cal_qty: "SELECT SUM(sku_calc_qty) total_tran_sku_calc_qty
+                                 FROM alloc_calc_item_loc tmp
+                                WHERE alloc_no = %s
+                                  AND exact_ind = %s
+                                  AND wh_id = %s
+                                  AND COALESCE(order_no, '$') = COALESCE(%s, COALESCE(order_no, '$'))
+                                  AND source_item = %s
+                                  AND tran_item = %s
+                                  AND sku_avail_qty <> 0
+                                GROUP BY alloc_no,
+                                         wh_id,
+                                         order_no,
+                                         source_item,
+                                         tran_item;"
+
+  Q_chk_opn_adj_qty: "SELECT 1
+                        FROM (SELECT alloc_no,
+                                    wh_id,
+                                    order_no,
+                                    source_item,
+                                    tran_item,
+                                    to_loc,
+                                    gross_need,
+                                    exact_ind,
+                                    SUM(avail_Qty)
+                                        OVER(PARTITION BY alloc_no,
+                                                            wh_id,
+                                                            order_no,
+                                                            source_item) total_avail_Qty,
+                                    sku_avail_qty,
+                                    tmp.STOCK_ON_HAND,
+                                    sku_calc_qty,
+                                    SUM(sku_calc_qty)
+                                        OVER(PARTITION BY alloc_no,
+                                                            wh_id,
+                                                            order_no,
+                                                            source_item,
+                                                            tran_item) total_tran_sku_calc_qty,
+                                    tmp.som_qty,
+                                    SUM(sku_calc_qty)
+                                        OVER(PARTITION BY alloc_no,
+                                                            wh_id,
+                                                            order_no,
+                                                            source_item) total_sku_calc_qty
+                                FROM alloc_calc_item_loc tmp
+                                WHERE alloc_no = %s
+                                AND COALESCE(sku_calc_qty, 0) <> 0
+                                ORDER BY   gross_need_no_own_ship
+                                        - CASE
+                                            WHEN net_need_ind = 'Y' THEN stock_on_hand
+                                            ELSE 0
+                                        END ASC,
+                                        alloc_no,
+                                        wh_id,
+                                        order_no,
+                                        source_item,
+                                        tran_item,
+                                        CONVERT(to_loc,DECIMAL) DESC)t
+                        WHERE sku_avail_qty < total_tran_sku_calc_qty;"
+
+  Q_upd_alloc_sku_calc_qty: "UPDATE alloc_calc_item_loc tmp
+                                SET alloc_sku_calc_qty = sku_calc_qty
+                              WHERE alloc_no = %s
+                                AND source_item = %s
+                                AND COALESCE(order_no, '$') = COALESCE(%s,COALESCE(order_no, '$'))
+                                AND wh_id = %s
+                                AND tran_item = %s
+                                AND sku_avail_qty <> 0;"
+
+  Q_upd_sku_calc_qty: "UPDATE alloc_calc_item_loc tmp
+                          SET sku_calc_qty = sku_calc_qty + %s,
+                              sku_spread_qty = %s
+                        WHERE alloc_no = %s
+                          AND source_item = %s
+                          AND COALESCE(order_no, '$') = COALESCE(%s,COALESCE(order_no, '$'))
+                          AND wh_id = %s
+                          AND tran_item = %s
+                          AND sku_avail_qty <> 0
+                          AND EXISTS
+                                  (SELECT 1
+                                     FROM alloc_item_loc_details_temp gtt
+                                    WHERE alloc_no = %s
+                                      AND sel_ind = 'Y'
+                                      AND tmp.alloc_no = gtt.alloc_no
+                                      AND tmp.wh_id = gtt.wh_id
+                                      AND tmp.source_item = gtt.source_item
+                                      AND COALESCE(tmp.diff_id,'$') = COALESCE(gtt.diff_id,COALESCE(tmp.diff_id,'$'))                                         
+                                      AND COALESCE(tmp.order_no, '$') = COALESCE(gtt.po_no,COALESCE(tmp.order_no, '$'))
+                                      AND gtt.location_id = tmp.to_loc );"
+
+  Q_loop_u1: "SELECT tmp.*,
+                     tmp.sku_avail_qty - tmp.old_total_tran_sku_calc_qty AS new_avail_Qty,
+                     old_total_tran_sku_calc_qty + sku_spread_qty AS new_total_sku_calc_qty
+                FROM (SELECT tmp.alloc_no,
+                             tmp.wh_id,
+                             tmp.order_no,
+                             tmp.source_item,
+                             tmp.tran_item,
+                             tmp.diff_id,
+                             tmp.to_loc,
+                             tmp.gross_need,
+                             tmp.exact_ind,
+                             gtt.sel_ind,
+                             SUM(tmp.avail_qty)
+                                 OVER(PARTITION BY tmp.alloc_no,
+                                                   tmp.wh_id,
+                                                   tmp.order_no,
+                                                   tmp.source_item) AS total_avail_Qty,
+                             tmp.sku_avail_qty,
+                             tmp.sku_spread_qty,
+                             tmp.stock_on_hand,
+                             tmp.sku_calc_qty,
+                             SUM(tmp.sku_calc_qty)
+                                 OVER(PARTITION BY tmp.alloc_no,
+                                                   tmp.wh_id,
+                                                   tmp.order_no,
+                                                   tmp.source_item,
+                                                   tmp.tran_item) AS total_tran_sku_calc_qty,
+                             SUM(tmp.alloc_sku_calc_qty)
+                                 OVER(PARTITION BY tmp.alloc_no,
+                                                   tmp.wh_id,
+                                                   tmp.order_no,
+                                                   tmp.source_item,
+                                                   tmp.tran_item) AS old_total_tran_sku_calc_qty,
+                             tmp.som_qty,
+                             SUM(tmp.sku_calc_qty)
+                                 OVER(PARTITION BY tmp.alloc_no,
+                                                   tmp.wh_id,
+                                                   tmp.order_no,
+                                                   tmp.source_item) AS total_sku_calc_qty
+                      FROM alloc_calc_item_loc  tmp,
+                           alloc_item_loc_details_temp gtt
+                     WHERE tmp.alloc_no = %s
+                       AND COALESCE(tmp.sku_calc_qty, 0) <> 0
+                       AND gtt.alloc_no = %s 
+                       AND tmp.alloc_no = gtt.alloc_no
+                       AND tmp.wh_id = gtt.wh_id
+                       AND tmp.source_item = gtt.source_item                             
+                       AND COALESCE(tmp.diff_id,'$') = COALESCE(gtt.diff_id,COALESCE(tmp.diff_id,'$'))
+                       AND COALESCE(tmp.order_no, '$') = COALESCE(gtt.po_no,COALESCE(tmp.order_no, '$'))
+                       AND gtt.location_id = tmp.to_loc
+                       AND tmp.rule_type <> '7'
+                     ORDER BY   gross_need_no_own_ship
+                              - CASE WHEN net_need_ind = 'Y'
+                                     THEN
+                                        tmp.stock_on_hand
+                                     ELSE
+                                        0
+                                END ASC,
+                              alloc_no,
+                              wh_id,
+                              order_no,
+                              source_item,
+                              sel_ind DESC,
+                              tran_item,
+                              CONVERT(to_loc,DECIMAL) DESC) tmp
+               WHERE (  (total_tran_sku_calc_qty - sku_spread_qty)
+                      + (  tmp.sku_avail_qty
+                         - tmp.old_total_tran_sku_calc_qty) <> sku_avail_qty);"
+
+  Q_loop_u2: "SELECT tmp.*,
+                     tmp.sku_avail_qty - tmp.old_total_tran_sku_calc_qty AS new_avail_Qty,
+                     old_total_tran_sku_calc_qty + sku_spread_qty AS new_total_sku_calc_qty
+                FROM (SELECT tmp.alloc_no,
+                             tmp.wh_id,
+                             tmp.order_no,
+                             tmp.source_item,
+                             tmp.tran_item,
+                             tmp.diff_id,
+                             tmp.to_loc,
+                             tmp.gross_need,
+                             tmp.exact_ind,
+                             gtt.sel_ind,
+                             SUM(tmp.avail_Qty)
+                                 OVER(PARTITION BY tmp.alloc_no,
+                                                   tmp.wh_id,
+                                                   tmp.order_no,
+                                                   tmp.source_item) AS total_avail_Qty,
+                             tmp.sku_avail_qty,
+                             tmp.sku_spread_qty,
+                             tmp.STOCK_ON_HAND,
+                             tmp.sku_calc_qty,
+                             SUM(tmp.sku_calc_qty)
+                                 OVER(PARTITION BY tmp.alloc_no,
+                                                   tmp.wh_id,
+                                                   tmp.order_no,
+                                                   tmp.source_item,
+                                                   tmp.tran_item) AS total_tran_sku_calc_qty,
+                             SUM(tmp.alloc_sku_calc_qty)
+                                 OVER(PARTITION BY tmp.alloc_no,
+                                                   tmp.wh_id,
+                                                   tmp.order_no,
+                                                   tmp.source_item,
+                                                   tmp.tran_item) AS old_total_tran_sku_calc_qty,
+                             tmp.som_qty,
+                             SUM(tmp.sku_calc_qty)
+                                 OVER(PARTITION BY tmp.alloc_no,
+                                                   tmp.wh_id,
+                                                   tmp.order_no,
+                                                   tmp.source_item) AS total_sku_calc_qty
+                        FROM alloc_calc_item_loc  tmp,
+                             alloc_item_loc_details_temp gtt
+                       WHERE tmp.alloc_no = %s
+                         AND COALESCE(tmp.sku_calc_qty, 0) <> 0
+                         AND gtt.alloc_no = %s
+                         AND tmp.alloc_no = gtt.alloc_no
+                         AND tmp.wh_id = gtt.wh_id
+                         AND tmp.source_item = gtt.source_item                                
+                         AND COALESCE(tmp.diff_id,'$') = COALESCE(gtt.diff_id,COALESCE(tmp.diff_id,'$'))                                 
+                         AND COALESCE(tmp.order_no, '$') = COALESCE(gtt.po_no,COALESCE(tmp.order_no, '$'))
+                         AND gtt.location_id = tmp.to_loc
+                         AND tmp.rule_type = '7'
+                       ORDER BY stock_on_hand DESC,
+                                alloc_no,
+                                wh_id,
+                                order_no,
+                                source_item,
+                                sel_ind DESC,
+                                tran_item,
+                                CONVERT(to_loc,DECIMAL) DESC) tmp
+                WHERE (  (total_tran_sku_calc_qty - sku_spread_qty)
+                       + (  tmp.sku_avail_qty
+                          - tmp.old_total_tran_sku_calc_qty) <> sku_avail_qty);"
+
+  Q_upd_sku_cal_qty_loop: "UPDATE alloc_calc_item_loc
+                              SET sku_calc_qty =
+                                               GREATEST(
+                                                     FLOOR(
+                                                           (sku_calc_qty - %s)
+                                                         / %s)
+                                                   * %s,
+                                                   0)
+                            WHERE alloc_no = %s
+                              AND source_item = %s
+                              AND COALESCE(order_no, '$') = COALESCE(%s,COALESCE(order_no, '$'))
+                              AND wh_id = %s
+                              AND tran_item = %s;"
+
+  Q_upd_alloc_sku_calc_qty1: "UPDATE alloc_calc_item_loc tmp
+                                 SET alloc_sku_calc_qty = NULL
+                               WHERE alloc_no = %s
+                                 AND source_item = %s
+                                 AND COALESCE(order_no, '$') = COALESCE(%s,COALESCE(order_no, '$'))
+                                 AND wh_id = %s
+                                 AND tran_item = %s
+                                 AND sku_avail_qty <> 0;"
+
+  Q_upd_sku_sprd_qty: "UPDATE alloc_calc_item_loc tmp
+                          SET sku_spread_qty = NULL, 
+                              alloc_sku_calc_qty = NULL
+                        WHERE alloc_no = %s
+                          AND source_item = %s
+                          AND COALESCE(order_no, '$') = COALESCE(%s,COALESCE(order_no, '$'))
+                          AND wh_id = %s
+                          AND tran_item = %s
+                          AND sku_spread_qty <> 0;"
+
+  C_temp_tbl1: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_item_header_temp
+               (ALLOC_NO                    NUMERIC(15),    
+                SOURCE_ITEM                 VARCHAR(25),  
+                SOURCE_ITEM_DESC            VARCHAR(250), 
+                DIFF_ID                     VARCHAR(10),  
+                PO_NO                       VARCHAR(40),  
+                RULE_TYPE                   VARCHAR(10),  
+                GROSS_NEED                  NUMERIC(12),  
+                STOCK_ON_HAND               NUMERIC(12),  
+                FUTURE_FULFILL_QTY          NUMERIC(12),  
+                NET_NEED                    NUMERIC(12),  
+                CALC_QTY                    NUMERIC(12),  
+                AVAIL_QTY                   NUMERIC(12),  
+                ALLOC_QTY                   NUMERIC(12),  
+                REMAIN_QTY                  NUMERIC(12),  
+                SPREAD_QTY                  NUMERIC(12),  
+                SOM_QTY                     NUMERIC(12),  
+                PACK_IND                    VARCHAR(1));"
+  
+  C_temp_tbl2: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_item_details_temp
+                (ALLOC_NO                    NUMERIC(15),    
+                 WH_ID                       VARCHAR(40),  
+                 SOURCE_ITEM                 VARCHAR(25),  
+                 SOURCE_ITEM_DESC            VARCHAR(250), 
+                 DIFF_ID                     VARCHAR(10),  
+                 PO_NO                       VARCHAR(40),  
+                 RULE_TYPE                   VARCHAR(10),  
+                 GROSS_NEED                  NUMERIC(12),  
+                 STOCK_ON_HAND               NUMERIC(12),  
+                 FUTURE_FULFILL_QTY          NUMERIC(12),  
+                 NET_NEED                    NUMERIC(12),  
+                 CALC_QTY                    NUMERIC(12),  
+                 AVAIL_QTY                   NUMERIC(12),  
+                 ALLOC_QTY                   NUMERIC(12),  
+                 REMAIN_QTY                  NUMERIC(12),  
+                 SPREAD_QTY                  NUMERIC(12),  
+                 SOM_QTY                     NUMERIC(12));"
+  
+  C_temp_tbl3: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_item_loc_dtls_prv_temp
+                (ALLOC_NO                    NUMERIC(15),    
+                 WH_ID                       VARCHAR(40),  
+                 SOURCE_ITEM                 VARCHAR(25),  
+                 SOURCE_ITEM_DESC            VARCHAR(250), 
+                 DIFF_ID                     VARCHAR(10),  
+                 PO_NO                       VARCHAR(40),  
+                 LOCATION_ID                 VARCHAR(40),  
+                 LOCATION_DESC               VARCHAR(150), 
+                 GROUP_ID                    VARCHAR(40),  
+                 GROUP_DESC                  VARCHAR(600),
+                 ASSIGN_DEFAULT_WH           NUMERIC(10),    
+                 RULE_TYPE                   VARCHAR(10),  
+                 SOM_QTY                     NUMERIC(20),  
+                 GROSS_NEED                  NUMERIC(12),  
+                 STOCK_ON_HAND               NUMERIC(12),  
+                 FUTURE_FULFILL_QTY          NUMERIC(12),  
+                 NET_NEED                    NUMERIC(12),  
+                 CALC_QTY                    NUMERIC(12),  
+                 ALLOC_QTY                   NUMERIC(12),  
+                 VARIANCE_PCT                NUMERIC(12),  
+                 SEL_IND                     VARCHAR(1));"
+                
+  C_temp_tbl4: "CREATE TEMPORARY TABLE IF NOT EXISTS  alloc_item_loc_details_temp
+                (ALLOC_NO                    NUMERIC(15),    
+                 WH_ID                       VARCHAR(40),  
+                 SOURCE_ITEM                 VARCHAR(25),  
+                 SOURCE_ITEM_DESC            VARCHAR(250), 
+                 DIFF_ID                     VARCHAR(10),  
+                 PO_NO                       VARCHAR(40),  
+                 LOCATION_ID                 VARCHAR(40),  
+                 LOCATION_DESC               VARCHAR(150), 
+                 GROUP_ID                    VARCHAR(40),  
+                 GROUP_DESC                  VARCHAR(600), 
+                 ASSIGN_DEFAULT_WH           NUMERIC(10),    
+                 RULE_TYPE                   VARCHAR(10),  
+                 SOM_QTY                     NUMERIC(20),  
+                 GROSS_NEED                  NUMERIC(12),  
+                 STOCK_ON_HAND               NUMERIC(12),  
+                 FUTURE_FULFILL_QTY          NUMERIC(12),  
+                 NET_NEED                    NUMERIC(12),  
+                 CALC_QTY                    NUMERIC(12),  
+                 ALLOC_QTY                   NUMERIC(12),  
+                 VARIANCE_PCT                NUMERIC(12),  
+                 SEL_IND                     VARCHAR(1),   
+                 ITEM_PARENT                 VARCHAR(25),  
+                 PACK_NO                     VARCHAR(25),  
+                 COMP_CALC_QTY               NUMERIC(12));"

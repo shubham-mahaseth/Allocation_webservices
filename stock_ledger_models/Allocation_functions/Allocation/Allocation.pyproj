@@ -1,0 +1,188 @@
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>5cb3a65b-dcca-453b-82a6-0e2b73fff6c7</ProjectGuid>
+    <ProjectHome>.</ProjectHome>
+    <StartupFile>ALLOCATION_DETAILS\alloc_details_wrapper.py</StartupFile>
+    <SearchPath>
+    </SearchPath>
+    <WorkingDirectory>.</WorkingDirectory>
+    <OutputPath>.</OutputPath>
+    <Name>Allocation</Name>
+    <RootNamespace>Allocation</RootNamespace>
+    <TestFramework>Pytest</TestFramework>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <DebugSymbols>true</DebugSymbols>
+    <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+    <DebugSymbols>true</DebugSymbols>
+    <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="ALLOCATION_DETAILS\alloc_details_wrapper.py" />
+    <Compile Include="ALLOCATION_DETAILS\alloc_loc_spread_wrapper.py" />
+    <Compile Include="ALLOCATION_DETAILS\setup_alloc_details.py" />
+    <Compile Include="ALLOCATION_DETAILS\update_sku_calc_qty.py" />
+    <Compile Include="ALLOCATION_DETAILS\update_sku_calc_qty_wrapper.py" />
+    <Compile Include="ALLOCATION_STATUS\approve.py" />
+    <Compile Include="ALLOCATION_STATUS\approve_wrapper.py" />
+    <Compile Include="ALLOCATION_STATUS\reserve.py" />
+    <Compile Include="ALLOCATION_STATUS\reserve_wrapper.py" />
+    <Compile Include="ALLOCATION_STATUS\worksheet.py" />
+    <Compile Include="ALLOCATION_STATUS\wrapper_worksheet.py" />
+    <Compile Include="ALLOCATION_SUMMARY\copy_allocation_wrapper.py" />
+    <Compile Include="ALLOCATION_SUMMARY\copy_alloc.py" />
+    <Compile Include="ALLOCATION_SUMMARY\populate_srch_results.py" />
+    <Compile Include="ALLOCATION_SUMMARY\searchB.py" />
+    <Compile Include="ALLOCATION_SUMMARY\switch_window_wrapper.py" />
+    <Compile Include="CALCULATION\calculate.py" />
+    <Compile Include="CALCULATION\calculate_bak.py" />
+    <Compile Include="CALCULATION\calculate_validation.py" />
+    <Compile Include="CALCULATION\calculate_whatif.py" />
+    <Compile Include="CALCULATION\calculation_setup.py" />
+    <Compile Include="CALCULATION\calculation_wrapper.py" />
+    <Compile Include="CALCULATION\whatif_calculation_wrapper.py" />
+    <Compile Include="CREATE_ALLOC_FUNCTIONS\complete_create.py" />
+    <Compile Include="CREATE_ALLOC_FUNCTIONS\create_alloc.py" />
+    <Compile Include="CREATE_ALLOC_FUNCTIONS\insert_alloc_sku_head_alloc_dtl.py" />
+    <Compile Include="CREATE_ALLOC_FUNCTIONS\upd_alloc_item_resv_exp.py" />
+    <Compile Include="CREATE_SCREEN\create_screen_add_button_wrapper.py" />
+    <Compile Include="CREATE_SCREEN\error_report_wrapper.py" />
+    <Compile Include="CREATE_SCREEN\process_split_data.py" />
+    <Compile Include="CREATE_SCREEN\load_split_data_wrapper.py" />
+    <Compile Include="CREATE_SCREEN\on_click_process.py" />
+    <Compile Include="CREATE_SCREEN\populate_search_result.py" />
+    <Compile Include="CREATE_SCREEN\pop_alloc_head_wrapper.py" />
+    <Compile Include="CREATE_SCREEN\refresh_grid_wrapper.py" />
+    <Compile Include="CREATE_SCREEN\split_button_wrapper.py" />
+    <Compile Include="GLOBAL_FILES\convert_numpy_64.py" />
+    <Compile Include="GLOBAL_FILES\get_vdate.py" />
+    <Compile Include="GLOBAL_FILES\null_handler.py" />
+    <Compile Include="INVENTORY_SETUP\inventory_setup.py" />
+    <Compile Include="INVENTORY_SETUP\load_item_source.py" />
+    <Compile Include="INVENTORY_SETUP\setup_inventory_bak.py" />
+    <Compile Include="GLOBAL_FILES\testing_wrapper.py" />
+    <Compile Include="GLOBAL_FILES\get_connection.py" />
+    <Compile Include="INVENTORY_SETUP\update_alloc_ext.py" />
+    <Compile Include="INVENTORY_SETUP\update_latest_inv_wrapper.py" />
+    <Compile Include="INVENTORY_SETUP\wrapper_load_item.py" />
+    <Compile Include="INVENTORY_SETUP\wrapper_upd_alloc_ext.py" />
+    <Compile Include="LIKE_ITEM\like_item_del_button_wrapper.py" />
+    <Compile Include="LIKE_ITEM\like_item_map_button_wrapper.py" />
+    <Compile Include="LIKE_ITEM\like_item_ok_button_wrapper.py" />
+    <Compile Include="LIKE_ITEM\retrieve_like_item_map_wrapper.py" />
+    <Compile Include="LIKE_ITEM\setup_like_item.py" />
+    <Compile Include="QUANTITY_LIMITS\qty_limits_ok_button_wrapper.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="QUANTITY_LIMITS\qty_limits_screen_wrapper.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="QUANTITY_LIMITS\setup_qty_limits.py" />
+    <Compile Include="RULES_AND_LOCATIONS\change_weight.py" />
+    <Compile Include="RULES_AND_LOCATIONS\del_loc_wrapper.py" />
+    <Compile Include="RULES_AND_LOCATIONS\insert_locations_wrapper.py" />
+    <Compile Include="RULES_AND_LOCATIONS\insert_rule_wrapper.py" />
+    <Compile Include="RULES_AND_LOCATIONS\load_change_weight_dates_wrapper.py" />
+    <Compile Include="RULES_AND_LOCATIONS\load_rule_dates_wrapper.py" />
+    <Compile Include="RULES_AND_LOCATIONS\location_add_button_wrapper.py" />
+    <Compile Include="RULES_AND_LOCATIONS\populate_store.py" />
+    <Compile Include="RULES_AND_LOCATIONS\retreive_locations_wrapper.py" />
+    <Compile Include="RULES_AND_LOCATIONS\retrieve_rule_data.py" />
+    <Compile Include="RULES_AND_LOCATIONS\retrieve_rule_data_wrapper.py" />
+    <Compile Include="RULES_AND_LOCATIONS\retrieve_rule_dates_weight_wrapper.py" />
+    <Compile Include="RULES_AND_LOCATIONS\setup_rules_locations.py" />
+    <Compile Include="RULES_AND_LOCATIONS\upd_min_pres_qty_wrapper.py" />
+    <Compile Include="RULES_AND_LOCATIONS\upd_size_prof_wrapper.py" />
+    <Compile Include="RULES_AND_LOCATIONS\upd_st_wh_wrapper.py" />
+    <Compile Include="SCHEDULE\chk_dup_styl_clr_wrapper.py" />
+    <Compile Include="SCHEDULE\create_alloc_from_parent.py" />
+    <Compile Include="SCHEDULE\retreive_purge_alloc.py" />
+    <Compile Include="SCHEDULE\retreive_purge_alloc_wrapper.py" />
+    <Compile Include="SCHEDULE\retreive_schedule_data_wrapper.py" />
+    <Compile Include="SCHEDULE\update_alloc_parms_wrapper.py" />
+    <Compile Include="SCHEDULE\update_alloc_status _wrapper.py" />
+    <Compile Include="SCHEDULE\update_alloc_type_wrapper.py" />
+    <Compile Include="SCHEDULE\update_run_status_wrapper.py" />
+    <Compile Include="SCHEDULE\update_schedule_date_wrapper.py" />
+    <Compile Include="SCHEDULE\create_alloc_from_parent_wrapper.py" />
+    <Compile Include="SCHEDULE\delete_nonavail_from_parent_wrapper.py" />
+    <Compile Include="SCHEDULE\delete_nonselected_from_parent_wrapper.py" />
+    <Compile Include="SCHEDULE\setup_schedule_alloc.py" />
+    <Compile Include="SIZE_DETAILS\alloc_size_hdr_wrapperpy.py" />
+    <Compile Include="SIZE_DETAILS\alloc_size_header.py" />
+    <Compile Include="SIZE_DETAILS\get_size_prof_wrapper.py" />
+    <Compile Include="SIZE_DETAILS\retreive_alloc_size_details_wrapper.py" />
+    <Compile Include="SIZE_DETAILS\setup_size_detail.py" />
+    <Compile Include="ALLOCATION_DETAILS\update_alloc_qty_wrapper.py" />
+    <Compile Include="WHATIF_SUMMARY\alloc_wisummary.py" />
+    <Compile Include="WHATIF_SUMMARY\retreive_wisummary_details_wrapper.py" />
+    <Compile Include="WHATIF_SUMMARY\retreive_wisummary_into_temp_wrapper.py" />
+    <Compile Include="WHATIF_SUMMARY\retrieve_wi_summary_wrapper.py" />
+    <Compile Include="WHATIF_SUMMARY\setup_whatif_summary.py" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="ALLOCATION_STATUS\" />
+    <Folder Include="CREATE_ALLOC_FUNCTIONS\" />
+    <Folder Include="GLOBAL_FILES\" />
+    <Folder Include="INVENTORY_SETUP\" />
+    <Folder Include="CALCULATION\" />
+    <Folder Include="ALLOCATION_DETAILS\" />
+    <Folder Include="CREATE_SCREEN\" />
+    <Folder Include="LIKE_ITEM\" />
+    <Folder Include="ALLOCATION_SUMMARY\" />
+    <Folder Include="SCHEDULE\" />
+    <Folder Include="WHATIF_SUMMARY\" />
+    <Folder Include="SIZE_DETAILS\" />
+    <Folder Include="RULES_AND_LOCATIONS\" />
+    <Folder Include="QUANTITY_LIMITS\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="GLOBAL_FILES\alloc_size_header.yaml" />
+    <Content Include="GLOBAL_FILES\approve_queries.yaml" />
+    <Content Include="GLOBAL_FILES\reserve_queries.yaml" />
+    <Content Include="GLOBAL_FILES\setup_purge_alloc.yaml" />
+    <Content Include="GLOBAL_FILES\calculate_queries.yaml" />
+    <Content Include="GLOBAL_FILES\schedule_alloc_queries.yaml" />
+    <Content Include="GLOBAL_FILES\ASQuery.yaml" />
+    <Content Include="GLOBAL_FILES\calculate_queries_bak.yaml" />
+    <Content Include="GLOBAL_FILES\calculate_whatif_queries.yaml" />
+    <Content Include="GLOBAL_FILES\calculation_setup_queries.yaml" />
+    <Content Include="GLOBAL_FILES\change_weight_queries.yaml" />
+    <Content Include="GLOBAL_FILES\copy_alloc_data.yaml" />
+    <Content Include="GLOBAL_FILES\create_alloc_queries.yaml" />
+    <Content Include="GLOBAL_FILES\insert_alloc_hdr_alloc_dtl_queries.yaml" />
+    <Content Include="GLOBAL_FILES\inventory_setup_queries.yaml" />
+    <Content Include="GLOBAL_FILES\calculate_validation_queries.yaml" />
+    <Content Include="GLOBAL_FILES\like_item_queries.yaml" />
+    <Content Include="GLOBAL_FILES\load_item_source_queries.yaml" />
+    <Content Include="GLOBAL_FILES\process_split_data_queries.yaml" />
+    <Content Include="GLOBAL_FILES\on_click_process_queries.yaml" />
+    <Content Include="GLOBAL_FILES\populate_search_result_queries.yaml" />
+    <Content Include="GLOBAL_FILES\populate_rules_location_queries.yaml" />
+    <Content Include="GLOBAL_FILES\setup_alloc_details_queries.yaml" />
+    <Content Include="GLOBAL_FILES\setup_like_item_queries.yaml" />
+    <Content Include="GLOBAL_FILES\setup_qty_limits_queries.yaml" />
+    <Content Include="GLOBAL_FILES\setup_rules_locations_queries.yaml" />
+    <Content Include="GLOBAL_FILES\setup_whatif_summary_queries.yaml" />
+    <Content Include="GLOBAL_FILES\size_profile_queries.yaml" />
+    <Content Include="GLOBAL_FILES\spread_alloc_loc_queries.yaml" />
+    <Content Include="GLOBAL_FILES\update_sku_calc_qty.yaml" />
+    <Content Include="GLOBAL_FILES\upd_alloc_ext_queries.yaml" />
+    <Content Include="GLOBAL_FILES\upd_item_resv_exp_queries.yaml" />
+    <Content Include="GLOBAL_FILES\wisummary.yaml" />
+    <Content Include="GLOBAL_FILES\worksheet_queries.yaml" />
+  </ItemGroup>
+  <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
+  <!-- Uncomment the CoreCompile target to enable the Build command in
+       Visual Studio and specify your pre- and post-build commands in
+       the BeforeBuild and AfterBuild targets below. -->
+  <!--<Target Name="CoreCompile" />-->
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+</Project>

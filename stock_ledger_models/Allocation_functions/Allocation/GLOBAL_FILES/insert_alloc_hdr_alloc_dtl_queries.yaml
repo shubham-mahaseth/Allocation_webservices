@@ -1,0 +1,282 @@
+insert_tables:
+  Q_sel_rec_sys_opt: "SELECT * FROM system_options"
+  Q_sel_alloc_level: "SELECT alloc_level FROM alloc_head WHERE alloc_no=%s;"
+  Q_sel_nextval: "SELECT IF(MAX(alloc_sync_process_id) IS NULL,1,MAX(COALESCE(alloc_sync_process_id,1))+1) alloc_sync_process_id FROM alloc_sync_header_temp;"
+  Q_ins_hdr_tmp_tbl: "INSERT INTO alloc_sync_header_temp ( alloc_sync_process_id,
+                                                                          alc_alloc_id,
+                                                                          order_no,
+                                                                          wh,
+                                                                          item,
+                                                                          status,
+                                                                          alloc_desc,
+                                                                          po_type,
+                                                                          alloc_method,
+                                                                          release_date,
+                                                                          order_type,
+                                                                          context_type,
+                                                                          context_value,
+                                                                          comment_desc,
+                                                                          doc,
+                                                                          doc_type,
+                                                                          origin_ind)    
+						                  SELECT %s alloc_sync_process_id,
+                                                              inr.alc_alloc_id,
+                                                              inr.order_no,
+                                                              inr.wh,
+                                                              inr.item,
+                                                              inr.status,
+                                                              inr.alloc_desc,
+                                                              inr.po_type,
+                                                              inr.alloc_method,
+                                                              inr.release_date,
+                                                              inr.order_type,
+                                                              inr.context_type,
+                                                              inr.context_value,
+                                                              inr.comment_desc,
+                                                              inr.doc,
+                                                              inr.doc_type,
+                                                              inr.origin_ind
+                                                FROM (WITH
+                                                          src
+                                                          AS
+                                                              ( SELECT ais.alloc_no, ais.source_type
+				                                                       					   FROM alloc_item_source_dtl ais
+				                                                       				      WHERE ais.alloc_no = %s
+				                                                       				   GROUP BY ais.alloc_no, ais.source_type)
+                                                      SELECT DISTINCT
+                                                             l.alloc_no alc_alloc_id,
+                                                             l.order_no order_no,
+                                                             l.wh_id wh,
+                                                             l.item_id item,
+                                                             'A' status,
+                                                             a.alloc_desc,
+                                                             NULL po_type,
+                                                             'A' alloc_method,
+                                                             l.release_date,
+                                                             'PREDIST' order_type,
+                                                             a.context context_type,
+                                                             CASE WHEN a.context = 'PROMO' THEN a.promotion ELSE 0 END AS context_value,
+                                                             NULL comment_desc,
+				                              			   CASE WHEN ast.alloc_criteria = 'P' then ast.ref_1 else substr(ast.ref_2,instr(ast.ref_2,'/')+1,instr(substr(ast.ref_2,instr(ast.ref_2,'/')+1),'/')-1) end doc,
+						                     			   CASE WHEN ast.alloc_criteria = 'P' THEN 'PO'
+                                                           WHEN ast.alloc_criteria = 'A' THEN 'PO'
+                                                           WHEN ast.alloc_criteria = 'BOL' THEN 'BOL'
+                                                           WHEN ast.alloc_criteria = 'T' THEN 'TSF' ELSE 'W' end  doc_type,  
+                                                             'ALC' origin_ind
+                                                        FROM src,
+				                              		       alloc_head a,
+				                              			   alloc_item_location l,
+				                              			   alloc_itm_search_dtl ast
+                                                      WHERE     a.alloc_no = src.alloc_no
+                                                             AND a.alloc_no = l.alloc_no
+                                                             AND l.alloc_no = ast.alloc_no
+				                              			   AND l.item_id = ast.item
+                                                             AND ast.loc = l.wh_id
+                                                             AND coalesce(l.allocated_qty, 0) > 0) inr;"
+
+  Q_ins_hdr_tmp_tbl_d: "INSERT INTO alloc_sync_header_temp (alloc_sync_process_id,
+                                                                           alc_alloc_id,
+                                                                           order_no,
+                                                                           wh,
+                                                                           item,
+                                                                           status,
+                                                                           alloc_desc,
+                                                                           po_type,
+                                                                           alloc_method,
+                                                                           release_date,
+                                                                           order_type,
+                                                                           context_type,
+                                                                           context_value,
+                                                                           comment_desc,
+                                                                           doc,
+                                                                           doc_type,
+                                                                           origin_ind)
+                                            SELECT %s,
+                                                   inr.alc_alloc_id,
+                                                   inr.order_no,
+                                                   inr.wh,
+                                                   inr.item,
+                                                   inr.status,
+                                                   inr.alloc_desc,
+                                                   inr.po_type,
+                                                   inr.alloc_method,
+                                                   inr.release_date,
+                                                   inr.order_type,
+                                                   inr.context_type,
+                                                   inr.context_value,
+                                                   inr.comment_desc,
+                                                   inr.doc,
+                                                   inr.doc_type,
+                                                   inr.origin_ind
+                                              FROM (WITH
+                                                        src
+                                                        AS
+                                                            (SELECT ais.alloc_no, ais.source_type
+		                                                            					   FROM alloc_item_source_dtl ais
+		                                                            				      WHERE ais.alloc_no = %s
+		                                                            				   GROUP BY ais.alloc_no, ais.source_type)
+                                                    SELECT DISTINCT
+                                                           l.alloc_no alc_alloc_id,
+                                                           l.order_no order_no,
+                                                           l.wh_id wh,
+                                                           l.item_id item,
+                                                           'A' status,
+                                                           a.alloc_desc,
+                                                           NULL po_type,
+                                                           'A' alloc_method,
+                                                           l.release_date,
+                                                           CASE src.source_type WHEN 3 THEN 'MANUAL' ELSE 'PREDIST' END AS order_type,
+                                                           a.context context_type,
+                                                           CASE a.context WHEN 'PROMO' THEN a.promotion ELSE NULL END AS context_value,
+                                                           NULL comment_desc,
+                                                           CASE WHEN ast.alloc_criteria = 'P' then ast.ref_1 else substr(ast.ref_2,instr(ast.ref_2,'/')+1,instr(substr(ast.ref_2,instr(ast.ref_2,'/')+1),'/')-1) end doc, 
+                                                           CASE WHEN ast.alloc_criteria = 'P' THEN 'PO'
+                                                           WHEN ast.alloc_criteria = 'A' THEN 'PO'
+                                                           WHEN ast.alloc_criteria = 'BOL' THEN 'BOL'
+                                                           WHEN ast.alloc_criteria = 'T' THEN 'TSF' ELSE 'W' end  doc_type,
+                                                           'ALC' origin_ind
+                                                      FROM src, alloc_head a, alloc_item_location l,alloc_itm_search_dtl ast,item_dtl aim    
+                                                     WHERE     a.alloc_no = src.alloc_no
+                                                           AND a.alloc_no = l.alloc_no
+                                                           AND ast.alloc_no = src.alloc_no
+                                                           AND aim.item=l.item_id
+                                                           AND aim.item_parent = ast.item
+                                                           AND substr(ast.diff_id,instr(ast.diff_id,'~')+1) = aim.aggr_diff_id
+                                                           AND ast.loc = l.wh_id
+                                                           AND coalesce(l.allocated_qty, 0) > 0) inr;"
+
+  Q_ins_dtl_tmp_tbl: "INSERT INTO alloc_sync_detail_temp (alloc_sync_process_id,
+                                                                    rms_alloc_no,
+                                                                    alc_alloc_id,
+                                                                    to_loc,
+                                                                    to_loc_type,
+                                                                    qty_transferred,
+                                                                    qty_allocated,
+                                                                    qty_prescaled,
+                                                                    non_scale_ind,
+                                                                    in_store_date,
+                                                                    rush_flag)
+                                     SELECT %s,
+                                            h.rms_alloc_no,
+                                            h.alc_alloc_id,
+                                            l.location_id,
+                                            loc.loc_type,
+                                            NULL,
+                                            l.allocated_qty,
+                                            l.allocated_qty,
+                                            'Y',
+                                            l.in_store_date,
+                                            'N'
+                                       FROM alloc_sync_header_temp  h,
+                                            alloc_item_location     l,
+                                            (SELECT store loc, 'S' loc_type FROM store
+                                             UNION ALL
+                                             SELECT wh, 'W' loc_type FROM warehouse) loc
+                                      WHERE     h.alloc_sync_process_id = %s
+                                            AND h.alc_alloc_id = l.alloc_no
+                                            AND h.item = l.item_id
+                                            AND h.wh = l.wh_id
+                                            AND h.release_date = l.release_date 
+                                            AND l.location_id = loc.loc
+                                            AND coalesce(h.doc_type, '$') != 'ALLOC'
+                                            AND coalesce(l.allocated_qty, 0) > 0 
+                                            AND (   (h.doc_type IN ('PO', 'TSF')
+                                                     AND h.order_no = l.order_no)
+                                                 OR (    h.doc_type = 'A'
+                                                     AND h.doc = l.order_no)
+                                                 OR (    h.doc_type = 'W'
+                                                     AND h.doc IS NULL
+                                                     AND h.order_no IS NULL));"
+
+  Q_sel_prcoess_id_hdr: "select max(h.alloc_sync_process_id) alloc_sync_process_id from alloc_sync_header_temp h where h.alc_alloc_id=%s;"
+
+  Q_ins_alloc_sku_head: "INSERT INTO alloc_sku_head (alloc_no,
+																order_no,      
+                                                                wh,            
+                                                                item,          
+                                                                status,		 
+                                                                alloc_desc,	 
+                                                                po_type,		 
+                                                                alloc_method,	 
+                                                                release_date,	 
+                                                                order_type,	 
+                                                                context_type,  
+                                                                context_value, 
+                                                                comment_desc,  
+                                                                ref_no,		
+                                                                ref_type,		 
+                                                                alloc_parent)
+                                         SELECT h.rms_alloc_no,
+												h.order_no,
+                                                h.wh,
+                                                h.item,
+                                                h.status,
+                                                h.alloc_desc,
+                                                h.po_type,
+                                                h.alloc_method,
+                                                h.release_date,
+                                                h.order_type,
+                                                h.context_type,
+                                                h.context_value,
+                                                h.comment_desc,
+                                                h.doc,
+                                                h.doc_type,
+                                                null
+                                                from alloc_sync_header_temp h
+                                                where h.alloc_sync_process_id=%s;"
+
+  Q_sel_dtl_process_id: "select max(h.alloc_sync_process_id) alloc_sync_process_id from alloc_sync_detail_temp h where h.alc_alloc_id=%s;"
+
+  Q_ins_alloc_dtl: "INSERT INTO alloc_dtl (alloc_no,
+										  alloc_criteria,
+			    		                  to_loc,
+			    		                  to_loc_type,
+			    		                  tsf_qty,          
+			    		                  alloc_qty,         
+			    		                  distro_qty,
+			    		                  received_qty,
+                                          status,
+                                          create_id,
+                                          create_datetime,
+                                          last_update_datetime)
+                         SELECT d.rms_alloc_no,
+						 		null,
+						 		d.to_loc,
+						 		d.to_loc_type,
+						 		d.qty_transferred,
+						 		d.qty_allocated,
+						 		NULL,
+						 		NULL,
+                                 null,
+                                 current_user(),
+                                 current_timestamp(),
+                                 current_timestamp()
+						   FROM alloc_sync_detail_temp d
+                          WHERE d.alloc_sync_process_id = %s;"
+
+  Q_ins_alloc_xref: "INSERT INTO alloc_xref (
+                                              alloc_no,
+                                              item_id,
+                                              wh_id,
+                                              release_date,
+                                              order_no,
+                                              allocated_qty,
+                                              xref_alloc_no,
+                                              close_ind)
+                     SELECT 
+                            h.alc_alloc_id,
+                            h.item,
+                            h.wh,
+                            h.release_date,
+                            CASE WHEN h.doc_type= 'P' THEN (h.order_no) ELSE coalesce(h.doc, h.order_no) END order_no, 
+                            d.qty_allocated,
+                            h.rms_alloc_no,
+                            NULL
+                       FROM alloc_sync_header_temp  h,
+                            ( SELECT SUM(qty_allocated) qty_allocated, rms_alloc_no
+                                FROM alloc_sync_detail_temp a
+                               WHERE a.alloc_sync_process_id = %s
+                            GROUP BY rms_alloc_no) d
+                      WHERE     h.alloc_sync_process_id = %s
+                                 AND h.rms_alloc_no = d.rms_alloc_no;"
+

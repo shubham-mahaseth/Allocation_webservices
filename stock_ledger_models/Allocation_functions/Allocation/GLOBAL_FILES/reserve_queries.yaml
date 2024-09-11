@@ -1,0 +1,457 @@
+reserve:
+  Q_c_get_approval_disable: "SELECT code_desc FROM code_detail WHERE code_type = 'ALPR' AND code = 'APR';"
+  Q_get_status: "select status from alloc_head where alloc_no=%s;"
+  Q_get_release_date: "select release_date from alloc_head where alloc_no=%s;"
+  Q_get_sysem_date: "select SYSTEM_DATE from calendar_variables;"
+  Q_alloc_criteria: "SELECT ALLOC_CRITERIA FROM alloc_itm_search_dtl WHERE alloc_no = %s LIMIT 1;"
+  Q_get_last_inv_upd: "WITH wh_tmp
+		    	         AS
+                           (  SELECT alloc_no,
+                                     wh_id                        loc,
+                                     coalesce (order_no, '$')          order_no,
+                                     tran_item                    item,
+                                     source_item,
+                                     GREATEST(hold_back_value, 0)        hold_back_value, 
+                                     GREATEST(hold_back_pct_flag, 0)     hold_back_pct_flag, 
+                                     SUM(coalesce(calc_qty, 0))      total_calc_qty,
+                                     SUM(sku_calc_Qty)           allocated_Qty
+                                FROM alloc_calc_item_loc 
+                               WHERE     alloc_no = %s
+		    	         		AND coalesce(order_no,'$') = '$'
+		    	            GROUP BY  alloc_no,
+                                      wh_id,
+                                      coalesce(order_no, '$'),
+                                      tran_item,
+                                      source_item)                      
+                         SELECT 1 record FROM 
+                         (SELECT wh_tmp.*,
+                                        GREATEST (
+                                              (GREATEST ((ils.ITEM_SOH), 0))
+                                            - (  GREATEST (ils.reserved_qty, 0)
+                                               + GREATEST (ils.rtv_qty, 0)
+                                               + GREATEST (ils.non_sellable_qty, 0)
+                                               + GREATEST (ils.CUST_RESV_QTY, 0))
+                                            - (SELECT coalesce (
+                                                          SUM(GREATEST(d.DISTRO_QTY, 0)),
+                                                          0)
+                                                 FROM alloc_sku_head  h,      	
+                                                      po_item_location     pil, 	 	
+		    	         							 po_dtl pi,								 
+                                                      alloc_dtl  d   		 		
+                                                WHERE     h.item = wh_tmp.item
+                                                      AND h.wh = wh_tmp.loc
+                                                      AND h.status IN ('A', 'R')
+                                                      AND h.order_no IS NOT NULL
+                                                      AND pil.po_no = h.order_no
+                                                      AND pil.item = h.item
+                                                      AND pil.location = h.wh
+                                                      AND pil.qty_received > 0
+                                                      AND pi.po_no = pil.po_no
+                                                      AND pi.status IN ('A', 'C')
+                                                      AND d.alloc_no = h.alloc_no
+                                                      AND d.RECEIVED_QTY > 0
+                                                      AND d.DISTRO_QTY > 0),
+                                            0)    avail_qty
+                                   FROM item_location ils, wh_tmp               
+                                  WHERE     ils.item = wh_tmp.item
+                                        AND ils.location = wh_tmp.loc                 
+                                        AND wh_tmp.order_no = '$') src 
+                                        WHERE src.allocated_Qty >
+                                GREATEST(
+                                        src.avail_qty
+                                    - (CASE
+                                           WHEN     src.hold_back_pct_flag = 'Y'
+                                                AND src.hold_back_value IS NOT NULL
+                                           THEN
+                                               ROUND(
+                                                     src.avail_qty
+                                                   * (src.hold_back_value / 100))
+                                           WHEN     src.hold_back_pct_flag = 'N'
+                                                AND src.hold_back_value IS NOT NULL
+                                           THEN
+                                               COALESCE(src.hold_back_value,0)
+                                           ELSE
+                                               0
+                                       END),
+                                    0);"
+
+  Q_get_last_inv_upd_po: "WITH
+                 tmp
+                     AS
+               (  SELECT alloc_no,
+                         wh_id                        loc,
+                         COALESCE(order_no, '$')      order_no,
+                         tran_item                    item,
+                         source_item,
+                         MAX(hold_back_value)        hold_back_value,
+                         MAX(hold_back_pct_flag)     hold_back_pct_flag,
+                         SUM(COALESCE (calc_qty, 0))      total_calc_qty,
+                         SUM(sku_calc_Qty)           allocated_Qty
+                    FROM alloc_calc_item_loc tmp
+                   WHERE alloc_no = %s
+		        	   AND COALESCE (order_no, '$') <> '$'
+                GROUP BY alloc_no,
+                         wh_id,
+                         COALESCE (order_no, '$'),
+                         tran_item,
+                         source_item)
+                 SELECT 1 record FROM (SELECT
+                 tmp.*,
+                 (  ol.qty_ordered
+                  - COALESCE(ol.qty_received, 0)
+                  - COALESCE(( SELECT SUM(ald.ALLOC_QTY)
+                             FROM alloc_sku_head alh,
+                                  alloc_dtl ald,
+                                  alloc_xref    alx
+                            WHERE     alh.alloc_no =
+                                      alx.xref_alloc_no
+                                  AND ald.alloc_no = alh.alloc_no
+                                  AND alh.item = tmp.item
+                                  AND alh.order_no = ol.po_no
+                                  AND alh.wh = tmp.loc
+                         GROUP BY alh.item, alh.order_no),
+                        0))    avail_qty
+                     FROM tmp, po_item_location ol
+                     WHERE     tmp.item = ol.item
+                 AND tmp.loc = ol.location
+                 AND tmp.order_no = ol.po_no) src
+                    WHERE src.allocated_Qty >
+                     GREATEST(src.avail_qty
+                 - (CASE
+                    WHEN     src.hold_back_pct_flag = 'Y'
+                         AND src.hold_back_value IS NOT NULL
+                    THEN
+                        ROUND (
+                              src.avail_qty
+                            * (src.hold_back_value / 100))
+                    WHEN     src.hold_back_pct_flag = 'N'
+                         AND src.hold_back_value IS NOT NULL
+                    THEN
+                        src.hold_back_value
+                    ELSE
+                        0
+                END),
+                 0);"
+
+  Q_get_last_inv_upd_asn: "WITH
+                tmp
+                    AS
+                        (SELECT tmp.alloc_no,
+                              wh_id                        loc,       
+                              coalesce(order_no, '$')       order_no,
+                       SUBSTR(ast.ref_2,instr(ast.ref_2,'/')+1,instr(SUBSTR(ast.ref_2,instr(ast.ref_2,'/')+1),'/')-1)  asn,                                         
+							  tran_item                   item,                                       
+                              source_item,
+                              MAX(hold_back_value)          hold_back_value,                                               
+                              MAX(hold_back_pct_flag)       hold_back_pct_flag,                                                 
+                              SUM(coalesce(calc_qty, 0))    total_calc_qty,
+                              SUM(sku_calc_Qty)             allocated_Qty  
+                         FROM alloc_calc_item_loc tmp, alloc_itm_search_dtl ast
+                        WHERE     tmp.alloc_no = %s
+                             AND tmp.alloc_no=ast.alloc_no 
+                             AND ast.item=tmp.source_item 
+                             AND substr(ast.diff_id,instr(ast.diff_id,'~')+1) = tmp.diff_id 
+                             AND ast.loc=tmp.wh_id 
+						     AND coalesce(order_no, '$') <> '$'
+                     GROUP BY tmp.alloc_no,
+                              wh_id,
+                              coalesce(order_no, '$'),
+                       SUBSTR(ast.ref_2,instr(ast.ref_2,'/')+1,instr(SUBSTR(ast.ref_2,instr(ast.ref_2,'/')+1),'/')-1),                                                                                                  
+                              tran_item,
+                              source_item)
+                    SELECT  1 record
+                      FROM (SELECT x.*,(partial_avail_qty                     
+                         - coalesce(
+                                      (  SELECT 
+                                               SUM(ald.alloc_qty)
+                                           FROM alloc_sku_head alh,
+                                                alloc_dtl ald,
+                                                alloc_xref    alx
+                                          WHERE     alh.alloc_no =
+                                                    alx.xref_alloc_no
+                                                AND ald.alloc_no = alh.alloc_no
+                                                AND alh.item = x.item
+                                                AND alh.order_no = x.order_no
+                                    AND coalesce(alh.ref_no,'$') = x.asn
+                                    AND alh.ref_type = 'PO'
+                                                AND alh.wh = x.loc
+                                       GROUP BY alh.item, alh.order_no),
+                                      0)) avail_qty
+                             FROM (SELECT 
+                                    tmp.*,
+                                    SUM(ss.qty_expected
+                                    - coalesce(ss.qty_received, 0))    partial_avail_qty
+                                FROM tmp, ship_item ss,ship_dtl sh, warehouse w 
+                               WHERE     tmp.item = ss.item
+                                       AND tmp.loc = w.wh
+                                       AND w.physical_wh = sh.to_location
+                                       AND tmp.order_no = sh.po_no
+                                       AND sh.asn_id = tmp.asn
+                                       AND ss.shipment=sh.ship_id
+                                       group by tmp.alloc_no,
+                                                tmp.loc,
+                                                tmp.order_no,
+                                                tmp.asn,
+                                               tmp.item,
+                                               tmp.source_item,
+                                               tmp.hold_back_value,
+                                               tmp.hold_back_pct_flag,
+                                               tmp.total_calc_qty,
+                                               tmp.allocated_qty) 
+                                 x) src   
+                    WHERE src.allocated_Qty >
+                    GREATEST(
+                         src.avail_qty
+                       - (CASE
+                              WHEN     src.hold_back_pct_flag = 'Y'
+                                   AND src.hold_back_value IS NOT NULL
+                              THEN
+                                  ROUND(
+                                        src.avail_qty
+                                      * (src.hold_back_value / 100))
+                              WHEN     src.hold_back_pct_flag = 'N'
+                                   AND src.hold_back_value IS NOT NULL
+                              THEN
+                                  src.hold_back_value
+                              ELSE
+                                  0
+                          END),
+                       0);"
+
+  Q_get_last_inv_upd_tsf: "WITH
+                tmp
+                    AS
+                ( SELECT alloc_no,
+                   wh_id                        loc,
+                   COALESCE (order_no, '$')          order_no,
+                   tran_item                    item,
+                   source_item,
+                diff_id,
+                   MAX(hold_back_value)        hold_back_value,
+                   MAX(hold_back_pct_flag)     hold_back_pct_flag,
+                   SUM(COALESCE (calc_qty, 0))      total_calc_qty,
+                   SUM(sku_calc_Qty)           allocated_Qty
+              FROM alloc_calc_item_loc tmp
+             WHERE     alloc_no = %s
+                   AND COALESCE (order_no, '$') <> '$'
+                GROUP BY alloc_no,
+                   wh_id,
+                   COALESCE (order_no, '$'),
+                   tran_item,
+                   source_item,
+                diff_id)
+                SELECT 1 record
+                FROM (SELECT tmp.*,
+                COALESCE(td.TRANSFERED_QTY
+                      - COALESCE(td.SHIPPED_QTY, 0)
+                      - COALESCE(td.cancelled_qty, 0)
+               - COALESCE ((SELECT  COALESCE(SUM(GREATEST(d.ALLOC_QTY,
+                                                    0)),0)
+                               FROM alloc_sku_head h,
+                                    alloc_dtl d,
+                                    item_location ilc1
+                              WHERE h.item = tmp.item
+                                AND h.wh = tmp.loc
+                                AND ilc1.location = tmp.loc
+                                AND ilc1.item = tmp.item
+                                 AND ilc1.status in ('A','C')   
+                                 AND h.status IN ('A','R')
+                                 AND h.ref_type='TSF' 
+                                 AND th.tsf_id = h.order_no   
+                                 AND d.alloc_no = h.alloc_no
+                                 AND d.ALLOC_QTY > 0),
+                            0),0)    avail_qty
+                    FROM item_location ils, tmp ,
+                         tsf_item_loc td,
+                         tsf_dtl th              
+                 WHERE     ils.item = tmp.item
+                AND ils.location = tmp.loc                    
+                AND tmp.order_no = th.tsf_id
+                      AND th.tsf_id = td.tsf_id
+                      AND td.item = tmp.item
+                      AND th.to_location= tmp.loc) src
+                    WHERE src.allocated_Qty >
+                    GREATEST (
+                     src.avail_qty
+                 - (CASE
+                   WHEN     src.hold_back_pct_flag = 'Y'
+                        AND src.hold_back_value IS NOT NULL
+                   THEN
+                       ROUND (
+                             src.avail_qty
+                           * (src.hold_back_value / 100))
+                   WHEN     src.hold_back_pct_flag = 'N'
+                        AND src.hold_back_value IS NOT NULL
+                   THEN
+                       src.hold_back_value
+                   ELSE
+                       0
+               END),
+                    0);"
+
+  Q_get_item_sel_date: "SELECT MIN(tmp.create_datetime) create_datetime FROM alloc_itm_search_dtl tmp WHERE tmp.alloc_no = %s;"
+
+  Q_get_max_upd_date: "SELECT MAX(GREATEST(ils.soh_update_datetime,
+                                        ils.update_datetime)) AS last_inv_upd
+                                FROM    alloc_calc_item_loc tmp, item_location ils
+                               WHERE     tmp.alloc_no = %s
+                                 AND ils.item = tmp.tran_item
+                                 AND ils.location = tmp.to_loc;"
+
+  Q_chck_on_hand_diff: "SELECT 1
+                                 FROM alloc_calc_item_loc tmp, 	item_location ils
+                                WHERE     tmp.alloc_no = %s
+                                  AND ils.item = tmp.tran_item
+                                  AND ils.location = tmp.to_loc
+                                  AND GREATEST(coalesce (ils.ITEM_SOH, 0), 0) <>
+                                      GREATEST(
+                                            coalesce (tmp.STOCK_ON_HAND, 0)
+                                          - coalesce (tmp.on_order, 0)
+                                          - coalesce (tmp.on_alloc, 0)
+                                          + coalesce (tmp.alloc_out, 0)
+                                          - coalesce (tmp.in_transit_Qty, 0), 0);"
+
+  Q_upd_reclac_ind: "UPDATE alloc_head SET recalc_ind='Y' WHERE  alloc_no=%s;"
+
+  Q_asn_chck_recv_date: "SELECT 1 
+				                      FROM alloc_itm_search_dtl tmp, ship_dtl sh,po_dtl oh 
+				                     WHERE alloc_criteria = 'A'
+		                               AND sh.asn_id = substr(tmp.ref_2,instr(tmp.ref_2,'/')+1,instr(substr(tmp.ref_2,instr(tmp.ref_2,'/')+1),'/')-1)
+				                       AND oh.status = 'A'
+	                                   AND sh.received_date IS NULL
+					                   AND alloc_no = %s;"
+  Q_get_days: "SELECT CAST(code_desc AS UNSIGNED) days FROM code_detail WHERE code_type ='TAPD' AND code ='DAYS';"
+
+  Q_tsf_chck_rel_date: "SELECT 1 
+                                FROM alloc_itm_search_dtl tmp,
+                                tsf_dtl th
+                                WHERE tmp.alloc_criteria ='T' 
+                                AND th.tsf_id=tmp.ref_1        
+                                AND (th.status = 'I' OR th.approval_datetime is null OR current_date() > th.approval_datetime + %s) 
+                                AND tmp.alloc_no = %s;"
+
+  Q_mark_alloc_torecal: "SELECT al.alloc_no
+		                              FROM alloc_head al, alloc_head ae
+		                    WHERE	EXISTS
+                                    (SELECT tmp.alloc_no
+                                       FROM alloc_calc_item_loc  tmp1,
+                                            alloc_calc_item_loc  tmp
+                                      WHERE     tmp1.alloc_no = %s
+                                            AND tmp.alloc_no <> tmp1.alloc_no
+                                            AND tmp.tran_item = tmp1.tran_item
+                                            AND tmp.source_item = tmp1.source_item
+                                            AND tmp.wh_id = tmp1.wh_id
+                                            AND coalesce (tmp.order_no, '$') =
+                                                coalesce (tmp1.order_no, '$')
+                                            AND tmp.alloc_no = al.alloc_no)
+                                      AND al.alloc_no <> %s
+                                      AND al.status = 'WS'
+                                      AND ae.alloc_no = al.alloc_no
+                                      AND ae.recalc_ind = 'N';"
+
+  Q_chck_recalc_ind : "SELECT recalc_ind FROM alloc_head WHERE alloc_no = %s;"
+  
+  Q_chck_sku_calc_qty: "SELECT coalesce(SUM(sku_calc_qty),0) sku_calc_qty FROM alloc_calc_item_loc WHERE alloc_no = %s;"
+  
+  Q_del_records: "DELETE FROM alloc_item_location where alloc_no=%s;"
+  
+  Q_ins_alloc_item_loc: "INSERT INTO alloc_item_location (alloc_no,
+  					                                     item_id,
+  					                                     wh_id,
+  					                                     release_date,
+  					                                     location_id,
+  					                                     location_desc,
+  					                                     allocated_qty,
+  					                                     calculated_qty,
+  					                                     need_qty,
+  					                                     on_hand_qty,
+  					                                     som_qty,
+  					                                     freeze_ind,
+  					                                     diff1_id,
+  					                                     diff1_desc,
+  					                                     diff2_id,
+  					                                     diff2_desc,
+  					                                     parent_item_id,
+  					                                     created_order_no,
+  					                                     created_supplier_id,
+  					                                     parent_diff1_id,
+  					                                     future_unit_retail,
+  					                                     rush_flag,
+  					                                     cost,
+  					                                     in_store_date,
+  					                                     future_on_hand_qty,
+  					                                     order_no,
+  					                                     gross_need_qty,
+  					                                     rloh_qty)
+                              SELECT 
+                                     alloc_no,
+                                     tran_item                          item_id,
+                                     wh_id                              wh_id,
+                                     lc.release_date,
+                                     lc.loc,
+                                     lc.loc_desc,
+                                     sku_calc_qty                       allocated_qty,
+                                     sku_calc_qty                       calculated_qty,
+                                     need_value                         need_qty,
+                                     GREATEST(
+                                           coalesce (tmp.stock_on_hand, 0)
+                                         - coalesce (tmp.on_order, 0)
+                                         - coalesce (tmp.on_alloc, 0)
+                                         - coalesce (tmp.in_transit_qty, 0),
+                                         0)                             on_hand_qty,
+                                     tmp.som_qty,
+                                     'N'                                freeze_ind,
+                                     NULL                               diff1_id,
+                                     NULL                               diff1_desc,
+                                     NULL                               diff2_id,
+                                     NULL                               diff2_desc,
+                                     tmp.source_item                    parent_item_id,
+                                     NULL                               created_order_no,
+                                     NULL                               created_supplier_id,
+                                     tmp.diff_id                        parent_diff1_id,
+                                     0                                  future_unit_retail,
+                                     'N'                                rush_flag,
+                                     0                                  cost,
+                                     NULL                               in_store_date,
+                                     (  coalesce (tmp.on_order, 0)
+                                      + coalesce (tmp.on_alloc, 0)
+                                      + coalesce (tmp.in_transit_qty, 0))    future_on_hand_qty,
+                                 tmp.order_no order_no,
+                                     tmp.gross_need_no_own_ship         gross_need_qty,
+                                     0                                  rloh_qty
+                                FROM alloc_calc_item_loc  tmp,
+                                     (SELECT DISTINCT
+                                             ale.location_id       loc,
+                                             ale.location_desc     loc_desc,
+                                             GREATEST(le.release_date,coalesce(ale.release_date,le.release_date)) release_date 
+                                        FROM alloc_loc_group_detail      lg,
+                                             alloc_location       ale,
+                                             alloc_head  le    
+                                       WHERE  lg.alloc_no = %s
+                                             AND ale.loc_group_id = lg.loc_group_id
+                                             AND le.alloc_no = lg.alloc_no  
+                                             ) lc
+                               WHERE     tmp.alloc_no = %s
+                                     AND tmp.to_loc = lc.loc
+                                     AND NOT EXISTS
+                                             (SELECT 1
+                                                FROM alloc_item_location al
+                                               WHERE     al.alloc_no = tmp.alloc_no
+                                                     AND al.item_id = tmp.tran_item
+                                                     AND al.wh_id = tmp.wh_id
+                                                     AND al.release_date = lc.release_date
+                                                     AND al.location_id = tmp.to_loc
+                                                     AND coalesce(al.order_no, '$') =
+                                                         coalesce(tmp.order_no,
+                                                              coalesce(al.order_no, '$')));"
+  
+  
+  Q_sel_alloc_no: "SELECT alloc_no FROM alloc_head WHERE alloc_no=%s;"
+  
+  Q_upd_status: "UPDATE alloc_head SET status = 'RSV' WHERE alloc_no=%s;"
+  
+  Q_del_itm_search: "DELETE FROM alloc_itm_search_dtl WHERE alloc_no = %s AND (sel_ind = 'N' OR (avail_qty = 0 AND inactive_qty = 0));"
+
+
+
+

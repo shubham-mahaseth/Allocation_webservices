@@ -1,0 +1,45 @@
+upd_size_profile:
+
+  Q_get_avail_before_qty: "SELECT SUM(DISTINCT sku_avail_qty) as sum_sku_avail_qty, 
+                                    SUM(sku_calc_qty) as sum_sku_calc_qty,
+                                    MAX(som_qty) as max_som_qty
+                                    FROM alloc_calc_item_loc tmp
+                                    WHERE     alloc_no = %s /* Alloc_id */
+                                    AND source_item = %s /*:B_ALLOC_DETAIL.SOURCE_ITEM */
+                                    AND diff_id = %s /*:B_ALLOC_DETAIL.DIFF_ID */
+                                    AND COALESCE(order_no, '$') = COALESCE( %s, COALESCE(order_no, '$')) /*:B_ALLOC_DETAIL.ORDER_NO */
+                                    AND wh_id = %s /*:B_ALLOC_DETAIL.WH_ID */
+                                    AND to_loc <> %s /*:B_ALLOC_DETAIL.LOCATION_ID */
+                                    AND tran_item = %s /* L_tran_item_value*/;"
+
+
+  Q_get_avail_qty: "SELECT SUM(DISTINCT sku_avail_qty) as sum_dis_sku_avail_qty,
+                             SUM(sku_calc_qty) as sm_sku_calc_qty,
+                             MAX(som_qty) as mx_som_qty
+                                FROM alloc_calc_item_loc tmp
+                                WHERE     alloc_no = %s /*:B_ALLOC_DETAIL.ALLOC_ID*/
+                                AND source_item = %s /*:B_ALLOC_DETAIL.SOURCE_ITEM*/
+                                AND diff_id = %s /*:B_ALLOC_DETAIL.DIFF_ID*/
+                                AND COALESCE(order_no, '$') = COALESCE( %s, COALESCE(order_no, '$')) /*:B_ALLOC_DETAIL.ORDER_NO*/
+                                AND wh_id = %s /*:B_ALLOC_DETAIL.WH_ID */
+                                AND tran_item = %s /* L_tran_item_value */;"
+
+  Q_upd_calc_item_loc: "UPDATE alloc_calc_item_loc
+                            SET sku_calc_qty = %s /*L_alloc_qty*/
+                            WHERE     alloc_no = %s /*:B_ALLOC_DETAIL.ALLOC_ID*/
+                            AND source_item = %s /*:B_ALLOC_DETAIL.SOURCE_ITEM*/
+                            AND diff_id = %s /*:B_ALLOC_DETAIL.DIFF_ID*/
+                            AND COALESCE(order_no, '$') =COALESCE( %s, COALESCE(order_no, '$')) /*:B_ALLOC_DETAIL.ORDER_NO */
+                            AND wh_id = %s /*:B_ALLOC_DETAIL.WH_ID */
+                            AND to_loc = %s /*:B_ALLOC_DETAIL.LOCATION_ID */
+                            AND tran_item = %s /*L_tran_item_value */;"
+
+  Q_get_l_alloc_qty_if: "SELECT ROUND((%s / %s), 0) * %s as L_alloc_qty;"
+
+  Q_get_l_total_alloc_qty1_if: "SELECT ROUND(%s / %s, 0) * %s + %s as L_total_alloc_qty;"
+
+  Q_get_l_total_alloc_qty1_if1: "SELECT ROUND (%s / %s, 0) * %s - %s as L_total_alloc_qty;"
+
+  Q_get_l_alloc_qty_else: "SELECT ROUND(%s / %s, 0) * %s as L_alloc_qty;"
+
+  Q_get_l_total_alloc_qty1_else: "SELECT ROUND(%s / %s, 0) * %s + %s as L_total_alloc_qty;"

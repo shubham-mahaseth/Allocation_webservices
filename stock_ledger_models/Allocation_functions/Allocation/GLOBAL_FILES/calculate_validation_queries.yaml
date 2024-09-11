@@ -1,0 +1,1302 @@
+calculate_validate_new:
+  
+  Q_get_release_date: "SELECT release_date, alloc_level FROM alloc_head WHERE alloc_no = %s;"
+
+
+  Q_check_error: "SELECT 1 as error_found
+                    FROM alloc_itm_search_dtl
+                        WHERE  COALESCE(sel_ind, 'N') = 'Y'
+                        AND alloc_no = %s
+                        AND err_message IS NOT NULL
+                        AND err_ind = 'E' limit 1;"
+
+  Q_get_rule_rec: "SELECT * FROM alloc_rule WHERE alloc_no = %s;"
+
+  Q_get_item_source_found: "SELECT 1 as L_found FROM alloc_calc_source_temp WHERE alloc_no = %s limit 1;"
+
+  Q_get_item_loc_found: "SELECT 1 as L_found FROM alloc_calc_allitemloc WHERE alloc_no = %s limit 1;"
+
+  #Changes by Shubham Start#
+  Q_upd_itm_search_dtl: "UPDATE alloc_itm_search_dtl SET err_ind = null, err_message = null where alloc_no = %s;"
+  #Changes by Shubham End#
+
+  Q_po_alloc: "SELECT als.alloc_criteria,
+                   (SELECT 1 FROM code_detail WHERE code_type ='STDC' and code=als.loc) loc_config			
+			            FROM alloc_itm_search_dtl als 
+                            WHERE als.alloc_no = %s /*I_alloc_id */ limit 1;"
+
+  Q_get_days: "SELECT CAST(code_desc as unsigned) as code_desc FROM code_detail WHERE code_type ='TAPD' AND code ='DAYS';"
+
+  Q_sp_week: "SELECT CAST(code_desc as unsigned) as code_desc FROM code_detail WHERE code_type='SPW' AND code='ASPW';"
+
+  Q_del_itm_srch_tmp: "DELETE FROM alloc_itm_search_dtl
+                            WHERE alloc_no = %s /*I_alloc_id */ AND (sel_ind = 'N' OR (avail_qty = 0 AND inactive_qty = 0));"
+
+  Q_cre_alloc_po_eisd_temp: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_po_eisd_temp  (ALLOC_NO NUMERIC(20),
+                                            ITEM VARCHAR(25),
+                                            DIFF_ID VARCHAR(15),
+                                            ESTIMATED_INSTOCK_DATE DATE);"
+
+  Q_del_po_eisd_gtt: "DELETE FROM alloc_po_eisd_temp;"
+
+  Q_ins_po_eisd_gtt_p: "INSERT INTO alloc_po_eisd_temp (alloc_no,
+                                    item,
+                                    diff_id,
+                                    estimated_instock_date) 
+                                    SELECT alloc_no, 
+                                         item, 
+                                        SUBSTR(diff_id,INSTR(diff_id, '~') + 1) diff_id, 
+                                        MAX(estimated_instock_date) 
+                                      FROM (SELECT gtt.alloc_no,
+                                               gtt.item,
+                                            gtt.diff_id,
+                                            gtt.loc,
+                                            gtt.ref_1,
+                                            MAX(DATE(ol.instock_date))
+                                                      estimated_instock_date
+                                         FROM alloc_itm_search_dtl gtt,
+                                                    item_dtl im, 
+                                                          po_item_loc                ol,
+                                                          po_dtl               oh
+                                               WHERE     gtt.alloc_no= %s /*I_alloc_id */
+                                                   AND gtt.item = im.item_parent 
+                                                   AND gtt.diff_id = im.aggr_diff_id 
+                                                   AND im.item=ol.item
+                                                   AND gtt.loc = ol.location
+                                                   AND ol.po_no = oh.po_no
+                                                   AND oh.status = 'A'
+                                                   AND oh.po_type != 'ARB'
+                                                   AND (   (oh.po_origin_ind != 0)
+                                                       OR (    oh.po_origin_ind = 0
+                                                          AND oh.contract_no IS NOT NULL))
+                                                   AND oh.po_no = gtt.ref_1 
+                                                   AND (  ol.ordered_qty
+                                                       - COALESCE(ol.received_qty, 0)
+                                                       -       
+                                                        COALESCE(
+                                                           (  SELECT 
+                                                                   SUM(ald.alloc_qty)
+                                                               FROM alloc_sku_head alh,
+                                                                   alloc_dtl ald,
+                                                                   alloc_xref  alx
+                                                              WHERE     alh.alloc_no =
+                                                                      alx.xref_alloc_no
+                                                                   AND ald.alloc_no = alh.alloc_no
+                                                                   AND alh.item = im.item
+                                                                   AND alh.order_no = oh.po_no
+                                                                   AND alh.wh = gtt.loc
+                                                            GROUP BY alh.item, alh.order_no),
+                                                           0)) >=
+                                                      1
+                                            GROUP BY gtt.alloc_no,
+                                               gtt.ref_1,
+                                                   gtt.item,
+                                                   gtt.loc,
+                                                   gtt.diff_id)tmp 
+                                    GROUP BY alloc_no,
+                                           item,
+                                         diff_id ; "
+
+  Q_ins_po_eisd_gtt_a: "INSERT INTO alloc_po_eisd_temp (alloc_no,
+                                    item,
+                                    diff_id,
+                                    estimated_instock_date) 
+                                    WITH
+                                         tmp
+                                         AS
+                                             (  SELECT ast.alloc_no,
+                                                       ast.loc
+                                                           loc,
+                                                       ast.ref_1 order_no,    
+                                             SUBSTR(ast.ref_2,instr(ast.ref_2,'/')+1,instr(SUBSTR(ast.ref_2,instr(ast.ref_2,'/')+1),'/')-1)   
+                                                 asn,
+                                                       tmp.item
+                                                           item,
+                                                       ast.item source_item,                   
+                                                       substr(ast.diff_id,instr(ast.diff_id,'~')+1) diff_id                
+                                                  FROM item_dtl tmp, alloc_itm_search_dtl ast                                   
+                                                 WHERE ast.alloc_no = %s /*I_alloc_id*/ 
+                                          AND ast.item=tmp.item_parent 
+                                          AND ast.diff_id = tmp.aggr_diff_id 
+                                              GROUP BY ast.alloc_no,
+                                                       ast.loc,
+                                                       ast.ref_1,
+                                             SUBSTR(ast.ref_2,instr(ast.ref_2,'/')+1,instr(SUBSTR(ast.ref_2,instr(ast.ref_2,'/')+1),'/')-1),  
+                                                       tmp.item,
+                                                       ast.item,
+                                                       ast.diff_id)
+                                                SELECT alloc_no,source_item,diff_id,max(INSTOCK_DATE) 
+                                                    FROM ( SELECT x.*,(partial_avail_qty
+                                                  - COALESCE(
+                                                      (  SELECT                                              
+                                                               SUM(ald.alloc_qty)
+                                                           FROM alloc_sku_head alh,
+                                                                alloc_dtl ald,
+                                                                alloc_xref    alx
+                                                          WHERE     alh.alloc_no =
+                                                                    alx.xref_alloc_no
+                                                                AND ald.alloc_no = alh.alloc_no
+                                                                AND alh.item = x.item
+                                                                AND alh.order_no = x.order_no
+                                                    AND COALESCE(alh.ref_no,'$') = x.asn
+                                                    AND alh.ref_type = 'PO'
+                                                                AND alh.wh = x.loc
+                                                       GROUP BY alh.item, alh.order_no),
+                                                      0)) avail_qty
+                                                  FROM (SELECT 
+                                                       distinct tmp.*,ol.instock_date,
+                                                             (  SUM( ss.qty_expected
+                                                               - COALESCE(ss.qty_received, 0))
+                                                             )    partial_avail_qty
+                                                        FROM tmp, ship_item ss,ship_dtl sh, warehouse w, po_item_loc ol
+                                                  WHERE     tmp.item = ss.item
+                                                  AND tmp.loc = w.wh
+                                                  AND w.physical_wh = sh.to_location
+                                                  AND tmp.order_no = sh.po_no
+                                                  AND sh.asn_id = tmp.asn
+                                                  AND ss.shipment=sh.ship_id                               
+                                                  AND tmp.loc = ol.location
+                                                  AND ol.po_no = sh.po_no
+                                                  AND ss.item=ol.item
+                                                       GROUP BY tmp.alloc_no,
+                                                                tmp.loc,
+                                                                tmp.order_no,
+                                                                tmp.asn,
+                                                                tmp.item,
+                                                                tmp.source_item,
+                                                                tmp.diff_id,
+                                                                ol.instock_date) x) y
+                                    WHERE avail_qty>=1
+                                       GROUP BY alloc_no,
+                                                source_item,
+                                                diff_id; "
+
+  Q_mer_1: " WITH
+                        dr
+                        AS
+                            (SELECT tmp.alloc_no,
+                                    im.item_parent,
+                                    tmp.source_item,
+                                    im.item,
+                                    CASE
+                                        WHEN tmp.sister_store IS NOT NULL THEN tmp.sister_store
+                                        ELSE tmp.to_loc
+                                    END                               loc,
+                                    COALESCE (tmp.source_diff1_id,
+                                              tmp.source_diff2_id,
+                                              tmp.source_diff3_id,
+                                              tmp.source_diff4_id)    diff_id,
+                                    estimated_instock_date
+                               FROM alloc_calc_allitemloc  tmp,
+                                    alloc_rule              alr,
+                                    alloc_po_eisd_temp             alh,
+                                    item_dtl                   im
+                              WHERE     tmp.alloc_no =  %s
+                                    AND tmp.alloc_no = alr.alloc_no
+                                    AND tmp.alloc_no = alh.alloc_no
+                           AND alh.item = tmp.source_item
+                           AND alh.diff_id= COALESCE (tmp.source_diff1_id,
+                                              tmp.source_diff2_id,
+                                              tmp.source_diff3_id,
+                                              tmp.source_diff4_id) 
+                                    AND alr.size_profile_ind = 'Y'
+                                    AND im.item =
+                                        CASE
+                                            WHEN like_size_prof_ind = 'Y' THEN tmp.like_tran_item
+                                            ELSE tmp.tran_item
+                                        END
+                                    AND EXISTS
+                                            (SELECT 1
+                                               FROM alloc_size_profile sp
+                                              WHERE     sp.item_parent = im.item_parent
+                                    AND sp.aggr_diff_id = CASE
+                                                         WHEN like_size_prof_ind = 'Y'
+                                                         THEN COALESCE (tmp.like_source_diff1_id,
+                                                                    tmp.like_source_diff2_id,
+                                                                    tmp.like_source_diff3_id,
+                                                                    tmp.like_source_diff4_id)
+                                                         ELSE COALESCE (tmp.source_diff1_id,
+                                                                    tmp.source_diff2_id,
+                                                                    tmp.source_diff3_id,
+                                                                    tmp.source_diff4_id) 
+                                                         END
+                                                    AND sp.status = 'A'
+                                                    AND sp.request_date between (SELECT CASE WHEN DAYOFWEEK((Select SYSTEM_DATE from calendar_variables)) = '1' THEN DATE((Select SYSTEM_DATE from calendar_variables)) ELSE DATE_ADD((Select SYSTEM_DATE from calendar_variables), INTERVAL(1-DAYOFWEEK((Select SYSTEM_DATE from calendar_variables))) DAY) END - (%s*7) ) and alh.estimated_instock_date /*L_sp_week */
+                                                    AND sp.end_date >= alh.estimated_instock_date
+                          AND (SELECT CASE WHEN DAYOFWEEK((Select SYSTEM_DATE from calendar_variables)) = '1' THEN DATE((Select SYSTEM_DATE from calendar_variables)) ELSE DATE_ADD((Select SYSTEM_DATE from calendar_variables), INTERVAL(1-DAYOFWEEK((Select SYSTEM_DATE from calendar_variables))) DAY) END - (%s*7) ) <= sp.create_datetime   limit 1))
+                     , src AS ( SELECT dr.alloc_no, dr.source_item, dr.diff_id
+                        FROM dr
+                       WHERE NOT EXISTS
+                                 (SELECT 1
+                                    FROM alloc_size_profile sp 
+                              WHERE sp.item = dr.item 
+                                         AND sp.loc = dr.loc
+                                         AND sp.status = 'A'
+                                         AND sp.request_date between (SELECT CASE WHEN DAYOFWEEK((Select SYSTEM_DATE from calendar_variables)) = '1' THEN DATE((Select SYSTEM_DATE from calendar_variables)) ELSE DATE_ADD((Select SYSTEM_DATE from calendar_variables), INTERVAL(1-DAYOFWEEK((Select SYSTEM_DATE from calendar_variables))) DAY) END - (%s*7) ) and dr.estimated_instock_date  /*L_sp_week */
+                                         AND sp.end_date >= dr.estimated_instock_date
+                     AND (SELECT CASE WHEN DAYOFWEEK((Select SYSTEM_DATE from calendar_variables)) = '1' THEN DATE((Select SYSTEM_DATE from calendar_variables)) ELSE DATE_ADD((Select SYSTEM_DATE from calendar_variables), INTERVAL(1-DAYOFWEEK((Select SYSTEM_DATE from calendar_variables))) DAY) END - (%s*7)) <= sp.create_datetime                                                      
+                                          )
+                    GROUP BY dr.alloc_no, dr.source_item, dr.diff_id  )
+            UPDATE alloc_itm_search_dtl tgt, src 
+            SET tgt.err_ind='W',
+                tgt.err_message = SUBSTR(CONCAT(COALESCE(tgt.err_message,''), 'There are items that do not have a size profile.'), 1, 500)
+                        WHERE tgt.alloc_no = src.alloc_no
+                    AND tgt.item = src.source_item
+                    AND tgt.diff_id = src.diff_id
+                    AND tgt.sel_ind = 'Y';"
+
+  Q_mer_2: "WITH
+                    dr
+                    AS
+                        (  SELECT 
+                                  tmp.alloc_no,
+                                  tmp.source_item,
+                          COALESCE (tmp.source_diff1_id,
+                                                    tmp.source_diff2_id,
+                                                    tmp.source_diff3_id,
+                                                    tmp.source_diff4_id) source_diff_id,
+                                  CASE
+                                      WHEN tmp.like_size_prof_ind = 'Y'
+                                      THEN
+                                          tmp.LIKE_SOURCE_ITEM
+                                      ELSE
+                                          tmp.source_item
+                                  END    item_parent,
+                                  CASE
+                                      WHEN tmp.like_size_prof_ind = 'Y'
+                                      THEN
+                                          COALESCE (tmp.like_source_diff1_id,
+                                                    tmp.like_source_diff2_id,
+                                                    tmp.like_source_diff3_id,
+                                                    tmp.like_source_diff4_id)
+                                      ELSE
+                                          COALESCE (tmp.source_diff1_id,
+                                                    tmp.source_diff2_id,
+                                                    tmp.source_diff3_id,
+                                                    tmp.source_diff4_id)
+                                  END    diff_id,
+                                  release_date
+                             FROM alloc_calc_allitemloc tmp,
+                                  alloc_rule            alr,
+                                  alloc_head           alh
+                            WHERE     tmp.alloc_no = %s
+                                  AND tmp.alloc_no = alr.alloc_no
+                                  AND tmp.alloc_no = alh.alloc_no
+                                  AND alr.size_profile_ind = 'Y'
+                         GROUP BY tmp.alloc_no,
+                                  tmp.source_item,
+                          COALESCE (tmp.source_diff1_id,
+                                                    tmp.source_diff2_id,
+                                                    tmp.source_diff3_id,
+                                                    tmp.source_diff4_id), 
+                                  CASE
+                                      WHEN tmp.like_size_prof_ind = 'Y'
+                                      THEN
+                                          tmp.LIKE_SOURCE_ITEM
+                                      ELSE
+                                          tmp.source_item
+                                  END,
+                                  CASE
+                                      WHEN tmp.like_size_prof_ind = 'Y'
+                                      THEN
+                                          COALESCE (tmp.like_source_diff1_id,
+                                                    tmp.like_source_diff2_id,
+                                                    tmp.like_source_diff3_id,
+                                                    tmp.like_source_diff4_id)
+                                      ELSE
+                                          COALESCE (tmp.source_diff1_id,
+                                                    tmp.source_diff2_id,
+                                                    tmp.source_diff3_id,
+                                                    tmp.source_diff4_id)
+                                  END,
+                                  release_date)
+                            ,src AS (SELECT DISTINCT alloc_no,source_item,diff_id 
+                                FROM (  SELECT alloc_no,
+                                 source_item,
+                            source_diff_id diff_id, 
+                                 (SELECT 1
+                                    FROM alloc_size_profile sp
+                                   WHERE     sp.item_parent = dr.item_parent
+                                         AND sp.status = 'A'
+                                         AND sp.request_date between (SELECT CASE WHEN DAYOFWEEK((Select SYSTEM_DATE from calendar_variables)) = '1' THEN DATE((Select SYSTEM_DATE from calendar_variables)) ELSE DATE_ADD((Select SYSTEM_DATE from calendar_variables), INTERVAL(1-DAYOFWEEK((Select SYSTEM_DATE from calendar_variables))) DAY) END - (%s*7)) and dr.release_date  
+                                         AND sp.end_date >= dr.release_date
+                                         AND (SELECT CASE WHEN DAYOFWEEK((Select SYSTEM_DATE from calendar_variables)) = '1' THEN DATE((Select SYSTEM_DATE from calendar_variables)) ELSE DATE_ADD((Select SYSTEM_DATE from calendar_variables), INTERVAL(1-DAYOFWEEK((Select SYSTEM_DATE from calendar_variables))) DAY) END - (%s*7)) <= sp.create_datetime                        
+										 AND sp.aggr_diff_id = dr.diff_id limit 1)    size_prof
+                            FROM dr)x where size_prof is null )
+
+                            UPDATE alloc_itm_search_dtl tgt, src 
+				                SET tgt.err_ind='W', 
+					                tgt.err_message =SUBSTR(CONCAT(COALESCE(tgt.err_message,''), 'There are items that do not have a size profile.'), 1, 500)
+                                WHERE tgt.alloc_no = src.alloc_no
+                                AND tgt.item = src.source_item
+                                AND SUBSTR(tgt.diff_id, 3) = src.diff_id
+                                AND tgt.sel_ind = 'Y';"
+
+  Q_get_rec: "SELECT alloc_no, item, diff_id FROM alloc_itm_search_dtl WHERE alloc_no = %s /*I_alloc_id */ AND sel_ind='Y';"
+
+  Q_get_count_total_skus: "SELECT COUNT(*) as total_skus FROM item_dtl WHERE item_parent = %s AND aggr_diff_id = %s;"
+
+  Q_get_count_total_locs : "SELECT COUNT(*)as total_locs FROM alloc_location WHERE loc_group_id IN (SELECT loc_group_id FROM alloc_loc_group_detail WHERE alloc_no=%s);"
+
+  Q_get_count_total_whs: "SELECT COUNT(DISTINCT def_wh) as total_whs FROM alloc_location al, store st WHERE al.location_id = st.store  AND loc_group_id IN (SELECT loc_group_id FROM alloc_loc_group_detail WHERE alloc_no=%s);"
+
+  Q_upd_err_1: "UPDATE alloc_itm_search_dtl tmp
+                  SET err_ind = 'W',
+                     err_message = SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Item is inactive/discontinued at some of the selected locations.'), 1, 500)
+                    WHERE tmp.alloc_no = %s /*I_alloc_id */
+                  AND tmp.sel_ind = 'Y'
+                  AND tmp.item = %s /*rec.item */
+                  AND EXISTS (SELECT 1
+                                FROM (SELECT tmp.item,il.location
+                                        FROM item_location il,
+                                        alloc_itm_search_dtl tmp
+                                            WHERE tmp.alloc_no = %s /*I_alloc_id */
+                                            AND il.location_type='S'
+                                            AND il.item = tmp.item
+                                            AND tmp.item = %s /*rec.item */
+                                            AND il.location  IN (SELECT location_id FROM alloc_location WHERE loc_group_id IN (SELECT loc_group_id FROM alloc_loc_group_detail WHERE alloc_no= %s /*rec.alloc_no*/))
+                                            AND il.status !='A'
+                               UNION ALL  
+                               SELECT pb.pack_no,il.location 
+                                    FROM alloc_itm_search_dtl tmp,
+                                    item_location il,
+                                    packitem_breakout pb,
+                                    item_dtl im
+                                    WHERE tmp.alloc_no = %s /*I_alloc_id */
+                                    AND pb.pack_no = tmp.item
+                                    AND tmp.item = %s /*rec.item */
+                                    AND il.item = pb.item
+                                    AND il.status !='A'
+                                    AND il.location_type = 'S'
+                                    AND il.location  IN (SELECT location_id FROM alloc_location WHERE loc_group_id IN (SELECT loc_group_id FROM alloc_loc_group_detail WHERE alloc_no= %s /*rec.alloc_no*/))
+                                    AND im.item = pb.pack_no
+                                    AND im.sellable_ind = 'N') src
+                                    GROUP BY src.item
+                                    HAVING count(1) <> %s /*L_total_locs */);"
+
+  Q_upd_err_2: "UPDATE alloc_itm_search_dtl tmp
+                  SET err_ind = 'W',
+                     err_message = SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Item is inactive/discontinued at some warehouse.'), 1, 500)
+                 WHERE tmp.alloc_no = %s /*I_alloc_id*/
+                  AND tmp.sel_ind = 'Y'
+                  AND tmp.item = %s /*rec.item*/
+                  AND COALESCE(tmp.diff_id,'$') = COALESCE(%s,'$') /*rec.diff_id*/                       
+                  AND EXISTS (SELECT 1 
+                                FROM item_location il
+                               WHERE il.location_type='W'
+                                 AND il.item = tmp.item
+                                 AND il.location  IN (SELECT DISTINCT def_wh FROM alloc_location al, store st WHERE al.location_id = st.store AND loc_group_id IN (SELECT loc_group_id FROM alloc_loc_group_detail WHERE alloc_no = %s)) /*rec.alloc_no*/
+                                 AND il.status !='A'
+                               GROUP BY item
+                               HAVING count(1) <> %s /*L_total_whs*/); "
+
+  Q_upd_err_3: "UPDATE alloc_itm_search_dtl tmp
+               SET err_ind = 'W',
+                  err_message = SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'All the items are inactive/discontinued at some of the selected locations.'), 1,500)
+              WHERE tmp.alloc_no = %s /*I_alloc_id*/
+               AND tmp.sel_ind = 'Y'
+               AND tmp.item = %s  /*df_rec.item[i]*/
+               AND tmp.diff_id = %s /*rec.diff_id*/
+               AND EXISTS (SELECT 1 
+                          FROM (SELECT item,
+                                    location,                                            
+                                    /*COUNT(DISTINCT item) OVER (PARTITION BY loc) cnt_sku,
+                                    COUNT(DISTINCT location) OVER (PARTITION BY item) cnt_loc,*/
+                                    (select count(DISTINCT item) from item_location il1 where il1.item = item and il1.location = loc group by loc)cnt_sku,
+                                    (select count(DISTINCT location) from item_location il1 where il1.item = item and il1.location = loc group by item)cnt_loc,
+                                    COUNT(1) OVER (PARTITION BY item_parent) cnt_sku_loc
+                                FROM item_location
+                               WHERE location_type='S'
+                                 AND item IN (SELECT item FROM item_dtl WHERE item_parent=%s /*rec.item*/ AND aggr_diff_id=SUBSTR(%s,INSTR(%s, '~') + 1)) /*rec.diff_id*/
+                                 AND loc  IN (SELECT location_id FROM alloc_location WHERE loc_group_id IN (SELECT loc_group_id FROM alloc_loc_group_detail WHERE alloc_no=%s /*rec.alloc_no*/))
+                                 AND status !='A')temp
+                         WHERE cnt_loc != %s /*L_total_locs*/
+                           AND cnt_sku    = %s /*L_total_skus */);"
+
+  Q_upd_err_4: "UPDATE alloc_itm_search_dtl tmp
+               SET err_ind = 'W',
+                  err_message =SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'All the items are inactive/discontinued at some warehouse.'),  1, 500)
+              WHERE tmp.alloc_no = %s /*I_alloc_id*/
+               AND tmp.sel_ind = 'Y'
+               AND tmp.item = %s /*rec.item*/
+               AND tmp.diff_id = %s /*rec.diff_id*/
+               AND EXISTS (SELECT 1 
+                          FROM (SELECT item,
+                                    loc,                                            
+                                    /*COUNT(DISTINCT il.item) OVER (PARTITION BY loc) cnt_sku,
+                                    COUNT(DISTINCT il.location) OVER (PARTITION BY item) cnt_loc,
+                                    COUNT(DISTINCT il.location) OVER (PARTITION BY item_parent) cnt_wh,*/
+                                    COUNT(1) OVER (PARTITION BY il.item_parent) cnt_sku_loc,
+                                    (select count(DISTINCT item) from item_location il1 where il1.item = item and il1.location = loc group by loc)cnt_sku,
+                                    (select count(DISTINCT location) from item_location il1 where il1.item = item and il1.location = loc group by item)cnt_loc,
+									(select COUNT(DISTINCT location) from item_location il1 where il1.item = item and il1.location = loc group by item_parent) cnt_wh,
+                                    /*COUNT(DISTINCT CONCAT(il.item,il.location)) OVER (PARTITION BY il.item_parent) cnt_sku_wh*/
+                                    (select COUNT(DISTINCT CONCAT(item,location)) from item_location il1 where il1.item = item and il1.location = loc group by il.item_parent) cnt_sku_wh
+                                FROM item_location il
+                               WHERE il.location_type='W'
+                                 AND il.item IN (SELECT item FROM item_dtl WHERE item_parent= %s /*rec.item*/ AND aggr_diff_id = SUBSTR(%s,INSTR(%s, '~') + 1)) /*rec.diff_id*/
+                                 AND il.location  IN (SELECT DISTINCT def_wh FROM alloc_location al, store st WHERE al.location_id = st.store AND loc_group_id IN (SELECT loc_group_id FROM alloc_loc_group_detail WHERE alloc_no = %s /*rec.alloc_no*/))
+                                 AND il.status !='A')temp
+                          WHERE cnt_loc != %s /*L_total_whs */
+                           AND cnt_sku    = %s /*L_total_skus*/);"
+
+  Q_upd_err_5 : "UPDATE alloc_itm_search_dtl tmp
+               SET err_ind = 'W',
+                  err_message =SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Some of the items are inactive/discontinued at all the selected locations.'), 1, 500)
+             WHERE tmp.alloc_no = %s /*I_alloc_id*/
+               AND tmp.sel_ind = 'Y'
+               AND tmp.item = %s /*rec.item */
+               AND tmp.diff_id = %s /*rec.diff_id */
+               AND EXISTS (SELECT * 
+                         FROM (SELECT item,
+                                   loc,
+                                   /*COUNT(DISTINCT item) OVER (PARTITION BY loc) cnt_sku,
+                                   COUNT(DISTINCT loc) OVER (PARTITION BY item) cnt_loc,*/
+                                   (select count(DISTINCT item) from item_location il1 where il1.item = item and il1.location = loc group by loc)cnt_sku,
+                                   (select count(DISTINCT location) from item_location il1 where il1.item = item and il1.location = loc group by item)cnt_loc,
+                                   COUNT(1) OVER (PARTITION BY item_parent) cnt_sku_loc
+                               FROM item_location
+                              WHERE location_type='S'
+                                AND item IN (SELECT item FROM item_dtl WHERE item_parent= %s /*rec.item*/ AND aggr_diff_id = SUBSTR(%s /*rec.diff_id*/,INSTR(%s /*rec.diff_id*/, '~') + 1))
+                                AND loc  IN (SELECT location_id FROM alloc_location WHERE loc_group_id IN (SELECT loc_group_id FROM alloc_loc_group_detail WHERE alloc_no=%s /*rec.alloc_no*/))
+                                AND status !='A')temp
+                        WHERE cnt_loc = %s/* L_total_locs*/
+                        AND cnt_sku    != %s /*L_total_skus*/);"
+
+  Q_upd_err_6: "UPDATE alloc_itm_search_dtl tmp
+               SET err_ind = 'W',
+                  err_message =SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Some of the items are inactive/discontinued at all warehouse.'),  1,500)
+            WHERE tmp.alloc_no = %s /*I_alloc_id*/
+              AND tmp.sel_ind = 'Y'
+              AND tmp.item = %s /*rec.item*/
+              AND tmp.diff_id = %s /*rec.diff_id*/
+              AND EXISTS (SELECT * 
+                        FROM (SELECT item,
+                                  loc,                                            
+                                  /*COUNT(DISTINCT il.item) OVER (PARTITION BY loc) cnt_sku,
+                                  COUNT(DISTINCT il.location) OVER (PARTITION BY item) cnt_loc,
+                                  COUNT(DISTINCT il.location) OVER (PARTITION BY item_parent) cnt_wh,*/
+                                    (select count(DISTINCT item) from item_location il1 where il1.item = item and il1.location = loc group by loc)cnt_sku,
+                                    (select count(DISTINCT location) from item_location il1 where il1.item = item and il1.location = loc group by item)cnt_loc,
+									(select COUNT(DISTINCT location) from item_location il1 where il1.item = item and il1.location = loc group by item_parent) cnt_wh,
+                                  COUNT(1) OVER (PARTITION BY il.item_parent) cnt_sku_loc,
+                                  /*COUNT (DISTINCT CONCAT(il.item,il.location)) OVER (PARTITION BY il.item_parent) cnt_sku_wh*/
+                                    (select COUNT(DISTINCT CONCAT(item,location)) from item_location il1 where il1.item = item and il1.location = loc group by il.item_parent) cnt_sku_wh
+                              FROM item_location il, 
+                                  store st
+                              WHERE location_type='W'
+                               AND il.item IN (SELECT item FROM item_dtl WHERE item_parent= %s /* rec.item */ AND aggr_diff_id=SUBSTR(%s /*rec.diff_id*/,INSTR(%s /*rec.diff_id*/, '~') + 1))
+                               AND il.location IN (SELECT DISTINCT def_wh FROM alloc_location al, store st WHERE al.location_id = st.store AND  loc_group_id in (select alg.loc_group_id from alloc_loc_group_detail alg WHERE alg.alloc_no = %s /*rec.alloc_no */))
+                               AND il.status !='A')temp
+                       WHERE cnt_loc = %s /*L_total_whs */
+                        AND cnt_sku    !=%s /* L_total_skus*/);"
+
+  Q_get_wh_str_rel_ind: "SELECT WH_STORE_REL_IND FROM alloc_head WHERE alloc_no = %s;"
+
+  Q_mer_3: "WITH src AS  (
+                            SELECT DISTINCT tmp.alloc_no,
+                                 tmp.tmp_item,
+                                 tmp.loc
+                                FROM (SELECT DISTINCT alloc_no,
+                                tmp_item,loc,
+                                comp_item, 
+                                SUM(qty) OVER (PARTITION BY alloc_no,comp_item,loc ) qty
+                            FROM (SELECT tmp.alloc_no,
+                                            tmp.item tmp_item,
+                                            tmp.loc,
+                                            pb.item comp_item,
+                                            (tmp.avail_qty - CASE WHEN tmp.holdback_type='U' THEN tmp.holdback_qty WHEN tmp.holdback_type='Y' THEN  (tmp.avail_qty * (tmp.holdback_qty/100)) ELSE 0 END )*item_qty qty
+                                            FROM alloc_itm_search_dtl tmp, 
+                                                 packitem_breakout pb
+                                            WHERE alloc_no=%s /*I_alloc_id*/
+                                            AND tmp.item = pb.pack_no
+                                            UNION ALL
+                                            SELECT DISTINCT tmp.alloc_no,
+                                                tmp.item tmp_item,
+                                                tmp.loc,
+                                                tmp.item comp_item,
+                                                tmp.avail_qty - CASE WHEN tmp.holdback_type='U' THEN tmp.holdback_qty WHEN tmp.holdback_type='Y' THEN (tmp.avail_qty * (tmp.holdback_qty/100) )ELSE 0 END qty
+                                            FROM alloc_itm_search_dtl tmp, 
+                                                 item_dtl im
+                                            WHERE alloc_no= %s /*I_alloc_id*/
+                                            AND tmp.item = im.item
+                                            AND sellable_ind='Y')tmp1) tmp,
+                                            (SELECT gtt.alloc_no,
+                                                gtt.item_id,
+                                                st.def_wh,
+                                                SUM(GREATEST(COALESCE(gtt.min,0),COALESCE(gtt.min_need,0))) sum_min
+                                            FROM alloc_quantity_limits gtt,
+                                                store st
+                                                WHERE alloc_no = %s /*I_alloc_id*/
+                                                AND st.store = gtt.location_id
+                                                GROUP BY gtt.alloc_no,
+                                                 gtt.item_id,
+                                                 st.def_wh)ql
+                            WHERE ql.alloc_no = tmp.alloc_no
+                            AND ql.item_id = tmp.comp_item
+                            AND ql.def_wh = tmp.loc  
+                            AND sum_min >0
+                            AND qty<sum_min) 
+                                    UPDATE alloc_itm_search_dtl tgt, src 
+			                            SET tgt.err_ind = 'W',
+                                            tgt.err_message = SUBSTR(CONCAT(COALESCE(tgt.err_message,''), 'Total Min/Min Need Quantity Limits is greater than available inventory.'),1,500) 
+                                        WHERE tgt.alloc_no = src.alloc_no
+					                    AND tgt.item = src.tmp_item
+					                    AND tgt.loc = src.loc
+					                    AND COALESCE(tgt.alloc_criteria,'W') <> 'F';"
+
+  Q_mer_4: "WITH src AS (SELECT DISTINCT tmp.alloc_no,
+                      tmp.tmp_item,
+                      tmp.loc
+                        FROM (SELECT DISTINCT alloc_no,
+                              tmp_item,loc,
+                              comp_item, 
+                              SUM(qty) OVER (PARTITION BY alloc_no,comp_item,loc ) qty
+                         FROM (SELECT tmp.alloc_no,
+                                      tmp.item tmp_item,
+                                      tmp.loc,
+                                      pb.item comp_item,
+                                      (tmp.avail_qty - CASE WHEN tmp.holdback_type='U' THEN tmp.holdback_qty WHEN tmp.holdback_type='Y' THEN (tmp.avail_qty * (tmp.holdback_qty/100)) ELSE 0 END)*item_qty qty
+                                 FROM alloc_itm_search_dtl tmp, 
+                                      packitem_breakout pb
+                                WHERE alloc_no=%s /*I_alloc_id*/
+                                  AND tmp.item = pb.pack_no
+                                UNION ALL
+                               SELECT DISTINCT tmp.alloc_no,
+                                       tmp.item tmp_item,
+                                       tmp.loc,
+                                       tmp.item comp_item,
+                                       tmp.avail_qty - CASE WHEN tmp.holdback_type='U' THEN tmp.holdback_qty WHEN tmp.holdback_type='Y'THEN (tmp.avail_qty * (tmp.holdback_qty/100)) ELSE 0 END qty
+                                  FROM alloc_itm_search_dtl tmp, 
+                                       item_dtl im
+                                 WHERE alloc_no=%s /*I_alloc_id*/
+                                   AND tmp.item = im.item
+                                   AND sellable_ind='Y')tmp1) tmp,
+                      (SELECT gtt.alloc_no,
+                              gtt.item_id,
+                              SUM(GREATEST(COALESCE(gtt.min,0),COALESCE(gtt.min_need,0))) sum_min
+                         FROM alloc_quantity_limits gtt
+                        WHERE alloc_no = %s /* I_alloc_id */
+                        GROUP BY gtt.alloc_no,
+                              gtt.item_id)ql
+                        WHERE ql.alloc_no = tmp.alloc_no
+                        AND ql.item_id = tmp.comp_item
+                        AND sum_min >0
+                        AND qty<sum_min)
+                        UPDATE alloc_itm_search_dtl tgt, src 
+			                SET tgt.err_ind = 'W',
+			                	tgt.err_message = SUBSTR(CONCAT(COALESCE(tgt.err_message,''), 'Total Min/Min Need Quantity Limits is greater than available inventory.'),1,500) 
+			                	  WHERE tgt.alloc_no = src.alloc_no
+			                	  AND tgt.item = src.tmp_item
+			                	  AND tgt.loc = src.loc
+			                	  AND tgt.alloc_criteria = 'F'
+			                		  AND tgt.avail_qty IS NOT NULL;"
+
+  Q_mer_5: "WITH src AS (SELECT DISTINCT tmp.alloc_no,
+                        tmp.tmp_item 
+                            FROM (SELECT DISTINCT alloc_no,
+                                tmp_item,
+                                comp_item, 
+                                SUM(qty) OVER (PARTITION BY alloc_no,comp_item) qty
+                           from (SELECT tmp.alloc_no,
+                                        tmp.item tmp_item,
+                                        pb.item comp_item,
+                                        (tmp.avail_qty - CASE WHEN tmp.holdback_type='U' THEN tmp.holdback_qty WHEN tmp.holdback_type='Y' THEN (tmp.avail_qty * (tmp.holdback_qty/100)) ELSE 0 END)*item_qty qty
+                                   FROM alloc_itm_search_dtl tmp, 
+                                        packitem_breakout pb
+                                  WHERE alloc_no=%s /*I_alloc_id*/
+                                    AND tmp.item = pb.pack_no
+                                  UNION ALL
+                                 SELECT DISTINCT tmp.alloc_no,
+                                         tmp.item tmp_item,
+                                         tmp.item comp_item,
+                                         tmp.avail_qty - CASE WHEN tmp.holdback_type='U' THEN tmp.holdback_qty WHEN tmp.holdback_type='Y' THEN (tmp.avail_qty * (tmp.holdback_qty/100)) ELSE 0 END qty
+                                    FROM alloc_itm_search_dtl tmp, 
+                                         item_dtl im
+                                   WHERE alloc_no=%s /*I_alloc_id*/
+                                     AND tmp.item = im.item
+                                     AND sellable_ind='Y')tmp1) tmp,
+                        (SELECT gtt.alloc_no,
+                                gtt.item_id,
+                                SUM(GREATEST(COALESCE(gtt.min,0),COALESCE(gtt.min_need,0))) sum_min
+                           FROM alloc_quantity_limits gtt
+                          WHERE alloc_no = %s /*I_alloc_id*/
+                          GROUP BY gtt.alloc_no,
+                                gtt.item_id)ql
+                        WHERE ql.alloc_no = tmp.alloc_no
+                        AND ql.item_id = tmp.comp_item
+                        AND sum_min >0
+                        AND qty<sum_min) 
+                        UPDATE alloc_itm_search_dtl tgt, src 
+				        SET tgt.err_ind = 'W',
+					        tgt.err_message = SUBSTR(CONCAT(COALESCE(tgt.err_message,''), 'Total Min/Min Need Quantity Limits is greater than available inventory.'),1,500) 
+				        WHERE tgt.alloc_no = src.alloc_no
+				        AND tgt.item = src.tmp_item;"
+
+  Q_upd_err_7: "UPDATE alloc_itm_search_dtl 
+                    SET err_ind = 'W',       
+                        err_message = SUBSTR(CONCAT(COALESCE(err_message,''), 'There are some item/locations that will not be allocated due to item/location status.'),1,500)
+                    WHERE alloc_no = %s /*I_alloc_id*/
+                    AND sel_ind = 'Y'
+                    AND item IN (SELECT ITEM FROM (SELECT DISTINCT temp.item
+                                           FROM alloc_itm_search_dtl temp,
+                                                item_location il,
+                                                (SELECT location_id
+                                                FROM alloc_location
+                                                WHERE loc_group_id IN  (SELECT loc_group_id
+                                                                FROM alloc_loc_group_detail
+                                                                WHERE alloc_no=%s /*I_alloc_id*/)) loc
+												WHERE temp.alloc_no = %s /*I_alloc_id*/
+												AND temp.item = il.item
+												AND temp.sel_ind = 'Y'
+												AND loc.location_id = il.location
+												AND il.status = 'I')x);"
+
+  Q_upd_err_8: "UPDATE alloc_itm_search_dtl tmp
+                    SET err_ind = 'E',
+                        err_message = SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Holdback quantity must be less than available quantity.'),  1, 500)
+                    WHERE tmp.alloc_no = %s /*I_alloc_id*/
+                    AND tmp.sel_ind = 'Y'
+                    AND tmp.holdback_type = 'U'
+                    AND tmp.holdback_qty IS NOT NULL
+                    AND tmp.holdback_qty >= tmp.avail_qty;"
+
+  Q_upd_err_9: "UPDATE alloc_itm_search_dtl tmp
+                    SET err_ind = 'E',
+                        err_message = SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Holdback quantity must be less than available quantity.'),  1, 500)
+			        WHERE tmp.alloc_no = %s /*I_alloc_id*/
+                    AND tmp.sel_ind = 'Y'
+                    AND tmp.holdback_type = 'Y'
+                    AND tmp.holdback_qty IS NOT NULL
+                    AND (tmp.holdback_qty/100)*tmp.avail_qty >=  tmp.avail_qty;"
+
+  Q_get_rec_2: "SELECT alloc_no,item, diff_id  FROM alloc_itm_search_dtl  WHERE alloc_no = %s /*I_alloc_id*/  AND sel_ind = 'Y';"
+
+  Q_upd_err_10: "UPDATE alloc_itm_search_dtl tmp
+                  SET err_ind = 'E',
+                     err_message = SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Item is inactive/discontinued at all the selected locations.'), 1,500)
+                WHERE tmp.alloc_no =  %s /*I_alloc_id*/
+                  AND tmp.sel_ind = 'Y'
+                  AND tmp.item = %s /*rec.item*/
+                  AND NOT EXISTS (SELECT 1 
+                               FROM item_location 
+                              WHERE location_type = 'S' 
+                                AND item = tmp.item
+                                AND location IN (SELECT al.location_id 
+                                          FROM alloc_location al
+                                          WHERE al.loc_group_id IN (SELECT alg.loc_group_id 
+                                                               FROM alloc_loc_group_detail alg
+                                                              WHERE alg.alloc_no=%s /*rec.alloc_no*/))
+                                AND status = 'A');"
+
+  Q_upd_err_11: "UPDATE alloc_itm_search_dtl tmp
+                    SET err_ind = 'E',
+                     err_message = SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Item is inactive/discontinued at all warehouse.'), 1, 500)
+                    WHERE tmp.alloc_no = %s /*I_alloc_id*/
+                    AND tmp.sel_ind = 'Y'
+                    AND tmp.item =  %s /* rec.item */
+                    AND NOT EXISTS (SELECT 1 
+                               FROM item_location il
+                                WHERE location_type = 'W' 
+                                AND il.item = tmp.item
+                                AND il.location IN (SELECT DISTINCT def_wh
+                                             FROM alloc_location al, store st 
+                                            WHERE al.location_id = st.store 
+                                             AND loc_group_id IN (SELECT alg.loc_group_id 
+                                                               FROM alloc_loc_group_detail alg
+                                                              WHERE alg.alloc_no=%s /*rec.alloc_no */))
+                                AND il.status = 'A');"
+
+  Q_upd_err_12: "UPDATE alloc_itm_search_dtl tmp
+               SET err_ind = 'E',
+                  err_message = SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'All the items are inactive/discontinued at all the selected locations.'),  1, 500)
+				WHERE tmp.alloc_no = %s /*I_alloc_id*/
+				AND tmp.sel_ind = 'Y'
+				AND tmp.item = %s /*rec.item*/
+				AND tmp.diff_id = %s /*rec.diff_id*/
+				AND NOT EXISTS (SELECT 1 
+                            FROM item_location 
+                           WHERE location_type = 'S' 
+                             AND item IN (SELECT im.item 
+                                        FROM item_dtl im 
+                                       WHERE %s /*rec.item*/ = im.item_Parent
+                                         AND im.aggr_diff_id = SUBSTR(%s /*rec.diff_id*/,INSTR(%s /*rec.diff_id*/, '~') + 1))
+                             AND location IN (SELECT al.location_id 
+                                       FROM alloc_location al
+                                       WHERE al.loc_group_id IN (SELECT alg.loc_group_id 
+                                                            FROM alloc_loc_group_detail alg
+                                                           WHERE alg.alloc_no=%s /*rec.alloc_no*/))
+                             AND status = 'A');"
+
+  Q_upd_err_13: "UPDATE alloc_itm_search_dtl tmp
+                    SET err_ind = 'E',
+                        err_message =SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'All the items are inactive/discontinued at all warehouse.'),  1, 500)
+                    WHERE tmp.alloc_no = %s /*I_alloc_id*/
+                    AND tmp.sel_ind = 'Y'
+                    AND tmp.item = %s /*rec.item*/
+                    AND tmp.diff_id = %s /*rec.diff_id*/
+                    AND NOT EXISTS (SELECT 1 
+                            FROM item_location il
+                           WHERE location_type = 'W' 
+                             AND il.item IN (SELECT im.item 
+                                          FROM item_dtl im 
+                                          WHERE %s /*rec.item*/ = im.item_parent
+                                           AND im.aggr_diff_id = SUBSTR(%s /*rec.diff_id */,INSTR(%s /*rec.diff_id*/, '~') + 1))
+                             AND il.location IN (SELECT DISTINCT def_wh
+                                          FROM alloc_location al, store st 
+                                         WHERE al.location_id = st.store 
+                                          AND loc_group_id IN (SELECT alg.loc_group_id 
+                                                            FROM alloc_loc_group_detail alg
+                                                           WHERE alg.alloc_no=%s /*rec.alloc_no*/))
+                             AND il.status = 'A');"
+
+  Q_upd_err_14: "UPDATE alloc_itm_search_dtl tmp
+	                SET err_ind = 'E',
+		                err_message =SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'All the SKU''s are inactive status for WH.'),  1, 500)
+	                WHERE  tmp.alloc_no = %s /*I_alloc_id*/
+	                AND tmp.sel_ind = 'Y'
+	                AND avail_qty = 0
+	                AND inactive_qty > 0;"
+
+  Q_upd_err_15: "UPDATE alloc_itm_search_dtl tmp
+                    SET err_ind = 'E',
+                        err_message =SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'There are no active item/locations on this allocation.'), 1, 500)
+				    WHERE tmp.alloc_no = %s /*I_alloc_id*/
+                    AND tmp.sel_ind = 'Y'
+                    AND NOT EXISTS
+                          (SELECT 1
+                             FROM alloc_calc_allitemloc itm
+                            WHERE     itm.alloc_no = tmp.alloc_no
+                                  AND itm.source_item = tmp.item
+                            AND (  COALESCE(itm.source_diff1_id,'$') = COALESCE(tmp.diff_id, '$')
+                                        OR COALESCE(itm.source_diff2_id,'$') = COALESCE(tmp.diff_id,'$')
+                                        OR COALESCE(itm.source_diff3_id,'$') = COALESCE(tmp.diff_id,'$')
+                                        OR COALESCE(itm.source_diff4_id,'$') = COALESCE(tmp.diff_id,'$')) 
+                                  AND itm.assign_default_wh = tmp.loc);"
+
+  Q_upd_err_16: "UPDATE alloc_itm_search_dtl tmp
+                    SET err_ind = 'E',
+                        err_message = SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'There are no active item/locations on this allocation.'),  1, 500)
+				    WHERE tmp.alloc_no = %s /*I_alloc_id*/
+                    AND tmp.sel_ind = 'Y'
+                    AND NOT EXISTS
+                          (SELECT 1
+                             FROM alloc_calc_allitemloc itm
+                            WHERE     itm.alloc_no = tmp.alloc_no
+                                  AND itm.source_item = tmp.item
+                                  AND ( COALESCE(itm.source_diff1_id,'$') = COALESCE(tmp.diff_id, '$')
+                                        OR COALESCE(itm.source_diff2_id,'$') = COALESCE(tmp.diff_id,'$')
+                                        OR COALESCE(itm.source_diff3_id,'$') = COALESCE(tmp.diff_id,'$')
+                                        OR COALESCE(itm.source_diff4_id,'$') = COALESCE(tmp.diff_id,'$')));"
+
+  Q_upd_err_17: "UPDATE alloc_itm_search_dtl tmp
+              SET err_ind = 'E',
+                  err_message = SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Multi PO with same item/warehouse is not allowed'),1,500)
+            WHERE tmp.alloc_no = %s /* I_alloc_id*/
+              AND tmp.alloc_criteria = 'P'
+              AND tmp.sel_ind = 'Y'
+              AND tmp.pack_ind= 'N'                  
+              AND EXISTS (SELECT 1
+                            FROM (SELECT DISTINCT  tmp1.alloc_no,
+                                         tmp1.item pack_no,
+                                         tmp1.ref_1, 
+                                         tmp1.alloc_criteria,
+                                         tmp1.loc,
+                                         CASE 
+                                            WHEN tmp1.sellable_ind = 'Y' 
+                                            THEN tmp1.item 
+                                            ELSE COALESCE(pb.item,tmp1.item)  
+                                        END item 
+                                   FROM (SELECT tmp1.alloc_no,
+                                                tmp1.sel_ind,
+                                                tmp1.item,
+                                                tmp1.ref_1, 
+                                                tmp1.alloc_criteria,
+                                                tmp1.loc,
+                                                im.pack_ind,
+                                                im.sellable_ind
+                                           FROM alloc_itm_search_dtl tmp1,
+                                                item_dtl im
+                                          WHERE tmp1.item = im.item
+                                            AND alloc_no = %s /*I_alloc_id*/
+                                            AND tmp1.sel_ind = 'Y' )tmp1
+                                        LEFT JOIN packitem_breakout pb
+                                  ON tmp1.item =pb.pack_no) tmp1
+                           WHERE tmp.alloc_no = tmp1.alloc_no
+                             AND tmp.item = tmp1.item
+                             AND tmp.ref_1 <> tmp1.ref_1      
+                             AND tmp.alloc_criteria = tmp1.alloc_criteria
+                             AND tmp.loc = tmp1.loc);"
+
+  Q_upd_err_18: "UPDATE alloc_itm_search_dtl tmp
+                    SET err_ind = 'E',
+                        err_message = SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Multi PO with same item/warehouse is not allowed'),1,500)
+                    WHERE tmp.alloc_no = %s /*I_alloc_id*/
+                      AND tmp.alloc_criteria = 'P'
+                      AND tmp.sel_ind = 'Y'
+                      AND tmp.pack_ind= 'Y'                  
+                      AND EXISTS (SELECT 1
+                                    FROM (SELECT DISTINCT  tmp1.alloc_no,
+                                                 tmp1.item pack_no,
+                                                 tmp1.ref_1, 
+                                                 tmp1.alloc_criteria,
+                                                 tmp1.loc,
+                                       pb.pack_no item                         
+                                           FROM (SELECT DISTINCT tmp1.alloc_no,
+                                                        tmp1.sel_ind,
+                                                        tmp1.item,
+                                                        CASE 
+                                            WHEN im.sellable_ind = 'Y' AND im.pack_ind ='Y'
+                                               THEN tmp1.item 
+                                            WHEN  im.pack_ind ='N'
+                                               THEN tmp1.item
+                                            ELSE COALESCE(pb.item,tmp1.item)  
+                                            END  comp_item,                                              
+                                                        tmp1.ref_1, 
+                                                        tmp1.alloc_criteria,
+                                                        tmp1.loc,
+                                                        im.pack_ind,
+                                                        im.sellable_ind
+                                                   FROM alloc_itm_search_dtl tmp1      
+                                            LEFT JOIN packitem_breakout pb                 
+                                                        ON tmp1.item =pb.pack_no,
+                                                        item_dtl im
+                                                  WHERE tmp1.item = im.item
+                                                    AND tmp1.alloc_no = %s /*I_alloc_id*/
+                                                    AND tmp1.sel_ind = 'Y'                   
+                                       )tmp1,
+                                                packitem_breakout pb                     
+                                          WHERE tmp1.comp_item =pb.item                                        
+                                            AND EXISTS (SELECT 1 
+                                                          FROM alloc_itm_search_dtl tmp2
+                                                         WHERE tmp2.item = pb.pack_no   
+                                                           AND tmp2.alloc_no = tmp1.alloc_no
+                                                           AND tmp2.sel_ind= 'Y')
+                                  UNION
+                                          SELECT DISTINCT  tmp1.alloc_no,
+                                                 tmp1.item pack_no,
+                                                 tmp1.ref_1, 
+                                                 tmp1.alloc_criteria,
+                                                 tmp1.loc,
+                                                 tmp1.item item 
+                                            FROM alloc_itm_search_dtl tmp1,
+                                                 item_dtl im
+                                           WHERE tmp1.item = im.item
+                                             AND tmp1.alloc_no = %s /*I_alloc_id*/
+                                             AND tmp1.sel_ind = 'Y' 
+                                             AND im.sellable_ind = 'Y' 
+                                             AND im.pack_ind ='Y') tmp1
+                                   WHERE tmp.alloc_no = tmp1.alloc_no
+                                     AND tmp.item = tmp1.item
+                                     AND tmp.ref_1 <> tmp1.ref_1 
+                                     AND tmp.alloc_criteria = tmp1.alloc_criteria
+                                     AND tmp.loc = tmp1.loc);"
+
+  Q_upd_err_19: "UPDATE alloc_itm_search_dtl tmp
+                    SET err_ind = 'E',
+                        err_message = SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Multi Transfer with same item/warehouse is not allowed.'),1,500)
+                    WHERE tmp.alloc_no = %s /*I_alloc_id */
+                      AND tmp.alloc_criteria = 'T'
+                      AND tmp.sel_ind = 'Y'
+                      AND tmp.pack_ind= 'N'                  
+                      AND EXISTS (SELECT 1
+                                    FROM (SELECT DISTINCT  tmp1.alloc_no,
+                                                 tmp1.item pack_no,
+                                                 tmp1.ref_1, 
+                                                 tmp1.alloc_criteria,
+                                                 tmp1.loc,
+                                                 CASE 
+                                                    WHEN tmp1.sellable_ind = 'Y' 
+                                                    THEN tmp1.item 
+                                                    ELSE COALESCE(pb.item,tmp1.item)  
+                                                END item 
+                                           FROM (SELECT tmp1.alloc_no,
+                                                        tmp1.sel_ind,
+                                                        tmp1.item,
+                                                        tmp1.ref_1, 
+                                                        tmp1.alloc_criteria,
+                                                        tmp1.loc,
+                                                        im.pack_ind,
+                                                        im.sellable_ind
+                                                   FROM alloc_itm_search_dtl tmp1,
+                                                        item_dtl im
+                                                  WHERE tmp1.item = im.item
+                                                    AND alloc_no = %s /*I_alloc_id */
+                                                    AND tmp1.sel_ind = 'Y' )tmp1
+                                                 LEFT JOIN packitem_breakout pb
+                                          ON tmp1.item =pb.pack_no) tmp1
+                                   WHERE tmp.alloc_no = tmp1.alloc_no
+                                     AND tmp.item = tmp1.item
+                                     AND tmp.ref_1 <> tmp1.ref_1                              
+                                     AND tmp.alloc_criteria = tmp1.alloc_criteria
+                                     AND tmp.loc = tmp1.loc);"
+
+  Q_upd_err_20: "UPDATE alloc_itm_search_dtl tmp
+                    SET err_ind = 'E',
+                        err_message = SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Multi Transfer with same item/warehouse is not allowed.'),1,500)
+                    WHERE tmp.alloc_no = %s /*I_alloc_id */
+                      AND tmp.alloc_criteria = 'T'
+                      AND tmp.sel_ind = 'Y'
+                      AND tmp.pack_ind= 'Y'                  
+                      AND EXISTS (SELECT 1
+                                    FROM (SELECT DISTINCT  tmp1.alloc_no,
+                                                 tmp1.item pack_no,
+                                                 tmp1.ref_1, 
+                                                 tmp1.alloc_criteria,
+                                                 tmp1.loc,
+                                       pb.pack_no item                              
+                                           FROM (SELECT DISTINCT tmp1.alloc_no,
+                                                        tmp1.sel_ind,
+                                                        tmp1.item,
+                                                        CASE 
+                                            WHEN im.sellable_ind = 'Y' AND im.pack_ind ='Y'
+                                               THEN tmp1.item 
+                                            WHEN  im.pack_ind ='N'
+                                               THEN tmp1.item
+                                            ELSE COALESCE(pb.item,tmp1.item)  
+                                            END  comp_item,                                             
+                                                        tmp1.ref_1, 
+                                                        tmp1.alloc_criteria,
+                                                        tmp1.loc,
+                                                        im.pack_ind,
+                                                        im.sellable_ind
+                                                   FROM alloc_itm_search_dtl tmp1
+                                            LEFT JOIN packitem_breakout pb                
+                                               ON tmp1.item =pb.pack_no,
+			        								  item_dtl im
+                                                  WHERE tmp1.item = im.item
+                                                    AND tmp1.alloc_no = %s /*I_alloc_id */
+                                                    AND tmp1.sel_ind = 'Y'             
+                                       )tmp1,
+                                                packitem_breakout pb
+                                          WHERE tmp1.comp_item =pb.item                            
+                                            AND EXISTS (SELECT 1 
+                                                          FROM alloc_itm_search_dtl tmp2
+                                                         WHERE tmp2.item = pb.pack_no   
+                                                           AND tmp2.alloc_no = tmp1.alloc_no
+                                                           AND tmp2.sel_ind= 'Y')
+                                  UNION
+                                          SELECT DISTINCT  tmp1.alloc_no,
+                                                 tmp1.item pack_no,
+                                                 tmp1.ref_1, 
+                                                 tmp1.alloc_criteria,
+                                                 tmp1.loc,
+                                                 tmp1.item item 
+                                            FROM alloc_itm_search_dtl tmp1,
+                                                 item_dtl im
+                                           WHERE tmp1.item = im.item
+                                             AND tmp1.alloc_no = %s /*I_alloc_id */
+                                             AND tmp1.sel_ind = 'Y' 
+                                             AND im.sellable_ind = 'Y' 
+                                             AND im.pack_ind ='Y') tmp1
+                                   WHERE tmp.alloc_no = tmp1.alloc_no
+                                     AND tmp.item = tmp1.item
+                                     AND tmp.ref_1 <> tmp1.ref_1 
+                                     AND tmp.alloc_criteria = tmp1.alloc_criteria
+                                     AND tmp.loc = tmp1.loc);"
+
+  Q_upd_err_21: "UPDATE alloc_itm_search_dtl tmp
+              SET err_ind = 'E',
+                  err_message = SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Multi ASN with same item/warehouse is not allowed.'),1,500)
+            WHERE tmp.alloc_no = %s /*I_alloc_id*/
+              AND tmp.alloc_criteria = 'A'
+              AND tmp.sel_ind = 'Y'
+              AND tmp.pack_ind= 'N'                  
+              AND EXISTS (SELECT 1
+                            FROM (SELECT DISTINCT  tmp1.alloc_no,
+                                         tmp1.item pack_no,
+                                         tmp1.ref_1, 
+                                         tmp1.alloc_criteria,
+                                         tmp1.loc,
+                                         CASE 
+                                            WHEN tmp1.sellable_ind = 'Y' 
+                                            THEN tmp1.item 
+                                            ELSE COALESCE(pb.item,tmp1.item)  
+                                        END item 
+                                   FROM (SELECT tmp1.alloc_no,
+                                                tmp1.sel_ind,
+                                                tmp1.item,  
+                                                CONCAT(tmp1.ref_1 , substr(tmp1.ref_2,instr(tmp1.ref_2,'/')+1,instr(substr(tmp1.ref_2,instr(tmp1.ref_2,'/')+1),'/')-1)) ref_1,   
+                                                tmp1.alloc_criteria,
+                                                tmp1.loc,
+                                                im.pack_ind,
+                                                im.sellable_ind
+                                           FROM alloc_itm_search_dtl tmp1,
+                                                item_dtl im
+                                          WHERE tmp1.item = im.item
+                                            AND alloc_no = %s /*I_alloc_id*/
+                                            AND tmp1.sel_ind = 'Y' )tmp1
+                                        LEFT JOIN packitem_breakout pb
+                                  ON tmp1.item =pb.pack_no) tmp1
+                           WHERE tmp.alloc_no = tmp1.alloc_no
+                             AND tmp.item = tmp1.item
+                             AND CONCAT(tmp.ref_1, substr(tmp.ref_2,instr(tmp.ref_2,'/')+1,instr(substr(tmp.ref_2,instr(tmp.ref_2,'/')+1),'/')-1)) <> tmp1.ref_1                                
+                             AND tmp.alloc_criteria = tmp1.alloc_criteria
+                             AND tmp.loc = tmp1.loc);"
+
+  Q_upd_err_22: "UPDATE alloc_itm_search_dtl tmp
+              SET err_ind = 'E',
+                  err_message = SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Multi ASN with same item/warehouse is not allowed.'),1,500)
+            WHERE tmp.alloc_no = %s /*I_alloc_id*/
+              AND tmp.alloc_criteria = 'A'
+              AND tmp.sel_ind = 'Y'
+              AND tmp.pack_ind= 'Y'                  
+              AND EXISTS (SELECT 1
+                            FROM (SELECT DISTINCT  tmp1.alloc_no,
+                                         tmp1.item pack_no,
+                                         tmp1.ref_1, 
+                               tmp1.asn,      
+                                         tmp1.alloc_criteria,
+                                         tmp1.loc,
+                               pb.pack_no item                              
+                                   FROM (SELECT DISTINCT tmp1.alloc_no,
+                                                tmp1.sel_ind,
+                                                tmp1.item,
+                                                CASE 
+                                    WHEN im.sellable_ind = 'Y' AND im.pack_ind ='Y'
+                                       THEN tmp1.item 
+                                    WHEN  im.pack_ind ='N'
+                                       THEN tmp1.item
+                                    ELSE COALESCE(pb.item,tmp1.item)  
+                                    END  comp_item,                                             
+                                                tmp1.ref_1, 
+                                    substr(tmp1.ref_2,instr(tmp1.ref_2,'/')+1,instr(substr(tmp1.ref_2,instr(tmp1.ref_2,'/')+1),'/')-1) asn,  
+                                                tmp1.alloc_criteria,
+                                                tmp1.loc,
+                                                im.pack_ind,
+                                                im.sellable_ind
+                                           FROM alloc_itm_search_dtl tmp1
+                                    LEFT JOIN packitem_breakout pb
+                                    ON tmp1.item =pb.pack_no,
+									   item_dtl im
+										 WHERE tmp1.item = im.item
+                                            AND tmp1.alloc_no = %s /*I_alloc_id*/
+                                            AND tmp1.sel_ind = 'Y'                 
+                               )tmp1,
+                                        packitem_breakout pb
+                                  WHERE tmp1.comp_item =pb.item                                 
+                                    AND EXISTS (SELECT 1 
+                                                  FROM alloc_itm_search_dtl tmp2
+                                                 WHERE tmp2.item = pb.pack_no   
+                                                   AND tmp2.alloc_no = tmp1.alloc_no
+                                                   AND tmp2.sel_ind= 'Y')
+                          UNION
+                                  SELECT DISTINCT  tmp1.alloc_no,
+                                         tmp1.item pack_no,
+                                         tmp1.ref_1, 
+                               substr(tmp1.ref_2,instr(tmp1.ref_2,'/')+1,instr(substr(tmp1.ref_2,instr(tmp1.ref_2,'/')+1),'/')-1) asn,  
+                                         tmp1.alloc_criteria,
+                                         tmp1.loc,
+                                         tmp1.item item 
+                                    FROM alloc_itm_search_dtl tmp1,
+                                         item_dtl im
+                                   WHERE tmp1.item = im.item
+                                     AND tmp1.alloc_no = %s /*I_alloc_id*/
+                                     AND tmp1.sel_ind = 'Y' 
+                                     AND im.sellable_ind = 'Y' 
+                                     AND im.pack_ind ='Y') tmp1
+                           WHERE tmp.alloc_no = tmp1.alloc_no
+                             AND tmp.item = tmp1.item
+                      AND NOT (tmp.ref_1 = tmp1.ref_1 AND substr(tmp.ref_2,instr(tmp.ref_2,'/')+1,instr(substr(tmp.ref_2,instr(tmp.ref_2,'/')+1),'/')-1) = tmp1.asn)  
+                             AND tmp.alloc_criteria = tmp1.alloc_criteria
+                             AND tmp.loc = tmp1.loc);"
+
+  Q_upd_err_23: "UPDATE alloc_itm_search_dtl tmp
+						  SET err_ind = 'E',
+							  err_message = SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Multi DCs with same item is not allowed'),1,500)
+						WHERE tmp.alloc_no = %s /*I_alloc_id*/
+						  AND tmp.sel_ind = 'Y'
+						  AND tmp.pack_ind= 'N'
+						  AND EXISTS (SELECT 1
+										FROM (SELECT DISTINCT  tmp1.alloc_no,
+													 tmp1.item pack_no,
+													 tmp1.loc,
+													 CASE
+														WHEN tmp1.sellable_ind = 'Y'
+														THEN tmp1.item
+														ELSE COALESCE(pb.item,tmp1.item)  
+													 END item
+											    FROM (SELECT tmp1.alloc_no,
+															 tmp1.sel_ind,
+															 tmp1.item,
+															 tmp1.loc,
+															 im.pack_ind,
+															 im.sellable_ind
+													    FROM alloc_itm_search_dtl tmp1,
+															 item_dtl im
+													   WHERE tmp1.item = im.item
+														 AND alloc_no = %s /*I_alloc_id*/
+														 AND tmp1.sel_ind = 'Y'
+														 AND EXISTS(SELECT 1 from code_detail cd where cd.code=tmp1.loc and cd.code_type = 'STDC' ))tmp1
+													LEFT JOIN packitem_breakout pb
+											   ON tmp1.item =pb.pack_no) tmp1
+									   WHERE tmp.alloc_no = tmp1.alloc_no
+										 AND tmp.item = tmp1.item
+										 AND tmp.loc <> tmp1.loc);"
+
+  Q_upd_err_24: "UPDATE alloc_itm_search_dtl tmp
+						  SET err_ind = 'E',
+							  err_message = SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Multi DCs with same item is not allowed'),1,500)
+						    WHERE tmp.alloc_no = %s /*I_alloc_id*/
+						    AND tmp.sel_ind = 'Y'
+						    AND tmp.pack_ind= 'Y'  
+						    AND EXISTS (SELECT 1
+										FROM (SELECT DISTINCT  tmp1.alloc_no,
+													 tmp1.item pack_no,
+													 tmp1.loc,
+													 pb.pack_no item                            
+											    FROM (SELECT DISTINCT tmp1.alloc_no,
+															 tmp1.sel_ind,
+															 tmp1.item,
+															 CASE
+												                WHEN im.sellable_ind = 'Y' AND im.pack_ind ='Y'
+												                THEN tmp1.item
+												                WHEN  im.pack_ind ='N'
+												                 THEN tmp1.item
+												                 ELSE COALESCE(pb.item,tmp1.item)  
+												             END  comp_item,         
+															 tmp1.loc,
+															 im.pack_ind,
+															 im.sellable_ind
+													    FROM alloc_itm_search_dtl tmp1
+															LEFT JOIN packitem_breakout pb               
+															 ON tmp1.item =pb.pack_no,
+															 item_dtl im
+													   WHERE tmp1.item = im.item
+														 AND tmp1.alloc_no = %s /*I_alloc_id*/
+														 AND tmp1.sel_ind = 'Y'            
+														 AND EXISTS(SELECT 1 from code_detail cd where cd.code=tmp1.loc and cd.code_type = 'STDC' ))tmp1,
+													 packitem_breakout pb
+											   WHERE tmp1.comp_item =pb.item                  
+												 AND EXISTS (SELECT 1
+															   FROM alloc_itm_search_dtl tmp2
+															  WHERE tmp2.item = pb.pack_no 
+															    AND tmp2.alloc_no = tmp1.alloc_no
+															    AND tmp2.sel_ind= 'Y')
+												 AND EXISTS(SELECT 1 from code_detail cd where cd.code=tmp1.loc and cd.code_type = 'STDC' )
+									          UNION
+											  SELECT DISTINCT tmp1.alloc_no,
+													 tmp1.item pack_no,
+													 tmp1.loc,
+													 tmp1.item item
+												FROM alloc_itm_search_dtl tmp1,
+													 item_dtl im
+											   WHERE tmp1.item = im.item
+												 AND tmp1.alloc_no = %s /*I_alloc_id*/
+												 AND tmp1.sel_ind = 'Y'
+												 AND im.sellable_ind = 'Y'
+												 AND im.pack_ind ='Y'
+												 AND EXISTS(SELECT 1 from code_detail cd where cd.code=tmp1.loc and cd.code_type = 'STDC' )) tmp1
+									   WHERE tmp.alloc_no = tmp1.alloc_no
+										 AND tmp.item = tmp1.item
+										 AND tmp.loc <> tmp1.loc);"
+
+  Q_upd_err_25: "UPDATE alloc_itm_search_dtl tmp
+                    SET err_ind = 'E',
+                        err_message = CASE WHEN %s ='T' THEN SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Multi PO with same item/warehouse is not allowed.'),1,500) 
+                                                     ELSE SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Multi PO with same item/diff/warehouse is not allowed.'),1,500) END
+                    WHERE     tmp.alloc_no = %s /*I_alloc_id*/
+                    AND tmp.alloc_criteria = 'P'
+                    AND tmp.sel_ind = 'Y'
+                    AND EXISTS
+                          (SELECT 1 from (SELECT 1
+                             FROM alloc_itm_search_dtl tmp1
+                            WHERE     tmp.alloc_no = tmp1.alloc_no
+                                  AND tmp.sel_ind = tmp1.sel_ind
+                                  AND tmp.item = tmp1.item                   
+                                  AND COALESCE(tmp.diff_id,'$') = COALESCE(tmp1.diff_id,'$')   
+                                  AND tmp.ref_1 <> tmp1.ref_1
+                                  AND tmp.alloc_criteria = tmp1.alloc_criteria
+                                  AND tmp.loc = tmp1.loc)x);"
+
+  Q_upd_err_26: "UPDATE alloc_itm_search_dtl tmp
+                    SET err_ind = 'E',
+                        err_message = CASE WHEN %s='T' THEN SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Multi Transfer with same item/warehouse is not allowed.'),1,500)
+                                                ELSE        SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Multi Transfer with same item/diff/warehouse is not allowed.'),1,500) END
+                    WHERE     tmp.alloc_no = %s /*I_alloc_id*/
+                    AND tmp.alloc_criteria = 'T'
+                    AND tmp.sel_ind = 'Y'
+                    AND EXISTS  (Select 1 from (SELECT 1
+                             FROM alloc_itm_search_dtl tmp1
+                            WHERE     tmp.alloc_no = tmp1.alloc_no
+                                  AND tmp.sel_ind = tmp1.sel_ind
+                                  AND tmp.item = tmp1.item                 
+                                  AND COALESCE(tmp.diff_id,'$') = COALESCE(tmp1.diff_id,'$')                            
+                                  AND tmp.ref_1 <> tmp1.ref_1 
+                                  AND tmp.alloc_criteria = tmp1.alloc_criteria
+                                  AND tmp.loc = tmp1.loc)x);"
+
+  Q_upd_err_27: "UPDATE alloc_itm_search_dtl tmp
+                    SET err_ind = 'E',
+                        err_message = CASE WHEN %s='T' THEN SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Multi ASN with same item/warehouse is not allowed.'),1,500)
+                                                   ELSE     SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Multi ASN with same item/diff/warehouse is not allowed.'),1,500) END
+                    WHERE     tmp.alloc_no = %s /*I_alloc_id*/
+                    AND tmp.alloc_criteria = 'A'
+                    AND tmp.sel_ind = 'Y'
+                    AND EXISTS  (Select 1 from (SELECT 1
+                             FROM alloc_itm_search_dtl tmp1
+                            WHERE     tmp.alloc_no = tmp1.alloc_no
+                                  AND tmp.sel_ind = tmp1.sel_ind
+                                  AND tmp.item = tmp1.item
+                                  AND COALESCE(tmp.diff_id,'$') = COALESCE(tmp1.diff_id,'$')   
+                                  AND tmp.rowid<> tmp1.rowid 
+                                  AND tmp.alloc_criteria = tmp1.alloc_criteria
+                                  AND tmp.loc = tmp1.loc)x);"
+
+  Q_upd_err_28: "UPDATE alloc_itm_search_dtl tmp
+                    SET err_ind = 'E',
+                     err_message = CASE WHEN %s='T' THEN SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Multi DCs with same item is not allowed'),1,500)
+                                                      ELSE SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Multi DCs with same item/diff is not allowed'),1,500)END
+                    WHERE tmp.alloc_no = %s /*I_alloc_id*/
+                    AND tmp.sel_ind = 'Y'
+                    AND EXISTS(select 1 from (SELECT 1
+                               FROM alloc_itm_search_dtl tmp1
+                              WHERE tmp.alloc_no = tmp1.alloc_no
+                               AND tmp.sel_ind = tmp1.sel_ind
+                               AND tmp.item = tmp1.item
+                               AND COALESCE(tmp.diff_id,'$') = COALESCE(tmp1.diff_id,'$')   
+                               AND tmp.loc <> tmp1.loc
+                               AND EXISTS(SELECT 1 from code_detail cd where cd.code=tmp1.loc and cd.code_type = 'STDC' ))x);"
+
+  Q_upd_err_29: "UPDATE alloc_itm_search_dtl tmp
+                    SET err_ind = 'E',
+                        err_message = SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'Release date should not be prior to not before date.'),1,500)
+                    WHERE     alloc_no = %s /*I_alloc_id*/
+                    AND ref_1 IS NOT NULL
+                    AND alloc_criteria = 'P'
+                    AND sel_ind = 'Y'
+                    AND EXISTS
+                       (SELECT 1
+                          FROM po_dtl oh
+                         WHERE     oh.po_no = tmp.ref_1
+                               AND oh.not_before_date > %s /*L_release_date*/);"
+
+  Q_upd_err_30: "UPDATE alloc_itm_search_dtl tmp
+                    SET err_ind = 'E',
+                        tmp.err_message = SUBSTR(CONCAT(COALESCE(tmp.err_message,''), CONCAT('Transfer Allocation cannot be approved as system date is not Transfer Approval Date +', %s,' Day(s).')), 1, 500) /*L_days*/
+                    WHERE     tmp.alloc_no = %s /*I_alloc_id*/    
+                    AND tmp.alloc_criteria = 'T'
+                    AND tmp.sel_ind = 'Y'
+                    AND EXISTS  ( SELECT 1
+                              from tsf_dtl th
+                              where th.tsf_id=tmp.ref_1
+                               AND (th.status = 'I' OR th.approval_datetime is null OR (Select SYSTEM_DATE from calendar_variables) > th.approval_datetime + %s /*L_days*/));"
+
+  Q_upd_err_31: "UPDATE   alloc_itm_search_dtl tmp
+                    SET tmp.err_ind='E', 
+                        tmp.err_message = SUBSTR(CONCAT(COALESCE(tmp.err_message,''), 'ASN should not be received.'), 1,500)
+                    WHERE      tmp.alloc_no = %s /*I_alloc_id*/    
+                    AND tmp.alloc_criteria = 'A'           
+                    AND tmp.sel_ind = 'Y'            
+                    AND NOT  EXISTS ( SELECT  1 FROM ship_dtl sh,po_dtl oh 
+                                WHERE  sh.asn_id=substr(tmp.ref_2,instr(tmp.ref_2,'/')+1,instr(substr(tmp.ref_2,instr(tmp.ref_2,'/')+1),'/')-1)
+                                AND sh.po_no=oh.po_no and oh.status='A' and sh.received_date is null ) 
+                                AND tmp.alloc_criteria = 'A'
+                                AND tmp.sel_ind = 'Y' AND tmp.alloc_no =%s /*I_alloc_id*/ ;"
+
+do_calculation:
+  Q_error_ind: "UPDATE alloc_itm_search_dtl
+                                           SET split_ind = CASE WHEN err_ind = 'E' THEN 'Y' ELSE 'N' END
+                                         WHERE alloc_no = %s;"
+
+  

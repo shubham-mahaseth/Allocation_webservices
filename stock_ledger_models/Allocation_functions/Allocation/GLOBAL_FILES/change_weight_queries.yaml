@@ -1,0 +1,133 @@
+#############################################################
+# Created By - Priyanshu/Krishna                            #                
+# File Name - calculate.yaml                                #
+# Purpose - contains all queries for change weight          #
+#############################################################
+seed_ly_eow:
+ Q_align_input: "SELECT CONCAT(%s,'-',%s,'-',%s) AS cal_date;"
+
+ Q_seed_eow: "SELECT DATEDIFF(%s,first_day) AS dd,
+                  calendar.month_454 AS mm,
+                  calendar.year_454 AS yyyy
+             FROM calendar
+            WHERE calendar.first_day =
+                                    (SELECT MAX(calendar.first_day)
+                                       FROM calendar
+                                      WHERE calendar.first_day <= %s);"
+ Q_out_wk_454: "SELECT TRUNCATE((%s/7),0)+1 AS wk_454;"
+
+ Q_out_dd_454: "SELECT DATEDIFF(%s,((%s-1)*7))+1 AS dd_454;"
+
+fetch_ly_eow:
+  Q_date_add: "SELECT (%s - 1) * 7 + %s - 1 AS date_add;"
+  Q_fetch_eow: "SELECT no_of_weeks,DATE_ADD(first_day , INTERVAL %s DAY) AS cal_date FROM calendar WHERE year_454 = %s AND month_454 = %s;"
+  #Q_format_output: "SELECT DATE_FORMAT(%s,'%d') AS dd,
+  #                     DATE_FORMAT(%s,'%m') AS mm,
+  #                     DATE_FORMAT(%s,'%Y') AS yyyy;"
+
+change_weight:
+  Q_fetch_rule: "SELECT weeks_this_year,
+                        weeks_last_year,
+                        start_date1,
+                        start_date2,
+                        end_date1,
+                        end_date2,
+                        rule_type
+                   FROM alloc_rule
+                  WHERE alloc_no = %s;"
+
+  Q_sel_weight: "SELECT weight FROM alloc_rules_weight_temp WHERE alloc_no = %s;"
+
+  Q_del_rule_date: "DELETE FROM alloc_rule_date
+                         WHERE alloc_no = %s;"
+  
+  Q_ins_rule_date: "INSERT IGNORE INTO alloc_rule_date (alloc_no,
+                                                 week_end,
+                                                 ty_ly_ind,
+                                                 week_index,
+                                                 weight)
+                           VALUES (%s
+                                   ,%s
+                                   ,%s
+                                   ,%s
+                                   ,coalesce(%s,1));"
+
+  Q_date_loop_range: "SELECT TRUNCATE(COALESCE(((DATEDIFF(end_date1 , start_date1)/7)+1),-1),0) AS date1,
+                        TRUNCATE(COALESCE(((DATEDIFF(end_date2 , start_date2)/7)+1),-1),0) AS date2
+                   FROM alloc_rule
+                   WHERE alloc_no = %s;"
+  
+  Q_fetch_ty_eow: "SELECT last_eow_date
+                    FROM calendar_variables;"
+  
+  Q_chk_ly_ty_ind: "SELECT CASE WHEN   weeks_this_year IS NOT NULL
+                                   OR weeks_last_year IS NOT NULL
+                               THEN 'Y'
+                               ELSE 'N'
+                           END ty_ly_ind
+                     FROM alloc_rule
+                    WHERE alloc_no = %s;"
+  
+  Q_fetch_cur_date: "SELECT DATE_ADD((SELECT SYSTEM_DATE FROM calendar_variables),INTERVAL -12 month) last_year;"
+
+  #Q_format_output: "SELECT DATE_FORMAT(%s,'%d') AS dd,
+  #                         DATE_FORMAT(%s,'%m') AS mm,
+  #                         DATE_FORMAT(%s,'%Y') AS yyyy;"
+
+  Q_ly_eow: "SELECT CONCAT(%s,'-',%s,'-',%s) AS ly_eow;"
+pop_need_dates:
+  Q_fetch_rule: "SELECT weight
+                  FROM alloc_rule_date
+                 WHERE alloc_no=%s;"
+
+  Q_del_calc_date: "DELETE FROM alloc_calc_need_dates
+                     WHERE alloc_no = %s;"
+
+  Q_ins_need_date: "INSERT INTO alloc_calc_need_dates (alloc_no
+                                                       ,rule_many_to_one_id
+                                                       ,eow_date
+                                                       ,weight
+                                                       ,create_id
+                                                       ,create_datetime
+                                                       ,last_update_id
+                                                       ,last_update_datetime)
+                      SELECT r.alloc_no,
+                             -1 rule_many_to_one_id,
+                             r.week_end,
+                             r.weight,
+                             USER()        create_id,
+                             (SELECT SYSTEM_DATE FROM calendar_variables)     create_datetime,
+                             USER()        last_update_id,
+                             timestamp(curdate())     last_update_datetime
+                        FROM alloc_rule_date r
+                       WHERE r.alloc_no = %s;"
+
+
+retrieve_rule_dates_weight:
+  Q_del: " DELETE FROM alloc_rules_weight_temp tmp WHERE alloc_no = %s"
+
+  Q_ins: "INSERT INTO alloc_rules_weight_temp (alloc_no, eow_date, weight) 
+                           SELECT alloc_no, week_end AS eow_date, weight  
+                             FROM alloc_rule_date ar 
+                            WHERE alloc_no = %s "
+
+  Q_fetch: "SELECT ALLOC_NO,
+                   EOW_DATE,
+                   WEIGHT*100 as WEIGHT 
+              FROM alloc_rules_weight_temp 
+             WHERE alloc_no =%s;"
+
+load_rule_dates_weight:
+  L_merge_1: "WITH src AS 
+                       (SELECT gtt.alloc_no,
+                               gtt.eow_date,
+                               gtt.weight 
+                          FROM alloc_rules_weight_temp gtt 
+                         WHERE  gtt.alloc_no = %s) 
+             UPDATE alloc_rule_date tgt,src 
+                SET tgt.weight = src.weight 
+              WHERE COALESCE(tgt.weight, 99999) != COALESCE(src.weight, 99999) 
+                AND tgt.alloc_no = src.alloc_no  
+                AND tgt.week_end= src.eow_date;"
+
+  C_get_rule_rec: "select 1 from alloc_rule_date where alloc_no=%s;"

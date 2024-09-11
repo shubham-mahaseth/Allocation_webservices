@@ -1,0 +1,1349 @@
+#############################################################
+#Created By - Proxima360                             #                
+#File Name  - setup_qty_limits_queries.yaml                 #
+#Purpose    - All queries for quantity limits functions     #
+#############################################################
+
+retreive_quantity_limits:
+  C_temp_tbl: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_quantity_limits_temp(ALLOC_NO                 NUMERIC(15),    
+                                                                               LOCATION_ID              VARCHAR(40),  
+                                                                               LOCATION_DESC            VARCHAR(150), 
+                                                                               LOCATION_GROUP_ID        VARCHAR(40),  
+                                                                               LOCATION_GROUP_DESC      VARCHAR(150), 
+                                                                               LOCATION_GROUP_TYPE      VARCHAR(1),   
+                                                                               HIER1                    VARCHAR(40),  
+                                                                               HIER2                    VARCHAR(40),  
+                                                                               HIER3                    VARCHAR(40),  
+                                                                               ITEM_ID                  VARCHAR(60),  
+                                                                               ITEM_DESC                VARCHAR(250), 
+                                                                               DIFF_ID                  VARCHAR(60),  
+                                                                               SIZE_COUNT               NUMERIC(12),   
+                                                                               MIN                      NUMERIC(12),  
+                                                                               MAX                      NUMERIC(12),  
+                                                                               TRESHOLD                 NUMERIC(12),  
+                                                                               TREND                    NUMERIC(12),  
+                                                                               WOS                      NUMERIC(12),  
+                                                                               MIN_NEED                 NUMERIC(12),   
+                                                                               SOM_QTY                  NUMERIC(12),
+                                                                               PACK_IND                 VARCHAR(1),   
+                                                                               ASSIGN_DEFAULT_WH        NUMERIC(10),
+                                                                               PRIMARY KEY(ALLOC_NO,LOCATION_ID,ITEM_ID,DIFF_ID));"
+  C_temp_tbl2: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_quantity_limits_temp2(ALLOC_NO                 NUMERIC(15),    
+                                                                               LOCATION_ID              VARCHAR(40),  
+                                                                               LOCATION_DESC            VARCHAR(150), 
+                                                                               LOCATION_GROUP_ID        VARCHAR(40),  
+                                                                               LOCATION_GROUP_DESC      VARCHAR(150), 
+                                                                               LOCATION_GROUP_TYPE      VARCHAR(1),   
+                                                                               HIER1                    VARCHAR(40),  
+                                                                               HIER2                    VARCHAR(40),  
+                                                                               HIER3                    VARCHAR(40),  
+                                                                               ITEM_ID                  VARCHAR(60),  
+                                                                               ITEM_DESC                VARCHAR(250), 
+                                                                               DIFF_ID                  VARCHAR(60),  
+                                                                               SIZE_COUNT               NUMERIC(12),   
+                                                                               MIN                      NUMERIC(12),  
+                                                                               MAX                      NUMERIC(12),  
+                                                                               TRESHOLD                 NUMERIC(12),  
+                                                                               TREND                    NUMERIC(12),  
+                                                                               WOS                      NUMERIC(12),  
+                                                                               MIN_NEED                 NUMERIC(12),   
+                                                                               SOM_QTY                  NUMERIC(12),
+                                                                               PACK_IND                 VARCHAR(1),   
+                                                                               ASSIGN_DEFAULT_WH        NUMERIC(10),
+                                                                               PRIMARY KEY(ALLOC_NO,LOCATION_ID,ITEM_ID,DIFF_ID));"
+
+  #C_drop_tbl: "DROP TABLE alloc_quantity_limits_temp;" #For testing purposes
+  
+  C_alloc_level:  "SELECT COALESCE(MAX(alloc_level),'$') alloc_level
+                     FROM alloc_head
+                    WHERE alloc_no = %s;"
+  
+  C_alloc_criteria: "SELECT COALESCE(MAX(alloc_criteria),'$') alloc_criteria
+                        FROM alloc_itm_search_dtl
+                       WHERE alloc_no = %s;"  
+  
+  L_del_1:  "DELETE t1 FROM alloc_quantity_limits t1
+              INNER JOIN alloc_quantity_limits t2 
+              WHERE t1.alloc_no = %s
+                AND t1.quantity_limits_id > t2.quantity_limits_id 
+                AND t1.alloc_no = t2.alloc_no
+                AND t1.location_id = t2.location_id
+                AND t1.item_id = t2.item_id;"                               
+                          
+  L_del_2: "DELETE FROM alloc_quantity_limits gtt
+              WHERE alloc_no = %s
+                AND (alloc_no, location_id)  NOT IN (SELECT lg.alloc_no, 
+                                                           lc.location_id
+                                                      FROM alloc_location lc,
+                                                           alloc_loc_group_detail lg
+                                                     WHERE lg.alloc_no = %s
+                                                       AND lg.loc_group_id = lc.loc_group_id);"
+
+  #Change by Shubham Start#  
+  # L_del_3: "WITH tbl1 AS 
+              # (SELECT alloc_no,
+                      # item_id,
+                      # location_id
+                 # FROM alloc_quantity_limits
+                # WHERE alloc_no = %s),
+              
+              # tbl2 AS 
+              # (SELECT tmp.alloc_no,
+                      # tmp.tran_item   item_id,
+                      # tmp.to_loc    location_id
+                 # FROM alloc_calc_allitemloc tmp
+                # WHERE alloc_no = %s
+                  # AND coalesce(item_type,'$') <> 'NSFSP'
+                # UNION 
+               # SELECT tmp.alloc_no,
+                      # tmp.tran_item   item_id,
+                      # tmp.to_loc    location_id
+                 # FROM alloc_calc_allitemloc tmp
+                # WHERE tmp.alloc_no = %s
+                  # AND tmp.item_type = 'NSFSP')
+                  
+              # DELETE FROM alloc_quantity_limits gtt
+               # WHERE alloc_no = %s
+                 # AND (alloc_no, item_id, location_id) NOT IN (SELECT tbl2.alloc_no, 
+                                                                     # tbl2.item_id, 
+                                                                     # tbl2.location_id FROM tbl2
+                                                            # LEFT JOIN tbl1
+                                                              # ON (    tbl1.alloc_no     = tbl2.alloc_no
+                                                                  # AND tbl1.item_id      = tbl2.item_id
+                                                                  # AND tbl1.location_id  = tbl2.location_id));"
+                                                                  
+  L_del_3: "WITH src AS (SELECT quantity_limits_id,alloc_no
+                             FROM alloc_quantity_limits gtt
+                            WHERE alloc_no = %s
+                              AND (alloc_no, item_id, location_id) IN
+                                  (SELECT alloc_no,
+                                          item_id,
+                                          location_id
+                                     FROM alloc_quantity_limits ql
+                                    WHERE alloc_no = %s
+                                      AND NOT EXISTS (SELECT tmp.alloc_no,
+                                                             tmp.tran_item           item_id,
+                                                             tmp.to_loc    location_id
+                                                        FROM (SELECT tmp.alloc_no,
+                                                                     coalesce(pi.item,tmp.tran_item) tran_item,
+                                                                     tmp.to_loc
+                                                                FROM alloc_calc_allitemloc tmp,
+                                                                     packitem pi
+                                                               WHERE tmp.alloc_no = %s
+                                                                 AND pi.pack_no = tmp.source_item
+                                                                 AND tmp.item_type = 'NSFSP'
+                                                               UNION
+                                                              SELECT alloc_no,
+                                                                     tran_item,
+                                                                     to_loc
+                                                                FROM alloc_calc_allitemloc
+                                                               WHERE alloc_no = %s
+                                                                 AND coalesce(item_type,'$') <> 'NSFSP') tmp
+                                                       WHERE tmp.alloc_no = %s
+                                                         AND tmp.alloc_no = ql.alloc_no
+                                                         AND tmp.tran_item = ql.item_id
+                                                         AND tmp.to_loc = ql.location_id)))
+                DELETE FROM alloc_quantity_limits ql
+                      WHERE EXISTS (select 1 
+                                    FROM src 
+                                     WHERE ql.alloc_no = src.alloc_no
+                                       AND ql.quantity_limits_id = src.quantity_limits_id);"                                                                  
+  #Change by Shubham End#  
+  Q_del_tmp: "DELETE FROM alloc_quantity_limits_temp WHERE alloc_no = %s;"
+
+  L_ins_1: "INSERT IGNORE INTO alloc_quantity_limits (alloc_no,
+                                                      location_id,
+                                                      location_desc,
+                                                      hier1,
+                                                      hier2,
+                                                      hier3,
+                                                      item_id,
+                                                      min,
+                                                      max,
+                                                      treshold,
+                                                      trend,
+                                                      wos,
+                                                      min_need,
+                                                      som_qty,
+                                                      diff_id) /*Changes by Shubham*/
+                      WITH tbl1 AS 
+                      (SELECT tmp.alloc_no,
+                              tmp.to_loc location_id,
+                              (SELECT st.store_desc
+                                  FROM store st
+                                  WHERE st.store = tmp.to_loc) location_desc,
+                              hier1,
+                              hier2,
+                              hier3,
+                              tmp.tran_item item_id,
+                              NULL    min,
+                              NULL    max,
+                              NULL    treshold,
+                              NULL    trend,
+                              NULL    wos,
+                              NULL    min_need,
+                              tmp.som_qty som_qty,
+                              /*Changes by Shubham Start*/
+                              COALESCE (source_diff1_id,
+                                        source_diff2_id,
+                                        source_diff3_id,
+                                        source_diff4_id)diff_id
+                             /*Changes by Shubham End*/           
+                         FROM alloc_calc_allitemloc tmp
+                        WHERE tmp.alloc_no = %s),
+                      
+                      tbl2 AS 
+                      (SELECT alloc_no,
+                              location_id,
+                              location_desc,
+                              hier1,
+                              hier2,
+                              hier3,
+                              item_id,
+                              min,
+                              max,
+                              treshold,
+                              trend,
+                              wos,
+                              min_need
+                         FROM alloc_quantity_limits
+                        WHERE alloc_no = %s)
+                      
+                      SELECT DISTINCT src.alloc_no,
+                             src.location_id,
+                             src.location_desc,
+                             src.hier1,
+                             src.hier2,
+                             src.hier3,
+                             src.item_id,
+                             src.min,
+                             src.max,
+                             src.treshold,
+                             src.trend,
+                             src.wos,
+                             src.min_need,
+                             src.som_qty,
+                             src.diff_id    /*Changes by shubham*/
+                        FROM (SELECT tbl1.alloc_no,
+                                     tbl1.location_id,
+                                     tbl1.location_desc,
+                                     tbl1.hier1,
+                                     tbl1.hier2,
+                                     tbl1.hier3,
+                                     tbl1.item_id,
+                                     COALESCE(tbl2.min,tbl1.min) min,
+                                     COALESCE(tbl2.max,tbl1.max) max,
+                                     COALESCE(tbl2.treshold,tbl1.treshold) treshold,
+                                     COALESCE(tbl2.trend,tbl1.trend) trend,
+                                     COALESCE(tbl2.wos,tbl1.wos) wos,
+                                     COALESCE(tbl2.min_need,tbl1.min_need) min_need,
+                                     COALESCE(tbl1.som_qty,1) som_qty,
+                                     tbl1.diff_id  /*Changes by shubham*/
+                                FROM tbl1
+                                LEFT JOIN tbl2 
+                                ON (    tbl1.alloc_no = tbl2.alloc_no
+                                    AND tbl1.item_id = tbl2.item_id
+                                    AND tbl1.location_id = tbl2.location_id)) src;"  
+
+  #Change by Shubham Start# 
+  
+  # L_ins_2: "INSERT IGNORE INTO alloc_quantity_limits (alloc_no,
+                                                      # location_id,
+                                                      # location_desc,
+                                                      # hier1,
+                                                      # hier2,
+                                                      # hier3,
+                                                      # item_id,
+                                                      # min,
+                                                      # max,
+                                                      # treshold,
+                                                      # trend,
+                                                      # wos,
+                                                      # min_need,
+                                                      # som_qty,
+                                                      # diff_id)   /*Changes by shubham*/
+                      # WITH tbl1 AS
+                      # (SELECT tmp.alloc_no,
+                              # tmp.to_loc location_id,
+                              # (SELECT st.store_desc
+                                  # FROM store st
+                                  # WHERE st.store = tmp.to_loc) location_desc,
+                              # hier1,
+                              # hier2,
+                              # hier3,
+                              # tmp.tran_item item_id,
+                              # NULL    min,
+                              # NULL    max,
+                              # NULL    treshold,
+                              # NULL    trend,
+                              # NULL    wos,
+                              # NULL    min_need,
+                              # tmp.som_qty som_qty,
+                              # /*Changes by shubham Starts*/
+                              # COALESCE (source_diff1_id,
+                                        # source_diff2_id,
+                                        # source_diff3_id,
+                                        # source_diff4_id)diff_id
+                              # /*Changes by shubham End*/
+                         # FROM alloc_calc_allitemloc tmp,
+                              # item_location iloc
+                        # WHERE tmp.alloc_no = %s
+                          # AND tmp.item_type = 'NSFSP'
+                          # AND tmp.to_loc = iloc.location
+                          # AND ((coalesce(%s,'W') = 'F' and iloc.status = 'A')
+                           # OR (coalesce(%s,'W') <> 'F' and iloc.status IN ('A', 'C')))),
+                      
+                      # tbl2 AS
+                      # (SELECT alloc_no,
+                              # location_id,
+                              # location_desc,
+                              # hier1,
+                              # hier2,
+                              # hier3,
+                              # item_id,
+                              # min,
+                              # max,
+                              # treshold,
+                              # trend,
+                              # wos,
+                              # min_need
+                         # FROM alloc_quantity_limits
+                        # WHERE alloc_no = %s)	
+                      
+                      # SELECT DISTINCT src.alloc_no,
+                             # src.location_id,
+                             # src.location_desc,
+                             # src.hier1,
+                             # src.hier2,
+                             # src.hier3,
+                             # src.item_id,
+                             # src.min,
+                             # src.max,
+                             # src.treshold,
+                             # src.trend,
+                             # src.wos,
+                             # src.min_need,
+                             # src.som_qty,
+                             # src.diff_id    /*Changes by Shubham*/
+                      # FROM (SELECT tbl1.alloc_no,
+                                   # tbl1.location_id,
+                                   # tbl1.location_desc,
+                                   # tbl1.hier1,
+                                   # tbl1.hier2,
+                                   # tbl1.hier3,
+                                   # tbl1.item_id,
+                                   # COALESCE(tbl2.min,tbl1.min) min,
+                                   # COALESCE(tbl2.max,tbl1.max) max,
+                                   # COALESCE(tbl2.treshold,tbl1.treshold) treshold,
+                                   # COALESCE(tbl2.trend,tbl1.trend) trend,
+                                   # COALESCE(tbl2.wos,tbl1.wos) wos,
+                                   # COALESCE(tbl2.min_need,tbl1.min_need)  min_need,
+                                   # COALESCE(tbl1.som_qty,1) som_qty,
+                                   # tbl1.diff_id    /*Changes by Shubham*/
+                              # FROM tbl1
+                              # LEFT JOIN tbl2 
+                              # ON (    tbl1.alloc_no    = tbl2.alloc_no)
+                                  # AND tbl1.item_id     = tbl2.item_id
+                                  # AND tbl1.location_id = tbl2.location_id) src;" 
+
+  L_ins_2: "INSERT IGNORE INTO alloc_quantity_limits (alloc_no,
+                                                      location_id,
+                                                      location_desc,
+                                                      hier1,
+                                                      hier2,
+                                                      hier3,
+                                                      item_id,
+                                                      min,
+                                                      max,
+                                                      treshold,
+                                                      trend,
+                                                      wos,
+                                                      min_need,
+                                                      som_qty,
+                                                      diff_id) /*Changes by Shubham*/
+                 SELECT src.alloc_no,
+                        src.location_id,
+                        src.location_desc,
+                        src.dept,
+                        src.class,
+                        src.subclass,
+                        src.item_id,
+                        src.MIN,
+                        src.MAX,
+                        src.treshold,
+                        src.trend,
+                        src.wos,
+                        src.min_need,
+                        src.som_qty,
+                        src.diff_id
+                  FROM (SELECT tmp.alloc_no,
+                               tmp.to_loc           location_id,
+                               (SELECT st.store
+                                 FROM store st
+                                WHERE st.store = tmp.to_loc) location_desc,
+                               NULL    dept,
+                               NULL    class,
+                               NULL    subclass,
+                               pi.item item_id,
+                               NULL    MIN,
+                               NULL    MAX,
+                               NULL    treshold,
+                               NULL    trend,
+                               NULL    wos,
+                               NULL    min_need,
+                               tmp.som_qty,
+                               COALESCE (source_diff1_id,
+                                        source_diff2_id,
+                                        source_diff3_id,
+                                        source_diff4_id)diff_id
+                        FROM alloc_calc_allitemloc tmp,
+                             packitem pi,
+                             item_location iloc
+                       WHERE tmp.alloc_no = %s
+                         AND tmp.tran_item = pi.pack_no
+                         AND tmp.item_type = 'NSFSP'
+                         AND tmp.to_loc = iloc.location
+                         AND pi.item = iloc.item
+                         AND ((COALESCE(%s,'W') = 'F' and iloc.status = 'A')               
+                                    OR (COALESCE(%s,'W') <> 'F' and iloc.status IN ('A', 'C')))
+                        AND NOT EXISTS (
+                        SELECT 1
+                          FROM alloc_quantity_limits ql
+                         WHERE alloc_no = %s
+						   and ql.alloc_no = tmp.alloc_no 
+                           and ql.location_id = tmp.to_loc 
+                           and ql.item_id = pi.item)) src;"                                 
+
+  
+  # L_ins_3: "INSERT INTO alloc_quantity_limits_temp
+               # WITH dr AS
+              # (SELECT alloc_no,
+                      # source_item,
+                      # COALESCE (source_diff1_id,
+                                        # source_diff2_id,
+                                        # source_diff3_id,
+                                        # source_diff4_id) diff_id,
+                      # tran_item,
+                      # MAX(im.item_desc) item_desc,
+                      # to_loc,
+                      # MAX(to_loc_name) to_loc_name,
+                      # group_type,
+                      # CASE
+                          # WHEN tmp.group_type = '7' THEN NULL
+                          # ELSE tmp.group_id
+                      # END group_id,
+                      # MAX(
+                          # CASE
+                              # WHEN tmp.group_type = '7' THEN NULL
+                              # ELSE tmp.group_desc
+                          # END) group_desc,
+                      # MAX(CASE WHEN tmp.tran_item <> tmp.source_item THEN
+                               # (SELECT CASE
+                                           # WHEN im.store_ord_mult = 'I' THEN isc.inner_pack_size
+                                           # WHEN im.store_ord_mult = 'C' THEN isc.supp_pack_size
+                                           # ELSE 1
+                                        # END
+                               
+                                  # FROM item_dtl im,
+                                       # item_sups         isp,
+                                       # item_sup_location isc
+                                 # WHERE im.item = tmp.tran_item
+                                   # AND im.item = isp.item
+                                   # AND isp.primary_supp_ind = 'Y'
+                                   # AND isc.item = isp.item
+                                   # AND isc.supplier = isp.item_supp
+                                   # AND isc.primary_supp_ind = 'Y'
+                                   # AND isc.primary_country_ind = 'Y')
+                          # ELSE tmp.som_qty
+                          # END) som_qty,
+                      # MAX(im.pack_ind)   pack_ind,
+                      # tmp.assign_default_wh      
+                 # FROM 
+                     # (SELECT gtt.alloc_no,
+                             # gtt.source_item,
+                             # gtt.tran_item tran_item,
+                             # gtt.to_loc,
+                             # gtt.to_loc_name,
+                             # gtt.group_desc,
+                             # gtt.group_type,
+                             # gtt.group_id,
+                             # gtt.source_diff1_id,
+                             # gtt.source_diff2_id,
+                             # gtt.source_diff3_id,
+                             # gtt.source_diff4_id,
+                             # gtt.som_qty,
+                             # gtt.assign_default_wh             
+                        # FROM (SELECT temp.alloc_no,
+                                     # temp.source_item,
+                                     # temp.tran_item tran_item,
+                                     # temp.to_loc,
+                                     # temp.to_loc_name,
+                                     # temp.group_desc,
+                                     # temp.group_type,
+                                     # temp.group_id,
+                                     # temp.source_diff1_id,
+                                     # temp.source_diff2_id,
+                                     # temp.source_diff3_id,
+                                     # temp.source_diff4_id,
+                                     # temp.som_qty,
+                                     # temp.assign_default_wh,    
+                                     # temp.rnk,
+                                     # ROW_NUMBER() OVER(PARTITION BY tran_item,to_loc ORDER BY rnk DESC) rr
+                                # FROM (SELECT tmp.alloc_no,
+                                             # tmp.source_item,
+                                             # tmp.tran_item tran_item,
+                                             # tmp.to_loc,
+                                             # tmp.to_loc_name,
+                                             # tmp.group_desc,
+                                             # tmp.group_type,
+                                             # tmp.group_id,
+                                             # aaim.diff1 source_diff1_id,
+                                             # aaim.diff2 source_diff2_id,
+                                             # aaim.diff3 source_diff3_id,
+                                             # aaim.diff4 source_diff4_id,
+                                             # tmp.som_qty,
+                                             # tmp.assign_default_wh,            
+                                             # 1 rnk
+                                        # FROM alloc_calc_allitemloc tmp,
+                                             # item_dtl aaim
+                                       # WHERE tmp.alloc_no = %s
+                                         # AND tmp.source_item = aaim.item
+                                         # AND tmp.item_type = 'NSFSP'
+                                      # UNION
+                                      # SELECT alloc_no,
+                                             # source_item,
+                                             # tran_item,
+                                             # to_loc,
+                                             # to_loc_name,
+                                             # group_desc,
+                                             # group_type,
+                                             # group_id,
+                                             # source_diff1_id,
+                                             # source_diff2_id,
+                                             # source_diff3_id,
+                                             # source_diff4_id,
+                                             # som_qty,
+                                             # assign_default_wh,           
+                                             # 2 rnk
+                                       # FROM alloc_calc_allitemloc
+                                       # WHERE alloc_no = %s
+                                             # AND coalesce(item_type,'$') <> 'NSFSP')temp)gtt
+                       # WHERE rr = 1) tmp,
+                                     # item_dtl im
+                # WHERE tmp.alloc_no = %s
+                  # AND im.item = tmp.tran_item
+                # GROUP BY alloc_no,
+                         # source_item,
+                         # COALESCE(source_diff1_id,
+                                   # source_diff2_id,
+                                   # source_diff3_id,
+                                   # source_diff4_id),
+                         # tran_item,
+                         # to_loc,
+                         # group_type,
+                         # CASE
+                             # WHEN tmp.group_type = '7' THEN NULL
+                             # ELSE tmp.group_id
+                         # END,
+                         # assign_default_wh)
+            
+               # SELECT DISTINCT dr.alloc_no,
+                      # dr.to_loc,
+                      # MAX(dr.to_loc_name)     location_desc,
+                      # dr.GROUP_ID              location_group_id,
+                      # MAX(dr.group_desc)      location_group_desc,
+                      # MAX(dr.group_type)      location_group_type,
+                      # ql.hier1,
+                      # ql.hier2,
+                      # ql.hier3,
+                      # tran_item               item_id,
+                      # MAX(dr.item_desc)       item_desc,
+                      # dr.diff_id              diff_id,
+                      # COUNT(*)                size_count,
+                      # MAX(ql.min)             min,
+                      # MAX(ql.max)             max,
+                      # MAX(ql.treshold)        treshold,
+                      # MAX(ql.trend)           trend,
+                      # MAX(ql.wos)             wos,
+                      # MAX(ql.min_need)        min_need,
+                      # MAX(dr.som_qty)         som_qty,
+                      # MAX(dr.pack_ind)        pack_ind,                   
+                      # dr.assign_default_wh    assign_default_wh           
+                 # FROM dr,
+                      # alloc_quantity_limits ql
+                # WHERE ql.alloc_no    = dr.alloc_no
+                  # AND ql.item_id     = dr.tran_item                            
+                  # AND ql.location_id = dr.to_loc
+              # GROUP BY dr.alloc_no,
+                      # dr.to_loc,
+                      # dr.group_id,                   
+                      # dr.tran_item,                                 
+                      # dr.diff_id,
+                      # dr.assign_default_wh;"                            
+
+  L_ins_3: "INSERT INTO alloc_quantity_limits_temp (alloc_no,
+                                                    location_id,
+                                                    location_desc,
+                                                    location_group_id,
+                                                    location_group_desc,
+                                                    location_group_type,
+                                                    hier1,
+                                                    hier2,
+                                                    hier3,
+                                                    item_id,
+                                                    item_desc,
+                                                    diff_id,
+                                                    size_count,
+                                                    MIN,
+                                                    MAX,
+                                                    treshold,
+                                                    trend,
+                                                    wos,
+                                                    min_need,
+                                                    som_qty,
+                                                    pack_ind,         
+                                                    assign_default_wh)  
+                           WITH
+                                  dr
+                                  AS
+                                      (  SELECT alloc_no,
+                                                source_item,
+                                        COALESCE (source_diff1_id,
+                                                          source_diff2_id,
+                                                          source_diff3_id,
+                                                          source_diff4_id) diff_id,
+                                                tran_item,  
+                                                MAX(im.item_desc) item_desc,
+                                                to_loc,
+                                                MAX(to_loc_name)
+                                                    to_loc_name,
+                                                group_type,
+                                                CASE
+                                                    WHEN tmp.group_type = '7' THEN NULL
+                                                    ELSE tmp.GROUP_ID
+                                                END
+                                                    GROUP_ID,
+                                                MAX(
+                                                    CASE
+                                                        WHEN tmp.group_type = '7' THEN NULL
+                                                        ELSE tmp.group_desc
+                                                    END)
+                                                    group_desc,
+                                                MAX(CASE WHEN tmp.tran_item <> tmp.source_item 
+                                                 THEN 
+                                                 (SELECT CASE
+                                                       WHEN im.store_ord_mult = 'I'
+                                                       THEN
+                                                          isc.inner_pack_size
+                                                       WHEN im.store_ord_mult = 'C'
+                                                       THEN
+                                                          isc.supp_pack_size
+                                                       ELSE
+                                                          1
+                                                        END 
+                                                    
+                                                   FROM item_dtl im,
+                                                        item_sups         isp,
+                                                         item_sup_location     isc
+                                                   WHERE im.item = tmp.tran_item
+                                                     AND im.item = isp.item
+                                                       AND isp.primary_supp_ind = 'Y'
+                                                       AND isc.item = isp.item
+                                                       AND isc.supplier = isp.item_supp
+                                                       AND isc.primary_supp_ind = 'Y'
+                                                       AND isc.primary_country_ind = 'Y')
+                                                         ELSE
+                                                            tmp.som_qty
+                                                    END)som_qty,
+                                                MAX(im.pack_ind)   pack_ind,
+                                                tmp.assign_default_wh   
+                                          FROM 
+                                          (SELECT gtt.alloc_no,
+                                                  gtt.source_item,
+                                                  gtt.tran_item tran_item,
+                                                  gtt.to_loc,
+                                                  gtt.to_loc_name,
+                                                  gtt.group_desc,
+                                                  gtt.group_type,
+                                                  gtt.GROUP_ID,
+                                                  gtt.source_diff1_id,
+                                                  gtt.source_diff2_id,
+                                                  gtt.source_diff3_id,
+                                                  gtt.source_diff4_id,
+                                                  gtt.som_qty,
+                                                  gtt.assign_default_wh            
+                                            FROM (SELECT temp.alloc_no,
+                                                         temp.source_item,
+                                                         temp.tran_item tran_item,
+                                                         temp.to_loc,
+                                                         temp.to_loc_name,
+                                                         temp.group_desc,
+                                                         temp.group_type,
+                                                         temp.GROUP_ID,
+                                                         temp.source_diff1_id,
+                                                         temp.source_diff2_id,
+                                                         temp.source_diff3_id,
+                                                         temp.source_diff4_id,
+                                                         temp.som_qty,
+                                                         temp.assign_default_wh,     
+                                                         temp.rnk,
+                                                         ROW_NUMBER() OVER(PARTITION BY tran_item,to_loc ORDER BY rnk DESC) rr 
+                                                          FROM (SELECT tmp.alloc_no,
+                                                                       tmp.source_item,
+                                                                       pi.item tran_item,
+                                                                       tmp.to_loc,
+                                                                       tmp.to_loc_name,
+                                                                       tmp.group_desc,
+                                                                       tmp.group_type,
+                                                                       tmp.GROUP_ID,
+                                                                       CASE WHEN aaim.aggr_diff_id = aaim.diff1 THEN aaim.aggr_diff_id ELSE NULL END source_diff1_id,
+                                                                       CASE WHEN aaim.aggr_diff_id = aaim.diff2 THEN aaim.aggr_diff_id ELSE NULL END source_diff2_id,
+                                                                       CASE WHEN aaim.aggr_diff_id = aaim.diff3 THEN aaim.aggr_diff_id ELSE NULL END source_diff3_id,
+                                                                       CASE WHEN aaim.aggr_diff_id = aaim.diff4 THEN aaim.aggr_diff_id ELSE NULL END source_diff4_id,
+                                                                       tmp.som_qty,
+                                                                       tmp.assign_default_wh,           
+                                                                                 1 rnk
+                                                                  FROM alloc_calc_allitemloc tmp,
+                                                                       packitem pi,
+                                                                       item_dtl aaim
+                                                                 WHERE tmp.alloc_no = %s
+                                                                   AND pi.pack_no = tmp.source_item
+                                                                   AND tmp.item_type = 'NSFSP'
+                                                                   AND pi.item = aaim.item
+                                                                UNION
+                                                                SELECT alloc_no,
+                                                                       source_item,
+                                                                       tran_item,
+                                                                       to_loc,
+                                                                       to_loc_name,
+                                                                       group_desc,
+                                                                       group_type,
+                                                                       GROUP_ID,
+                                                                       source_diff1_id,
+                                                                       source_diff2_id,
+                                                                       source_diff3_id,
+                                                                       source_diff4_id,
+                                                                       som_qty,
+                                                                       assign_default_wh,            
+                                                                       2 rnk
+                                                                 FROM alloc_calc_allitemloc 
+                                                                 WHERE alloc_no = %s
+                                                                       AND COALESCE(item_type,'$') <> 'NSFSP')temp
+                                                )gtt 
+                                           WHERE rr = 1) tmp,         
+                                            item_dtl im
+                                           WHERE tmp.alloc_no = %s
+                                             AND im.item = tmp.tran_item
+                                        GROUP BY alloc_no,
+                                                 source_item,
+                                                 COALESCE (source_diff1_id,
+                                                           source_diff2_id,
+                                                           source_diff3_id,
+                                                           source_diff4_id),
+                                                 tran_item,  
+                                                 to_loc,
+                                                 group_type,
+                                                 CASE
+                                                     WHEN tmp.group_type = '7' THEN NULL
+                                                     ELSE tmp.GROUP_ID
+                                                 END,
+                                                 assign_default_wh)            
+                                 SELECT dr.alloc_no,
+                                        dr.to_loc,
+                                        MAX(dr.to_loc_name)     location_desc,
+                                        dr.GROUP_ID              location_group_id,
+                                        MAX(dr.group_desc)      location_group_desc,
+                                        MAX(dr.group_type)      location_group_type,
+                                        NULL,
+                                        NULL,
+                                        NULL,
+                                        tran_item          item_id,                         
+                                        MAX(dr.item_desc)       item_desc,
+                                        dr.diff_id               diff_id,
+                                        COUNT(1)                size_count,
+                                        MAX(ql.MIN)             MIN,
+                                        MAX(ql.MAX)             MAX,
+                                        MAX(ql.treshold)        treshold,
+                                        MAX(ql.trend)           trend,
+                                        MAX(ql.wos)             wos,
+                                        MAX(ql.min_need)        min_need,
+                                        MAX(dr.som_qty)         som_qty,
+                                        MAX(dr.pack_ind)        pack_ind,                        
+                                        dr.assign_default_wh     assign_default_wh                
+                                   FROM dr, 
+                                        alloc_quantity_limits ql
+                                  WHERE ql.alloc_no = dr.alloc_no
+                                    AND ql.item_id = dr.tran_item                             
+                                    AND ql.location_id = dr.to_loc
+                               GROUP BY dr.alloc_no,
+                                        dr.to_loc,
+                                        dr.group_id,
+                                        dr.tran_item,                                 
+                                        dr.diff_id,
+                                        dr.assign_default_wh;" 
+
+  #Change by Shubham End# 
+  
+  Q_get_qty_limit: "SELECT * FROM alloc_quantity_limits_temp WHERE alloc_no = %s;"
+  #Changes from shubham start#
+  Q_del_alloc_qty_limits: "DELETE FROM alloc_quantity_limits tmp
+                                 WHERE tmp.alloc_no = %s
+                                   AND EXISTS (SELECT 1 
+                                                 FROM alloc_calc_allitemloc aacat
+                                                WHERE aacat.alloc_no = tmp.alloc_no
+                                                  AND aacat.source_item = tmp.item_id
+                                                  AND aacat.item_type = 'NSFSP');"
+
+  Q_insert_alloc_qty_limits_temp: "INSERT INTO alloc_quantity_limits_temp(ALLOC_NO,           
+                                       LOCATION_ID,       
+                                       LOCATION_DESC,      
+                                       LOCATION_GROUP_ID,  
+                                       LOCATION_GROUP_DESC,
+                                       LOCATION_GROUP_TYPE,
+                                       HIER1,              
+                                       HIER2,              
+                                       HIER3,              
+                                       ITEM_ID,            
+                                       ITEM_DESC,         
+                                       DIFF_ID,            
+                                       SIZE_COUNT,         
+                                       MIN,                
+                                       MAX,                
+                                       TRESHOLD,           
+                                       TREND,              
+                                       WOS,                
+                                       MIN_NEED,           
+                                       SOM_QTY,            
+                                       PACK_IND,           
+                                       ASSIGN_DEFAULT_WH)
+          WITH dr
+               AS
+                  ( SELECT alloc_no,
+                          source_item,
+                          COALESCE (source_diff1_id,
+                                    source_diff2_id,
+                                    source_diff3_id,
+                                    source_diff4_id)
+                          diff_id,
+                          tran_item,
+						  MAX((select im1.item_desc from item_dtl im1 where im.item_parent = im1.item)) item_desc,  
+                          to_loc,
+                          MAX(to_loc_name) to_loc_name,
+                          group_type,
+                          CASE WHEN tmp.group_type = '7' THEN NULL ELSE tmp.GROUP_ID END GROUP_ID,
+                          MAX(CASE WHEN tmp.group_type = '7' THEN NULL ELSE tmp.group_desc END) group_desc,
+                          MAX(tmp.som_qty)
+                          som_qty,
+                          MAX(im.pack_ind) pack_ind,   
+						  tmp.assign_default_wh         
+                      FROM alloc_calc_allitemloc tmp, item_dtl im
+                     WHERE     tmp.alloc_no = %s
+                          AND im.item = tmp.tran_item
+                   GROUP BY alloc_no,
+                          source_item,
+                          COALESCE (source_diff1_id,
+                                 source_diff2_id,
+                                 source_diff3_id,
+                                 source_diff4_id),
+                          tran_item,
+                          to_loc,
+                          group_type,
+                          CASE WHEN tmp.group_type = '7' THEN NULL ELSE tmp.GROUP_ID END,
+						  assign_default_wh)
+			  SELECT dr.alloc_no           alloc_no,
+                   dr.to_loc               location_id,
+                   MAX(dr.to_loc_name)     location_desc,
+                   dr.GROUP_ID             location_group_id,
+                   MAX(dr.group_desc)      location_group_desc,
+                   MAX(dr.group_type)      location_group_type,
+                   NULL,
+                   NULL,
+                   NULL,
+                   dr.source_item           item_id,
+                   MAX(dr.item_desc)       item_desc,
+                   dr.diff_id               diff_id,
+                   COUNT(1)                size_count,
+                   MAX(ql.MIN)             MIN,
+                   MAX(ql.MAX)             MAX,
+                   MAX(ql.treshold)        treshold,
+                   MAX(ql.trend)           trend,
+                   MAX(ql.wos)             wos,
+                   MAX(ql.min_need)        min_need,
+                   MAX(dr.som_qty)         som_qty,
+                   MAX(dr.pack_ind)        pack_ind,         
+				   dr.assign_default_wh    assign_default_wh 
+               FROM dr, alloc_quantity_limits ql
+               WHERE     ql.alloc_no = dr.alloc_no
+                   AND ql.item_id = dr.tran_item
+                   AND ql.location_id = dr.to_loc
+            GROUP BY dr.alloc_no,
+                   dr.to_loc,
+                   dr.GROUP_ID,
+                   dr.source_item,
+                   dr.diff_id,
+				   dr.assign_default_wh;"
+  #Changes from shubham end#
+                              
+get_qty_limits:
+  C_alloc_level: "SELECT COALESCE(MAX(alloc_level),'$') alloc_level
+                     FROM alloc_head
+                    WHERE alloc_no = %s;"
+                               
+  C_get_rule: "SELECT net_need_ind,exact_ind 
+                  FROM alloc_rule 
+                 WHERE alloc_no = %s;"
+                         
+  L_del_1: "DELETE FROM alloc_calc_qty_limits_temp
+              WHERE alloc_no = %s;"
+
+  #Changes from shubham Start#                      
+  # L_ins_2: "INSERT INTO alloc_calc_qty_limits_temp (alloc_no,
+                                                     # store,
+                                                     # item_source_id,
+                                                     # source_item,
+                                                     # tran_item,
+                                                     # min,
+                                                     # max,
+                                                     # treshold,
+                                                     # trend,
+                                                     # wos,
+                                                     # min_need,
+                                                     # create_id,
+                                                     # create_datetime,
+                                                     # last_update_id,
+                                                     # last_update_datetime)  
+                     # SELECT ql.alloc_no,
+                            # ql.location_id,
+                            # s.item_source_id,
+                            # s.source_item     source_item,
+                            # s.tran_item       tran_item,
+                            # ql.min,
+                            # ql.max,
+                            # ql.treshold,
+                            # ql.trend,
+                            # ql.wos,
+                            # ql.min_need,
+                            # user()              create_id,
+                            # curdate()           create_datetime,
+                            # user()              last_update_id,
+                            # current_timestamp()           last_update_datetime
+                       # FROM alloc_calc_source_temp s, 
+                            # alloc_quantity_limits ql  
+                      # WHERE s.alloc_no  = %s
+                        # AND ql.alloc_no = s.alloc_no
+                        # AND ql.item_id  = s.tran_item
+                        # AND coalesce(s.item_type,'$') <> 'NSFSP';"  
+                        
+  L_ins_2: "INSERT INTO alloc_calc_qty_limits_temp (alloc_no,
+                                                     store,
+                                                     item_source_id,
+                                                     source_item,
+                                                     tran_item,
+                                                     min,
+                                                     max,
+                                                     treshold,
+                                                     trend,
+                                                     wos,
+                                                     min_need,
+                                                     create_id,
+                                                     create_datetime,
+                                                     last_update_id,
+                                                     last_update_datetime)  
+										     SELECT DISTINCT ql.alloc_no,
+						   					 		ql.location_id,
+						   							s.item_source_id,
+						   							s.source_item,
+						   							s.source_item tran_item,
+						   							CASE 
+						   							   WHEN MAX(ROUND(min/s.item_qty ,0)) OVER(PARTITION BY s.alloc_no,s.source_item,ql.location_id) IS NOT NULL 
+						   							   THEN 1 
+						   							   ELSE NULL 
+						   							END min,
+													CASE 
+                                                       WHEN %s = 'Y' AND %s = 'Y'
+                                                       THEN 
+													      MIN(ROUND(GREATEST(((ql.max*ql.som_qty)-soh),0)/s.item_qty ,0)) OVER(PARTITION BY s.alloc_no,s.source_item,ql.location_id) 
+                                                       ELSE 
+													      MIN(ROUND(GREATEST(ql.max*ql.som_qty,0)/s.item_qty ,0)) OVER(PARTITION BY s.alloc_no,s.source_item,ql.location_id) 
+                                                    END max,
+						   							NULL treshold,
+						   							NULL trend,
+						   							NULL wos,
+						   							CASE 
+						   							   WHEN MAX(ROUND(min_need/s.item_qty ,0)) OVER(PARTITION BY s.alloc_no,s.source_item,ql.location_id) IS NOT NULL 
+						   							   THEN 1 
+						   							   ELSE NULL 
+						   							END  min_need,
+						   							USER()              create_id,
+						   							curdate()           create_datetime,
+						   							USER()              last_update_id,
+						   							curdate()           last_update_datetime
+						   					   FROM ( SELECT tmp.alloc_no,
+						   								     tmp.item_source_id,
+						   								     tmp.source_item,
+						   								     pi.item tran_item,
+						   									 pi.pack_qty item_qty                    
+						   						        FROM alloc_calc_source_temp tmp,
+						   							         packitem pi
+						   						       WHERE tmp.alloc_no  = %s
+						   						         AND pi.pack_no    = tmp.source_item
+						   						         AND tmp.item_type = 'NSFSP') s,
+						   						    alloc_quantity_limits ql,
+						   							pack_item_loc_need  ilt  
+						   					   WHERE s.alloc_no  = %s
+						   					     AND ql.alloc_no = s.alloc_no
+						   						AND s.tran_item  = ql.item_id
+						   					     AND ql.alloc_no = ilt.alloc_no
+						   						 AND ql.item_id  = ilt.item
+						   						 AND ql.location_id = ilt.to_loc
+										     UNION												 
+											 SELECT ql.alloc_no,
+													ql.location_id,
+													s.item_source_id,
+													s.source_item     source_item,
+													s.tran_item       tran_item,
+													ql.min,
+													ql.max,
+													ql.treshold,
+													ql.trend,
+													ql.wos,
+													ql.min_need,
+													user()              create_id,
+													curdate()           create_datetime,
+													user()              last_update_id,
+													current_timestamp()           last_update_datetime
+											   FROM alloc_calc_source_temp s, 
+													alloc_quantity_limits ql  
+											  WHERE s.alloc_no  = %s
+												AND ql.alloc_no = s.alloc_no
+												AND ql.item_id  = s.tran_item
+												AND coalesce(s.item_type,'$') <> 'NSFSP';"                         
+  #Changes from shubham End#
+  L_mer_1: "WITH src AS (SELECT DISTINCT  tmp.alloc_no,
+                                 tmp.item_source_id,
+                                 tmp.source_item,
+                                 tmp.tran_item,
+                                 tmp.store,
+                                 gtt.min,
+                                 gtt.max,
+                                 gtt.treshold,
+                                 gtt.trend,
+                                 gtt.wos,
+                                 gtt.min_need,
+                                 COALESCE(gtt.som_qty,1) som_qty
+                            FROM alloc_calc_qty_limits_temp tmp,
+                                 alloc_quantity_limits gtt
+                           WHERE tmp.alloc_no = %s
+                                    AND gtt.alloc_no = tmp.alloc_no
+                             AND gtt.item_id  = tmp.tran_item
+                             AND gtt.location_id = tmp.store)
+            UPDATE alloc_calc_qty_limits_temp tgt,
+                   src 
+               SET tgt.min = src.min*src.som_qty, 
+                   tgt.max = src.max*src.som_qty   
+            WHERE   tgt.alloc_no =src.alloc_no  
+                AND tgt.tran_item = src.tran_item 
+                AND tgt.store = src.store;" 
+
+  #Changes from shubham start#
+  Q_alloc_rule: "SELECT net_need_ind,exact_ind 
+                  FROM alloc_rule 
+                 WHERE alloc_no = %s;"
+                 
+  L_ins_2_style: "INSERT INTO alloc_calc_qty_limits_temp (alloc_no,
+                                                     store,
+                                                     item_source_id,
+                                                     source_item,
+                                                     tran_item,
+                                                     min,
+                                                     max,
+                                                     treshold,
+                                                     trend,
+                                                     wos,
+                                                     min_need,
+                                                     create_id,
+                                                     create_datetime,
+                                                     last_update_id,
+                                                     last_update_datetime) 
+											   SELECT ql.alloc_no,
+													  ql.location_id,
+													  s.item_source_id,
+													  s.source_item     source_item,
+													  s.tran_item       tran_item,
+													  ql.MIN,
+													  ql.MAX,
+													  ql.treshold,
+													  ql.trend,
+													  ql.wos,
+													  ql.min_need,
+													  USER()              create_id,
+													  curdate()           create_datetime,
+													  USER()              last_update_id,
+													  curdate()           last_update_datetime
+												 FROM alloc_calc_source_temp s, 
+													  alloc_quantity_limits_temp ql   
+												WHERE s.alloc_no  = %s
+												  AND ql.alloc_no = s.alloc_no
+												  AND COALESCE (source_diff1_id,
+																source_diff2_id,
+																source_diff3_id,
+																source_diff4_id)  = ql.diff_id
+												  AND ql.item_id  = s.source_item;"
+  #Changes from shubham end#                                               
+insert_qty_limits:
+  C_alloc_level: "SELECT COALESCE(MAX(alloc_level),'$') alloc_level
+                     FROM alloc_head
+                    WHERE alloc_no = %s;"
+  
+  C_get_rule_rec: "SELECT *
+                      FROM alloc_rule
+                     WHERE alloc_no = %s;" 
+  
+  L_del_1: "DELETE FROM alloc_quantity_limits 
+              WHERE alloc_no = %s"
+
+  Q_upd_inputs: "UPDATE alloc_quantity_limits_temp ql,alloc_quantity_limits_temp2 src
+                    SET ql.min      =src.min,
+                        ql.max      =src.max,
+                        ql.treshold =src.treshold,
+                        ql.trend    =src.trend,
+                        ql.wos      =src.wos,
+                        ql.min_need =src.min_need 
+                  WHERE src.alloc_no = %s
+                    AND ql.alloc_no           = src.alloc_no
+                    AND ql.item_id            = src.item_id
+                    AND ql.location_id        = src.location_id
+                    AND ql.diff_id            = src.diff_id
+                    AND (   COALESCE(ql.min, 9999999)      <> COALESCE(src.min, 9999999)
+                         OR COALESCE(ql.max, 9999999)      <> COALESCE(src.max, 9999999)
+                         OR COALESCE(ql.treshold, 9999999) <> COALESCE(src.treshold, 9999999)
+                         OR COALESCE(ql.trend, 9999999)    <> COALESCE(src.trend, 9999999)
+                         OR COALESCE(ql.wos, 9999999)      <> COALESCE(src.wos, 9999999)
+                         OR COALESCE(ql.min_need, 9999999) <> COALESCE(src.min_need, 9999999));"
+
+  #Changes from shubham start#  
+  # L_mer_1: "INSERT INTO alloc_quantity_limits (alloc_no,
+                                                # location_id,
+                                                # location_desc,
+                                                # hier1,
+                                                # hier2,
+                                                # hier3,
+                                                # item_id,
+                                                # min,
+                                                # max,
+                                                # treshold,
+                                                # trend,
+                                                # wos,
+                                                # min_need)
+          
+                          # WITH src AS 
+                          # (SELECT DISTINCT ql.alloc_no, 
+                                           # ql.location_id,
+                                           # ql.location_desc,
+                                           # ql.hier1,
+                                           # ql.hier2,
+                                           # ql.hier3,
+                                           # tmp.tran_item     item_id,
+                                           # ql.diff_id,
+                                           # ql.min,
+                                           # ql.max,
+                                           # ql.treshold,
+                                           # ql.trend,
+                                           # ql.wos,
+                                           # ql.min_need
+                             # FROM alloc_quantity_limits_temp ql,
+                                 # (SELECT alloc_no,
+                                         # tran_item,
+                                         # item_type,
+                                         # source_diff1_id,
+                                         # source_diff2_id,
+                                         # source_diff3_id,
+                                         # source_diff4_id,
+                                         # to_loc
+                                    # FROM alloc_calc_allitemloc
+                                   # WHERE alloc_no = %s
+                                     # AND COALESCE(item_type,'$') <> 'NSFSP') tmp
+                            # WHERE ql.alloc_no = %s
+                              # AND tmp.alloc_no = ql.alloc_no
+                              # AND tmp.tran_item = ql.item_id
+                              # AND COALESCE(ql.diff_id,'$') =  COALESCE(COALESCE(source_diff1_id,source_diff2_id,source_diff3_id,source_diff4_id),'$')
+                              # AND tmp.to_loc = ql.location_id)
+                              
+                              # SELECT src.alloc_no,
+                                     # src.location_id,
+                                     # src.location_desc,
+                                     # src.hier1,
+                                     # src.hier2,
+                                     # src.hier3,
+                                     # src.item_id,
+                                     # src.min,
+                                     # src.max,
+                                     # src.treshold,
+                                     # src.trend,
+                                     # src.wos,
+                                     # src.min_need 
+                                # FROM src
+       # ON DUPLICATE KEY UPDATE
+                           # min = src.min,
+                           # max = src.max,
+                           # treshold = src.treshold,
+                           # trend = src.trend,
+                           # wos = src.wos,
+                           # min_need = src.min_need;"
+
+  L_mer_1: "INSERT INTO alloc_quantity_limits (alloc_no,
+                                                location_id,
+                                                location_desc,
+                                                hier1,
+                                                hier2,
+                                                hier3,
+                                                item_id,
+                                                min,
+                                                max,
+                                                treshold,
+                                                trend,
+                                                wos,
+                                                min_need,
+                                                diff_id)   /*Changes by Shubham*/
+          
+              WITH src 
+                AS (SELECT DISTINCT ql.alloc_no, 
+                           ql.location_id,
+                           ql.location_desc,
+                           ql.hier1,
+                           ql.hier2,
+                           ql.hier3,
+                           tmp.tran_item     item_id,
+                           ql.MIN,
+                           ql.MAX,
+                           ql.treshold,
+                           ql.trend,
+                           ql.wos,
+                           ql.min_need,
+                           ql.diff_id         /*Changes by Shubham*/
+                       FROM alloc_quantity_limits_temp ql,
+                           (SELECT alloc_no,
+                                   COALESCE(item,source_item) tran_item,
+                                   item_type,
+                                   source_diff1_id,
+                                   source_diff2_id,
+                                   source_diff3_id,
+                                   source_diff4_id,
+                                   to_loc
+                              FROM alloc_calc_allitemloc,
+                                   packitem pi
+                            WHERE alloc_no = %s
+                              AND pack_no = source_item
+                              AND item_type = 'NSFSP'
+                              UNION
+                              SELECT alloc_no,
+                                     tran_item,
+                                     item_type,
+                                     source_diff1_id,
+                                     source_diff2_id,
+                                     source_diff3_id,
+                                     source_diff4_id,
+                                     to_loc
+								 FROM alloc_calc_allitemloc
+								WHERE alloc_no = %s
+								  AND COALESCE(item_type,'$') <> 'NSFSP')  tmp
+						  WHERE     ql.alloc_no = %s
+							   AND tmp.alloc_no = ql.alloc_no
+							   AND tmp.tran_item = ql.item_id
+						       AND COALESCE(ql.diff_id,'$') = CASE WHEN tmp.item_type = 'NSFSP'
+														           THEN (SELECT COALESCE(aaim.aggr_diff_id,'$')
+																           FROM item_dtl aaim 
+																          WHERE aaim.item = tmp.tran_item)
+														           ELSE COALESCE(COALESCE (source_diff1_id,
+																				           source_diff2_id,
+																				           source_diff3_id,
+																				           source_diff4_id),'$')
+											                       END           
+						     AND tmp.to_loc = ql.location_id)
+                              
+                    SELECT src.alloc_no,
+                           src.location_id,
+                           src.location_desc,
+                           src.hier1,
+                           src.hier2,
+                           src.hier3,
+                           src.item_id,
+                           src.min,
+                           src.max,
+                           src.treshold,
+                           src.trend,
+                           src.wos,
+                           src.min_need,
+                           src.diff_id   /*Changes by Shubham*/
+                      FROM src
+       ON DUPLICATE KEY UPDATE
+                           min = src.min,
+                           max = src.max,
+                           treshold = src.treshold,
+                           trend = src.trend,
+                           wos = src.wos,
+                           min_need = src.min_need;"
+
+  L_mer_2: "INSERT INTO alloc_quantity_limits (alloc_no,
+                                                location_id,
+                                                location_desc,
+                                                hier1,
+                                                hier2,
+                                                hier3,
+                                                item_id,
+                                                min,
+                                                max,
+                                                treshold,
+                                                trend,
+                                                wos,
+                                                min_need,
+                                                diff_id)   /*Changes by shubham*/
+              WITH src 
+                AS 
+                (SELECT DISTINCT ql.alloc_no, 
+                        ql.location_id,
+                        ql.location_desc,
+                        ql.hier1,
+                        ql.hier2,
+                        ql.hier3,
+                        tmp.tran_item     item_id,
+                        ql.MIN,
+                        ql.MAX,
+                        ql.treshold,
+                        ql.trend,
+                        ql.wos,
+                        ql.min_need,
+                        ql.diff_id   /*Changes by shubham*/       
+                    FROM alloc_quantity_limits_temp ql,
+                        alloc_calc_allitemloc  tmp
+                   WHERE     ql.alloc_no = %s
+                        AND tmp.alloc_no = ql.alloc_no
+                        AND tmp.source_item = ql.item_id
+                        AND COALESCE (source_diff1_id,
+                                  source_diff2_id,
+                                  source_diff3_id,
+                                  source_diff4_id) = ql.diff_id
+                        AND tmp.to_loc = ql.location_id)						
+              SELECT alloc_no,
+                     location_id,
+                     location_desc,
+                     hier1,
+                     hier2,
+                     hier3,
+                     item_id,
+                     MIN,
+                     MAX,
+                     treshold,
+                     trend,
+                     wos,
+                     min_need,
+                     diff_id      /*Changes by Shubham*/
+				FROM src
+       ON DUPLICATE KEY UPDATE
+                           min = src.min,
+                           max = src.max,
+                           treshold = src.treshold,
+                           trend = src.trend,
+                           wos = src.wos,
+                           min_need = src.min_need;"
+  #Changes from shubham end#

@@ -1,0 +1,57 @@
+upd_alloc_resv_exp:
+ Q_alloc_detail: "SELECT ah.item ,
+                                     coalesce(ad.alloc_qty, 0) alloc_qty,
+                                     ah.wh from_loc,
+                                     ad.to_loc,
+                                     ad.to_loc_type,
+                                     im.pack_ind
+                                FROM alloc_dtl ad,
+                                     alloc_sku_head ah,
+                                     item_dtl im
+                               WHERE ad.alloc_no = %s
+                                 AND ad.alloc_no = ah.alloc_no
+                                 AND ah.item     = im.item;"
+
+upd_item_resv_exp:
+  Q_sel_pack_ind: "SELECT pack_ind FROM item_dtl where item=%s"
+
+  Q_upd_item_resv: "UPDATE item_location
+                       SET reserved_qty     = CASE WHEN %s = 'Y' THEN reserved_qty ELSE reserved_qty + %s END,
+                           update_datetime  = current_timestamp(),
+                           last_update_id   = current_user()
+                     WHERE location      = %s
+                       AND location_type = %s
+                       AND item          = %s;"  #pack_comp_resv   = CASE WHEN 'Y' = 'Y' THEN pack_comp_resv + I_allocated_qty ELSE pack_comp_resv END, should add
+
+  Q_upd_item_exp: "UPDATE item_location
+                      SET expected_qty     = expected_qty + %s,
+                          update_datetime  = current_timestamp(),
+                          last_update_id   = current_user()
+                    WHERE location         = %s
+                      AND location_type    = %s
+                      AND item             = %s;"
+
+  Q_pack_ind_y: "UPDATE item_location
+                    SET reserved_qty     = reserved_qty + %s,
+                        update_datetime  = current_timestamp(),
+                        last_update_id   = current_user()
+                  WHERE location      = %s
+                    AND location_type = 'W'
+                    AND item          = %s;"
+  
+  Q_items_in_packs: "SELECT v.item,
+                            v.pack_qty
+                       FROM packitem v,
+                            item_dtl im
+                      WHERE v.pack_no = %s
+                        AND v.pack_no = im.item
+                        AND im.orderable_ind = 'Y';" #inventory_ind need to check column name
+
+
+
+upd_resv_exp:
+  Q_sel_rec: "SELECT h.alloc_no
+                       FROM alloc_sku_head h
+                      WHERE     h.alloc_no IN
+                                      (SELECT xref_alloc_no FROM alloc_xref WHERE alloc_no=%s)
+                        AND h.order_no IS NULL;"

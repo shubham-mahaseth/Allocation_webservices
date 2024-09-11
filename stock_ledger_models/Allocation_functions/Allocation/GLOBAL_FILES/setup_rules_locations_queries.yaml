@@ -1,0 +1,1439 @@
+#############################################################
+#Created By - Naveen Ramanathan                             #                
+#File Name  - setup_retreive_locations_queries.yaml         #
+#Purpose    - All queries for retreive_locations function   #
+#############################################################
+
+retreive_locations: 
+  
+  C_temp_tbl: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_location_temp
+                                                                       (ALLOC_NO             INT    
+                                                                       ,LOC                  VARCHAR(25) 
+                                                                       ,LOC_DESC             VARCHAR(150) 
+                                                                       ,LOC_TYPE             VARCHAR(1)   
+                                                                       ,DEFAULT_WH           NUMERIC(4)     
+                                                                       ,GROUP_ID             VARCHAR(40)  
+                                                                       ,GROUP_DESC           VARCHAR(600) 
+                                                                       ,LIKE_LOC             NUMERIC(10)    
+                                                                       ,LIKE_LOC_DESC        VARCHAR(150) 
+                                                                       ,WEIGHT_PCT           NUMERIC(12)  
+                                                                       ,CLEARANCE_IND        VARCHAR(1)   
+                                                                       ,ITEM_LOC_STATUS      VARCHAR(1)   
+                                                                       ,RELEASE_DATE         DATE          
+                                                                       ,DEL_IND              VARCHAR(1)
+                                                                       ,CONSTRAINT chk_clear_ind1 CHECK (CLEARANCE_IND IN ('Y','N','L'))
+                                                                       ,CONSTRAINT pk_loc PRIMARY KEY (ALLOC_NO,LOC));" 
+  C_temp_tbl2: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_location_temp2
+                                                                       (ALLOC_NO             INT    
+                                                                       ,LOC                  VARCHAR(25) 
+                                                                       ,LOC_DESC             VARCHAR(150) 
+                                                                       ,LOC_TYPE             VARCHAR(1)   
+                                                                       ,DEFAULT_WH           NUMERIC(4)     
+                                                                       ,GROUP_ID             VARCHAR(40)  
+                                                                       ,GROUP_DESC           VARCHAR(600) 
+                                                                       ,LIKE_LOC             NUMERIC(10)    
+                                                                       ,LIKE_LOC_DESC        VARCHAR(150) 
+                                                                       ,WEIGHT_PCT           NUMERIC(12)  
+                                                                       ,CLEARANCE_IND        VARCHAR(1)   
+                                                                       ,ITEM_LOC_STATUS      VARCHAR(1)   
+                                                                       ,RELEASE_DATE         DATE          
+                                                                       ,DEL_IND              VARCHAR(1)
+                                                                       ,CONSTRAINT chk_clear_ind1 CHECK (CLEARANCE_IND IN ('Y','N','L'))
+                                                                       ,CONSTRAINT pk_loc PRIMARY KEY (ALLOC_NO,LOC));"
+
+  Q_del_tmp: "DELETE FROM alloc_location_temp WHERE alloc_no = %s;"
+
+  L_ins: "INSERT IGNORE INTO alloc_location_temp
+           SELECT DISTINCT
+                       lg.alloc_no,
+                       lg.group_id,
+                       al.location_desc,
+                       'L' loc_type,
+                       st.def_wh,
+                       CASE
+                           WHEN lg.group_type = '7' THEN NULL
+                           ELSE lg.group_id
+                       END    group_id,
+                       CASE
+                           WHEN lg.group_type = '7' THEN NULL
+                           ELSE lg.group_desc
+                       END    group_desc,
+                       al.like_location_id,
+                       al.like_location_desc,
+                       al.like_location_weight,
+                       al.loc_clearance_ind,
+                       al.loc_status_ind,
+                       al.release_date,
+                       'N' del_ind
+                  FROM alloc_loc_group_detail lg,
+                        alloc_location al,
+                       store st
+                 WHERE lg.alloc_no = %s
+                   AND lg.group_type = 7
+                   AND st.store =  al.location_id
+                   AND al.group_id = lg.group_id
+                   AND al.loc_group_id = lg.loc_group_id
+                UNION
+                  SELECT DISTINCT lg.alloc_no,
+                                al.location_id,
+                                al.location_desc,
+                                'M' loc_type,
+                                st.def_wh,
+                                lg.group_id,
+                                lg.group_desc,
+                                al.like_location_id,
+                                al.like_location_desc,
+                                al.like_location_weight,
+                                al.loc_clearance_ind,
+                                al.loc_status_ind,
+                                al.release_date,
+                                'N' del_ind
+                  FROM alloc_loc_group_detail lg,
+                        alloc_location al,
+                       store st
+                 WHERE lg.alloc_no = %s
+                   AND lg.group_type = 1
+                   AND st.store =  al.location_id
+                   AND al.group_id = lg.group_id
+                   AND al.loc_group_id = lg.loc_group_id
+                UNION
+                  SELECT DISTINCT lg.alloc_no,
+                                al.location_id,
+                                al.location_desc,
+                                'T' loc_type,
+                                st.def_wh,
+                                lg.group_id,
+                                lg.group_desc,
+                                al.like_location_id,
+                                al.like_location_desc,
+                                al.like_location_weight,
+                                al.loc_clearance_ind,
+                                al.loc_status_ind,
+                                al.release_date,
+                                'N' del_ind
+                  FROM alloc_loc_group_detail lg,
+                        alloc_location al,
+                       store st
+                 WHERE lg.alloc_no = %s
+                   AND lg.group_type = 5
+                   AND st.store = al.location_id
+                   AND al.group_id = lg.group_id
+                   AND al.loc_group_id = lg.loc_group_id
+                UNION
+                  SELECT DISTINCT lg.alloc_no,
+                                al.location_id,
+                                al.location_desc,
+                                'A' loc_type,
+                                st.def_wh,
+                                lg.group_id,
+                                lg.group_desc,
+                                al.like_location_id,
+                                al.like_location_desc,
+                                al.like_location_weight,
+                                al.loc_clearance_ind,
+                                al.loc_status_ind,
+                                al.release_date,
+                                'N' del_ind
+                  FROM alloc_loc_group_detail lg,
+                        alloc_location al,
+                       store st
+                 WHERE lg.alloc_no = %s
+                   AND lg.group_type = 6
+                   AND st.store = al.location_id
+                   AND al.group_id = lg.group_id
+                   AND al.loc_group_id = lg.loc_group_id;"
+
+  L_sel: "SELECT * FROM alloc_location_temp WHERE alloc_no=%s ORDER BY cast(LOC as unsigned);" 
+
+insert_locations: 
+  Q_upd_inputs: "UPDATE alloc_location_temp tgt,alloc_location_temp2 src
+                    SET tgt.like_loc        = src.like_loc,
+                        tgt.like_loc_desc   = src.like_loc_desc,
+                        tgt.weight_pct      = src.weight_pct,
+                        tgt.clearance_ind   = src.clearance_ind,
+                        tgt.item_loc_status = src.item_loc_status,
+                        tgt.release_date    = src.release_date
+                  WHERE src.alloc_no = %s
+                    AND tgt.alloc_no = src.alloc_no
+                    AND tgt.loc      = src.loc
+                    AND (   COALESCE(tgt.like_loc, 9999999)       <> COALESCE(src.like_loc, 9999999)
+                         OR COALESCE(tgt.like_loc_desc, '$')      <> COALESCE(src.like_loc_desc, '$')
+                         OR COALESCE(tgt.weight_pct, 9999999)     <> COALESCE(src.weight_pct, 9999999)
+                         OR COALESCE(tgt.clearance_ind, '$')      <> COALESCE(src.clearance_ind, '$')
+                         OR COALESCE(tgt.item_loc_status, '$')    <> COALESCE(src.item_loc_status, '$')
+                         OR COALESCE(tgt.release_date, curdate()) <> COALESCE(src.release_date, curdate()));"
+
+  Q_gen_loc_grp_id: "SELECT IF(MAX(loc_group_id) IS NULL,1,MAX(COALESCE(loc_group_id,1))+1) loc_group_id 
+                       FROM alloc_loc_group_detail;"
+
+  C_get_rule_rec: "SELECT *
+                     FROM alloc_rule
+                    WHERE alloc_no = %s;"
+
+  C_check_loc_group: "SELECT lgd.loc_group_id loc_group_id
+                        FROM alloc_loc_group_detail lgd,
+                             alloc_location_temp tmp
+                       WHERE tmp.alloc_no = %s
+                         AND lgd.alloc_no = tmp.alloc_no
+                         AND lgd.group_type = CASE
+                                                  WHEN %s = 'A' THEN 6       
+                                                  WHEN %s  = 'T' THEN 5      
+                                                  WHEN %s  = 'L' THEN 7      
+                                                  WHEN %s  = 'M' THEN 1      
+                                               END
+                         AND lgd.group_id = COALESCE(tmp.group_id,tmp.loc)
+                       LIMIT 1;"
+
+  C_check_all_store: "SELECT 1 all_str
+                        FROM alloc_location_temp gtt
+                       WHERE alloc_no = %s AND loc_type = 'A'
+                       LIMIT 1;"
+
+  C_check_location: "SELECT 1 chk_loc
+                        FROM alloc_location_temp gtt
+                       WHERE alloc_no = %s AND loc_type = 'L'
+                       LIMIT 1;"
+
+  C_check_loc_list: "SELECT 1 chk_loc
+                        FROM alloc_location_temp gtt
+                       WHERE alloc_no = %s AND loc_type = 'M'
+                       LIMIT 1;"
+
+  C_check_loc_trait: "SELECT 1 chk_loc
+                        FROM alloc_location_temp gtt
+                       WHERE alloc_no = %s AND loc_type = 'T'
+                       LIMIT 1;"
+
+  C_check_recalc: "SELECT 1 recalc
+                     FROM alloc_head
+                    WHERE alloc_no = %s AND coalesce(recalc_ind, 'Y') = 'Y';"
+
+  L_del1: "DELETE FROM alloc_location tgt
+            WHERE loc_group_id IN (SELECT lg.loc_group_id
+                                       FROM alloc_loc_group_detail lg
+                                      WHERE lg.alloc_no = %s)
+              AND EXISTS (SELECT 1
+                         FROM  alloc_location_temp gtt
+                         WHERE gtt.alloc_no = %s
+                              AND gtt.loc = tgt.location_id
+                              AND gtt.group_id<>tgt.group_id);"
+
+  L_del3: "DELETE FROM alloc_location tgt
+            WHERE EXISTS(SELECT 1 
+                           FROM alloc_loc_group_detail al 
+                          WHERE al.group_type=7 
+                            AND tgt.group_id = al.group_id
+                            AND tgt.loc_group_id = al.loc_group_id 
+                            AND al.alloc_no = %s)
+              AND NOT EXISTS (SELECT 1 FROM  alloc_location_temp  gtt
+                               WHERE gtt.alloc_no = %s
+                                 AND gtt.loc = tgt.group_id   
+                                 AND gtt.loc = tgt.location_id);"
+
+  L_del4: "WITH tbl1 AS
+                     ((SELECT alc_location_id
+                         FROM alloc_location tgt
+                        WHERE (loc_group_id, location_id) IN (SELECT lgd.loc_group_id,
+                                                                     lgd.group_id     location_id
+                                                                FROM alloc_loc_group_detail  lgd
+                                                               WHERE lgd.alloc_no =%s
+                                                                 AND lgd.group_type = 7)
+                          AND NOT EXISTS (SELECT 1 
+                                            FROM alloc_location_temp  gtt, 
+                                                 alloc_loc_group_detail lgd1
+                                           WHERE gtt.alloc_no = %s
+                                             AND gtt.group_id = lgd1.group_id  
+                                             AND gtt.loc = tgt.location_id
+                                             AND lgd1.group_type = 7 )))
+                                         
+            DELETE FROM alloc_location al
+             WHERE al.alc_location_id IN (SELECT tbl1.alc_location_id FROM tbl1);"
+             
+  L_del5: "WITH tbl1 AS
+                     (SELECT loc_group_detail_id
+                        FROM alloc_loc_group_detail
+                       WHERE (loc_group_id, group_id) IN (SELECT lgd.loc_group_id,
+                                                                 lgd.group_id
+                                                            FROM alloc_loc_group_detail  lgd
+                                                           WHERE lgd.alloc_no = %s
+                                                             AND NOT EXISTS (SELECT 1
+                                                                               FROM alloc_location al
+                                                                              WHERE al.group_id = lgd.group_id
+                                                                                AND al.loc_group_id = lgd.loc_group_id)))
+           DELETE FROM alloc_loc_group_detail
+            WHERE loc_group_detail_id IN (SELECT loc_group_detail_id FROM tbl1);"                                             
+
+
+  L_del7: "WITH tbl1 AS
+                     (SELECT lgd.loc_group_id,
+                             lgd.group_id,
+                             lc.alc_location_id
+                        FROM alloc_loc_group_detail  lgd,
+                             alloc_location          lc
+                       WHERE lgd.alloc_no = %s
+                         AND lgd.group_type = 1
+                         AND lc.loc_group_id = lgd.loc_group_id
+                         AND lc.group_id = lgd.group_id)  
+           DELETE FROM alloc_location tgt
+            WHERE (loc_group_id, group_id, alc_location_id) IN (SELECT loc_group_id, group_id, alc_location_id FROM tbl1)  
+              AND NOT EXISTS (SELECT 1 
+                                FROM alloc_location_temp  gtt, 
+                                     alloc_loc_group_detail lgd1
+                               WHERE gtt.alloc_no = %s
+                                 AND gtt.group_id = lgd1.group_id 
+                                 AND gtt.loc = tgt.location_id
+                                 AND lgd1.group_type = 1 );"
+
+  L_del8: "WITH tbl1 AS
+                     (SELECT alc_location_id
+                        FROM alloc_location tgt
+                       WHERE (loc_group_id, group_id, alc_location_id) IN
+                                                                       (SELECT lgd.loc_group_id,
+                                                                               lgd.group_id,
+                                                                               lc.alc_location_id
+                                                                          FROM alloc_loc_group_detail  lgd,
+                                                                               alloc_location lc
+                                                                         WHERE lgd.alloc_no = %s
+                                                                           AND lgd.group_type = 1
+                                                                           AND lc.loc_group_id = lgd.loc_group_id
+                                                                           AND lc.group_id = lgd.group_id)
+                        AND NOT EXISTS (SELECT 1 
+                                          FROM alloc_location_temp  gtt, 
+                                               alloc_loc_group_detail lgd1
+                                         WHERE gtt.alloc_no = %s
+                                           AND gtt.group_id = lgd1.group_id 
+                                           AND gtt.loc = tgt.location_id
+                                           AND lgd1.group_type = 1 ))
+          DELETE FROM alloc_location
+           WHERE alc_location_id IN (SELECT alc_location_id FROM tbl1);"
+
+  L_del9: "WITH tbl1 AS
+                     (SELECT loc_group_detail_id
+                        FROM alloc_loc_group_detail
+                       WHERE (loc_group_id, group_id) IN
+                                                      (SELECT lgd.loc_group_id,
+                                                              lgd.group_id
+                                                         FROM alloc_loc_group_detail  lgd
+                                                        WHERE lgd.alloc_no = %s
+                                                          AND NOT EXISTS (SELECT 1
+                                                                            FROM alloc_location al
+                                                                           WHERE al.group_id = lgd.group_id
+                                                                             AND al.loc_group_id = lgd.loc_group_id)))
+           DELETE FROM alloc_loc_group_detail
+            WHERE loc_group_detail_id IN (SELECT loc_group_detail_id FROM tbl1);"
+
+
+  L_del11: "WITH tbl1 AS
+                      (SELECT lgd.loc_group_id,
+                              lgd.group_id,
+                              lc.alc_location_id
+                         FROM alloc_loc_group_detail  lgd,
+                              alloc_location  lc
+                        WHERE lgd.alloc_no = %s
+                            AND lgd.group_type = 5
+                            AND lc.loc_group_id = lgd.loc_group_id
+                            AND lc.group_id = lgd.group_id)
+
+            DELETE FROM alloc_location tgt
+             WHERE (loc_group_id, group_id, alc_location_id) IN (SELECT loc_group_id, group_id, alc_location_id FROM tbl1)
+               AND NOT EXISTS (SELECT 1 FROM  alloc_location_temp  gtt, 
+                                              alloc_loc_group_detail lgd1
+                                       WHERE gtt.alloc_no = %s
+                                         AND gtt.group_id = lgd1.group_id 
+                                         AND gtt.loc = tgt.location_id
+                                         AND lgd1.group_type = 5 );"
+
+  L_del12: "WITH tbl1 AS
+                      (SELECT alc_location_id
+                         FROM alloc_location tgt
+                        WHERE (loc_group_id, group_id, alc_location_id) IN (SELECT lgd.loc_group_id,
+                                                                                    lgd.group_id,
+                                                                                    lc.alc_location_id
+                                                                              FROM alloc_loc_group_detail  lgd,
+                                                                                   alloc_location lc
+                                                                             WHERE lgd.alloc_no = %s
+                                                                               AND lgd.group_type = 5
+                                                                               AND lc.loc_group_id = lgd.loc_group_id
+                                                                               AND lc.group_id = lgd.group_id)
+                         AND NOT EXISTS (SELECT 1 
+                                           FROM  alloc_location_temp  gtt, 
+                                                 alloc_loc_group_detail lgd1
+                                          WHERE gtt.alloc_no = %s
+                                            AND gtt.group_id = lgd1.group_id 
+                                            AND gtt.loc = tgt.location_id
+                                            AND lgd1.group_type = 5 ))
+             
+             DELETE FROM alloc_location
+              WHERE alc_location_id IN (SELECT alc_location_id FROM tbl1);"
+
+  L_del13: "WITH tbl1 AS
+                      (SELECT loc_group_detail_id
+                         FROM alloc_loc_group_detail lgd
+                        WHERE lgd.alloc_no = %s
+                          AND NOT EXISTS (SELECT 1
+                                            FROM alloc_location al
+                                           WHERE al.group_id = lgd.group_id
+                                             AND al.loc_group_id = lgd.loc_group_id))
+
+            DELETE FROM alloc_loc_group_detail
+             WHERE loc_group_detail_id IN (SELECT loc_group_detail_id FROM tbl1);"
+
+
+  L_del15: "WITH tbl1 AS
+                      (SELECT lgd.loc_group_id,
+                              lgd.group_id,
+                              lc.alc_location_id
+                         FROM alloc_loc_group_detail  lgd,
+                              alloc_location lc
+                        WHERE lgd.alloc_no = %s
+                          AND lgd.group_type = 6
+                          AND lc.loc_group_id = lgd.loc_group_id
+                          AND lc.group_id = lgd.group_id)
+             
+             DELETE FROM alloc_location tgt
+              WHERE (loc_group_id, group_id, alc_location_id) IN 
+                                                              (SELECT loc_group_id, 
+                                                                      group_id, 
+                                                                      alc_location_id 
+                                                                 FROM tbl1)
+                AND NOT EXISTS (SELECT 1 
+                                  FROM alloc_location_temp  gtt, 
+                                       alloc_loc_group_detail lgd1
+                                 WHERE gtt.alloc_no = %s
+                                   AND gtt.group_id = lgd1.GROUP_ID 
+                                   AND gtt.loc = tgt.location_id
+                                   AND lgd1.group_type = 6 );"
+
+  L_del16: "WITH tbl1 AS
+                      (SELECT alc_location_id
+                         FROM alloc_location tgt
+                        WHERE (loc_group_id, group_id, alc_location_id) IN
+                                                                        (SELECT lgd.loc_group_id,
+                                                                                lgd.group_id,
+                                                                                lc.alc_location_id
+                                                                           FROM alloc_loc_group_detail  lgd,
+                                                                                alloc_location          lc
+                                                                          WHERE lgd.alloc_no = %s
+                                                                            AND lgd.group_type = 6
+                                                                            AND lc.loc_group_id = lgd.loc_group_id
+                                                                            AND lc.group_id = lgd.group_id)
+                         AND NOT EXISTS (SELECT 1 
+                                           FROM alloc_location_temp  gtt, 
+                                                alloc_loc_group_detail lgd1
+                                          WHERE gtt.alloc_no = %s
+                                            AND gtt.group_id = lgd1.group_id 
+                                            AND gtt.loc = tgt.location_id
+                                            AND lgd1.group_type = 6 ))
+               DELETE FROM alloc_location
+                     WHERE alc_location_id IN (SELECT alc_location_id FROM tbl1);"
+
+  L_del17: "DELETE FROM alloc_loc_group_detail lgd
+            WHERE lgd.alloc_no = %s
+              AND NOT EXISTS  (SELECT 1
+                                 FROM alloc_location al
+                                WHERE al.group_id = lgd.group_id
+                                  AND al.loc_group_id =lgd.loc_group_id);"
+
+  L_mer1: "INSERT IGNORE INTO alloc_loc_group_detail (loc_group_id,
+                                                      alloc_no,
+                                                      template_id,
+                                                      group_desc,
+                                                      complex_ind,
+                                                      group_type,
+                                                      group_id,
+                                                      subgroup_id,
+                                                      subgroup_desc)
+                   WITH src AS
+                            (SELECT store_desc group_desc, 
+                                    store      group_id 
+                               FROM store)                       
+                   SELECT DISTINCT %s   loc_group_id,
+                          tmp.alloc_no,
+                          NULL template_id,
+                          src.group_desc,
+                          'N' complex_ind,
+                          7 group_type,
+                          src.group_id,
+                          NULL subgroup_id,
+                          NULL subgroup_desc 
+                     FROM src
+                     JOIN alloc_location_temp tmp
+                      ON(    tmp.loc = src.group_id
+                         AND tmp.loc_type = 'L'
+                         AND tmp.alloc_no = %s)
+                     LEFT JOIN alloc_loc_group_detail tgt 
+                       ON(    COALESCE(tgt.alloc_no,-1)     = tmp.alloc_no
+                          AND COALESCE(tgt.loc_group_id,-1) != %s
+                          AND COALESCE(tgt.group_type,-1)   != 7
+                          AND COALESCE(tgt.group_id,-1)     != src.group_id);"
+
+  L_mer3: "INSERT IGNORE INTO alloc_location (loc_group_id,
+                                              location_id,
+                                              location_desc,
+                                              group_id,
+                                              subgroup_id,
+                                              in_store_date)
+
+                   WITH src AS
+                            (SELECT store      location_id,
+                                    store_desc location_desc
+                               FROM store)
+                             
+                   SELECT DISTINCT %s loc_group_id,
+                          src.location_id,
+                          src.location_desc,
+                          src.location_id group_id,
+                          NULL subgroup_id,
+                          NULL in_store_date 
+                    FROM src
+                    JOIN alloc_location_temp tmp
+                      ON(    tmp.loc = src.location_id
+                         AND tmp.loc_type = 'L'
+                         AND tmp.alloc_no = %s)
+                    LEFT JOIN alloc_location tgt 
+                      ON(   COALESCE(tgt.loc_group_id,-1) != %s
+                        AND COALESCE(tgt.group_id,-1)     != src.location_id
+                        AND COALESCE(tgt.location_id,-1)  != src.location_id);"
+
+  L_mer5: "INSERT IGNORE INTO alloc_loc_group_detail (loc_group_id,
+                                                      alloc_no,
+                                                      template_id,
+                                                      group_desc,
+                                                      complex_ind,
+                                                      group_type,
+                                                      group_id,
+                                                      subgroup_id,
+                                                      subgroup_desc)
+                WITH src AS
+                (SELECT loc_list_desc group_desc,
+                        1             group_type, 
+                        loc_list      group_id 
+                   FROM store_list sl)
+                 
+                 SELECT DISTINCT %s loc_group_id,
+                        tmp.alloc_no,
+                        NULL template_id,
+                        src.group_desc,
+                        'N' complex_ind,
+                        1   group_type,
+                        src.group_id,
+                        NULL subgroup_id,
+                        NULL subgroup_desc 
+                   FROM src
+                   JOIN alloc_location_temp tmp
+                     ON(    tmp.group_id = src.group_id
+                        AND tmp.loc_type = 'M'
+                        AND tmp.alloc_no = %s)
+                   LEFT JOIN alloc_loc_group_detail tgt
+                          ON(    COALESCE(tgt.alloc_no,-1)     = tmp.alloc_no
+                             AND COALESCE(tgt.loc_group_id,-1) != %s 
+                             AND COALESCE(tgt.group_type,-1)   != 1
+                             AND COALESCE(tgt.group_id,-1)     != src.group_id);"
+              
+  L_mer7: "INSERT IGNORE INTO alloc_location (loc_group_id,
+                                              location_id,
+                                              location_desc,
+                                              group_id,
+                                              subgroup_id,
+                                              in_store_date)
+                           WITH src AS
+                                    (SELECT location location_id,
+                                            loc_list
+                                       FROM store_list sl)
+                                
+                         SELECT DISTINCT %s loc_group_id,
+                                src.location_id,
+                                tmp.loc_desc,
+                                tmp.group_id,
+                                NULL subgroup_id,
+                                NULL in_store_date 
+                           FROM src 
+                           JOIN alloc_location_temp tmp
+                             ON(    tmp.group_id = src.loc_list
+                                AND tmp.loc_type = 'M'
+                                AND tmp.loc = src.location_id
+                                AND tmp.alloc_no = %s)
+                           LEFT JOIN alloc_location tgt 
+                                  ON(    tgt.loc_group_id             != %s
+                                     AND COALESCE(tgt.group_id,-1)    != tmp.group_id
+                                     AND COALESCE(tgt.location_id,-1) != src.location_id);"
+
+  L_mer9: "INSERT IGNORE INTO alloc_loc_group_detail (loc_group_id,
+                                                      alloc_no,
+                                                      template_id,
+                                                      group_desc,
+                                                      complex_ind,
+                                                      group_type,
+                                                      group_id,
+                                                      subgroup_id,
+                                                      subgroup_desc)
+                                               
+                           WITH src AS
+                                    (SELECT 5          group_type, 
+                                            loc_trait  group_id,
+                                            trait_desc group_desc 
+                                       FROM store_traits)   
+                             
+                         SELECT DISTINCT %s loc_group_id,
+                                tmp.alloc_no,
+                                NULL template_id,
+                                src.group_desc,
+                                'N' complex_ind,
+                                src.group_type,
+                                src.group_id,
+                                NULL subgroup_id,
+                                NULL subgroup_desc
+                          FROM src
+                          JOIN alloc_location_temp tmp
+                            ON(    tmp.group_id = src.group_id
+                               AND tmp.loc_type = 'T'
+                               AND tmp.alloc_no = %s)
+                          LEFT JOIN alloc_loc_group_detail tgt
+                                 ON(    COALESCE(tgt.alloc_no,-1)     = tmp.alloc_no
+                                    AND COALESCE(tgt.loc_group_id,-1) != %s
+                                    AND COALESCE(tgt.group_type,-1)   != src.group_type
+                                    AND COALESCE(tgt.group_id,-1)     != src.group_id);"
+
+  L_mer11: "INSERT IGNORE INTO alloc_location (loc_group_id,
+                                               location_id,
+                                               location_desc,
+                                               group_id,
+                                               subgroup_id,
+                                               in_store_date)
+                           WITH src AS
+                           (SELECT store     location_id,
+                                   loc_trait
+                              FROM store_traits)
+                             
+                         SELECT DISTINCT %s loc_group_id,
+                                src.location_id,
+                                tmp.loc_desc,
+                                tmp.group_id,
+                                NULL subgroup_id,
+                                NULL in_store_date
+                           FROM src
+                           JOIN alloc_location_temp tmp
+                            ON(    tmp.group_id = tmp.group_id
+                               AND tmp.loc_type = 'T'
+                               AND tmp.loc = src.location_id
+                               AND tmp.alloc_no = %s)
+                           LEFT JOIN alloc_location tgt 
+                             ON(    tgt.loc_group_id             != %s
+                                AND COALESCE(tgt.group_id,-1)    != tmp.group_id
+                                AND COALESCE(tgt.location_id,-1) != src.location_id);"
+
+  L_mer13: "INSERT IGNORE INTO alloc_loc_group_detail (loc_group_id,
+                                                       alloc_no,
+                                                       template_id,
+                                                       group_desc,
+                                                       complex_ind,
+                                                       group_type,
+                                                       group_id,
+                                                       subgroup_id,
+                                                       subgroup_desc)   
+                                    
+                        SELECT DISTINCT %s loc_group_id,
+                                tmp.alloc_no,
+                                NULL template_id,
+                                'All Stores' group_desc,
+                                'N' complex_ind,
+                                6 group_type,
+                                'ALL' group_id,
+                                NULL subgroup_id,
+                                NULL subgroup_desc
+                          FROM alloc_location_temp tmp
+                          LEFT JOIN alloc_loc_group_detail tgt
+                                 ON(    COALESCE(tgt.alloc_no,-1)     = tmp.alloc_no
+                                    AND COALESCE(tgt.loc_group_id,-1) != %s 
+                                    AND COALESCE(tgt.group_type,-1)   != 6
+                                    AND COALESCE(tgt.group_id,-1)     != 'ALL'
+                                    AND tmp.alloc_no=%s);"
+
+  L_mer15: "INSERT IGNORE INTO alloc_location (loc_group_id,
+                                               location_id,
+                                               location_desc,
+                                               group_id,
+                                               subgroup_id,
+                                               in_store_date)
+                                
+                           WITH src AS
+                                    (SELECT store      location_id,
+                                            store_desc location_desc
+                                       FROM store)
+                        
+                         SELECT DISTINCT %s loc_group_id,
+                                src.location_id,
+                                src.location_desc,
+                                'ALL' group_id,
+                                NULL subgroup_id,
+                                NULL in_store_date 
+                           FROM src
+                           JOIN alloc_location_temp tmp
+                             ON(    tmp.loc = src.location_id
+                                AND tmp.loc_type = 'A'
+                                AND tmp.alloc_no = %s)
+                           LEFT JOIN alloc_location tgt 
+                                  ON(    tgt.loc_group_id != %s
+                                     AND COALESCE(tgt.group_id,-1) != 'ALL'
+                                     AND COALESCE(tgt.location_id,-1) != src.location_id);"
+
+  Q_merge_like_dtl: "UPDATE alloc_location al, alloc_location_temp src
+                        SET al.like_location_id     = src.like_loc,
+                            al.like_location_desc   = src.like_loc_desc,
+                            al.like_location_weight = src.weight_pct,
+                            al.loc_clearance_ind    = src.clearance_ind,
+                            al.loc_status_ind       = src.item_loc_status,
+                            al.release_date         = src.release_date
+                      WHERE src.alloc_no    = %s
+                        AND al.loc_group_id IN (SELECT loc_group_id FROM alloc_loc_group_detail WHERE alloc_no = %s)
+                        AND al.location_id  = src.loc;"
+
+delete_locations: 
+
+  C_get_rule_rec: "SELECT *
+                     FROM alloc_rule
+                    WHERE alloc_no = %s;"
+
+  C_check_all_store_del: "SELECT 1
+                            FROM alloc_location_temp gtt
+                           WHERE alloc_no = %s
+                             AND loc_type = 'A'
+                             AND del_ind = 'Y'
+                             AND EXISTS
+                                   (SELECT 1
+                                      FROM alloc_loc_group_detail  lgd,
+                                           alloc_location          lc
+                                     WHERE lgd.alloc_no = %s
+                                       AND lgd.group_type = 6
+                                       AND lc.loc_group_id = lgd.loc_group_id
+                                       AND lc.group_id     = lgd.group_id
+                                       AND lc.location_id  = gtt.loc
+                                       AND lc.group_id     = gtt.group_id);" 
+
+  C_check_location_del: "SELECT 1
+                           FROM alloc_location_temp gtt
+                          WHERE alloc_no = %s
+                            AND loc_type = 'L'
+                            AND del_ind = 'Y'
+                            AND EXISTS
+                                    (SELECT 1
+                                       FROM alloc_loc_group_detail lgd
+                                      WHERE lgd.alloc_no = %s
+                                        AND lgd.group_type = 7
+                                        AND lgd.group_id = gtt.loc);"
+
+  C_check_loc_list_del: "SELECT 1
+                           FROM alloc_location_temp gtt
+                          WHERE alloc_no = %s
+                            AND loc_type = 'T'
+                            AND del_ind = 'Y'
+                            AND EXISTS
+                                    (SELECT 1
+                                       FROM alloc_loc_group_detail  lgd,
+                                            alloc_location          lc
+                                      WHERE lgd.alloc_no = %s
+                                        AND lgd.group_type = 1
+                                        AND lc.loc_group_id = lgd.loc_group_id
+                                        AND lc.group_id = lgd.group_id
+                                        AND lc.location_id = gtt.loc
+                                        AND lc.group_id = COALESCE(gtt.group_id,lc.group_id));"
+
+  C_check_loc_trait_del: "SELECT 1
+                            FROM alloc_location_temp gtt
+                           WHERE alloc_no = %s
+                             AND loc_type = 'M'
+                             AND del_ind = 'Y'
+                             AND EXISTS
+                                     (SELECT 1
+                                        FROM alloc_loc_group_detail  lgd,
+                                             alloc_location          lc
+                                       WHERE lgd.alloc_no = %s
+                                         AND lgd.group_type = 5
+                                         AND lc.loc_group_id = lgd.loc_group_id
+                                         AND lc.group_id = lgd.group_id
+                                         AND lc.location_id = gtt.loc
+                                         AND lc.group_id =COALESCE(gtt.group_id,lc.group_id));"
+
+  L_del_alloc_location: "DELETE FROM alloc_location lc 
+                          WHERE EXISTS (SELECT 1 
+                                          FROM alloc_loc_group_detail  lgd, 
+                                                  alloc_location_temp  gtt 
+                                         WHERE gtt.alloc_no = %s
+                                           AND lgd.alloc_no = gtt.alloc_no
+                                           AND lgd.group_type = %s
+                                           AND lgd.group_id = COALESCE(gtt.group_id,lgd.group_id)
+                                           AND lc.loc_group_id = lgd.loc_group_id
+                                           AND lc.group_id = lgd.group_id
+                                           AND lc.location_id = gtt.loc
+                                           AND gtt.del_ind = 'Y');"
+
+  L_del_alloc_loc_group_dtl: "DELETE FROM alloc_loc_group_detail lgd
+                               WHERE lgd.alloc_no = %s
+                                 AND NOT EXISTS
+                                           (SELECT 1
+                                              FROM alloc_location al
+                                             WHERE al.group_id = lgd.group_id
+                                               AND al.loc_group_id = lgd.loc_group_id);"
+
+  Q_del_loc_temp: "DELETE FROM alloc_location_temp
+                         WHERE alloc_no = %s
+                           AND del_ind = 'Y';"
+
+  Q_fetch_loc: "SELECT * FROM alloc_location_temp WHERE alloc_no = %s;"
+                              
+upd_store_wh_rel:
+
+  L_upd: "UPDATE alloc_head
+             SET wh_store_rel_ind = COALESCE(%s,'Y')
+           WHERE alloc_no = %s;"
+
+  L_chk: "SELECT 1 chk
+            FROM alloc_head
+           WHERE alloc_no = %s;"
+
+update_size_profile_ind:
+
+  L_upd: "UPDATE alloc_rule
+             SET size_profile_ind = %s,
+                 last_update_datetime = current_timestamp(),
+                 last_update_id = user()
+           WHERE alloc_no=%s;"
+
+update_min_presentation_qty:
+
+  C_temp_tbl_qty_lts: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_quantity_limits_temp(ALLOC_NO                 NUMERIC(15),    
+                                                                                       LOCATION_ID              VARCHAR(40),  
+                                                                                       LOCATION_DESC            VARCHAR(150), 
+                                                                                       LOCATION_GROUP_ID        VARCHAR(40),  
+                                                                                       LOCATION_GROUP_DESC      VARCHAR(150), 
+                                                                                       LOCATION_GROUP_TYPE      VARCHAR(1),   
+                                                                                       HIER1                    VARCHAR(40),  
+                                                                                       HIER2                    VARCHAR(40),  
+                                                                                       HIER3                    VARCHAR(40),  
+                                                                                       ITEM_ID                  VARCHAR(60),  
+                                                                                       ITEM_DESC                VARCHAR(250), 
+                                                                                       DIFF_ID                  VARCHAR(60),  
+                                                                                       SIZE_COUNT               NUMERIC(12),   
+                                                                                       MIN                      NUMERIC(12),  
+                                                                                       MAX                      NUMERIC(12),  
+                                                                                       TRESHOLD                 NUMERIC(12),  
+                                                                                       TREND                    NUMERIC(12),  
+                                                                                       WOS                      NUMERIC(12),  
+                                                                                       MIN_NEED                 NUMERIC(12),   
+                                                                                       SOM_QTY                  NUMERIC(12),
+                                                                                       PACK_IND                 VARCHAR(1),   
+                                                                                       ASSIGN_DEFAULT_WH        NUMERIC(10),
+                                                                                       PRIMARY KEY(ALLOC_NO,LOCATION_ID,ITEM_ID));"
+
+  C_temp_tbl: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_items_srch_temp( ITEM                 VARCHAR(25),
+                                                                           LOCATION             NUMERIC(10),
+                                                                           ROLLUP_TYPE          VARCHAR(20),
+                                                                           ROLLUP_ITEM          VARCHAR(25),
+                                                                           ROLLUP_ITEM_DESC     VARCHAR(250) ,
+                                                                           MULTI_COLOR_PACK_IND VARCHAR(1) ,
+                                                                           COLOR_DIFF_ID        VARCHAR(15) ,
+                                                                           SELLING_UOM          VARCHAR(5) ,
+                                                                           INVENT_IND           VARCHAR(1) ,
+                                                                           HIER1                NUMERIC(4) ,
+                                                                           HIER2                NUMERIC(4) ,
+                                                                           HIER3                NUMERIC(4)); "  
+  
+  C_cursors: "SELECT alloc_criteria, 
+                     alloc_level, 
+                     wh_store_rel_ind 
+                FROM alloc_head
+               WHERE alloc_no = %s;"
+
+  L_del1: "DELETE FROM alloc_items_srch_temp;"
+
+  Q_ins_wh: " INSERT INTO alloc_items_srch_temp(item,                 
+                                                location,             
+                                                rollup_type,          
+                                                rollup_item ,         
+                                                rollup_item_desc,     
+                                                multi_color_pack_ind ,
+                                                color_diff_id ,       
+                                                selling_uom,          
+                                                invent_ind ,          
+                                                hier1,                
+                                                hier2,                
+                                                hier3)                     
+                                         SELECT gtt.item,
+                                                gtt.location,    
+                                                CASE 
+                                                    WHEN aim.pack_ind = 'Y' AND sellable_ind = 'N' 
+                                                    THEN 'NSFSP'
+                                                    WHEN aim.pack_ind = 'Y' 
+                                                    THEN 'PACK' ELSE 'STYLE' 
+                                                END rollup_type,    
+                                                aim.item_parent,
+                                                loc_status_ind   loc_status_ind,
+                                                NULL,
+                                                aim.diff1,
+                                                NULL store_ord_mult,
+                                                loc_clearance_ind loc_clearance_ind,
+                                                NULL dept,
+                                                NULL class,
+                                                NULL subclass
+                                           FROM (SELECT *
+                                                   FROM (SELECT DISTINCT item, 
+                                                                location loc
+                                                           FROM item_location ils
+                                                          WHERE EXISTS (SELECT 1 
+                                                                          FROM alloc_itm_search_dtl aails,
+                                                                               item_dtl             alc
+                                                                         WHERE aails.alloc_no = %s
+                                                                           AND CASE WHEN %s = 'T' THEN alc.item ELSE alc.item_parent END = aails.item                                          
+                                                                           AND alc.item = ils.item
+                                                                           AND aails.loc = ils.location)
+                                                            AND (GREATEST(GREATEST(COALESCE(ils.item_soh,0), 0)
+                                                                          - ((GREATEST(COALESCE(ils.reserved_qty,0), 0)
+                                                                          + GREATEST(COALESCE(ils.rtv_qty,0), 0)
+                                                                          + GREATEST(COALESCE(ils.non_sellable_qty,0), 0)
+                                                                          + GREATEST(COALESCE(ils.cust_resv_qty,0), 0)))
+                                                                          - (SELECT COALESCE(SUM(GREATEST(d.distro_qty,0)),0)
+                                                                                                     FROM alloc_head   h,
+                                                                                                          po_item_loc  ol,
+                                                                                                          po_dtl       oh,
+                                                                                                          alloc_dtl    d
+                                                                                                    WHERE ol.item = ils.item
+                                                                                                      AND ol.location = ils.location
+                                                                                                      AND h.status IN ('A', 'R')
+                                                                                                      AND h.po_no is NOT NULL
+                                                                                                      AND ol.po_no = h.po_no
+                                                                                                      AND ol.received_qty > 0
+                                                                                                      AND oh.po_no = ol.po_no
+                                                                                                      AND oh.status IN ('A', 'C')
+                                                                                                      AND d.alloc_no = h.alloc_no
+                                                                                                      AND d.alloc_qty > 0
+                                                                                                      AND d.alloc_qty > COALESCE(d.tsf_qty, 0)),0)) >= 1) item,
+                                                        (SELECT ale.location_id location,
+                                                                ale.loc_clearance_ind,
+                                                                ale.loc_status_ind,
+                                                                str.def_wh wh 
+                                                           FROM alloc_location ale,
+                                                                alloc_loc_group_detail al, 
+                                                                store str 
+                                                          WHERE alloc_no = %s
+                                                            AND al.loc_group_id = ale.loc_group_id
+                                                            AND ale.location_id  = str.store) loc
+                                                        WHERE (CASE WHEN %s = 'Y' THEN loc.wh ELSE item.loc END) = item.loc) gtt,
+                                                        item_dtl aim
+                                                  WHERE aim.item = gtt.item; "   
+                          
+  Q_ins_po: " INSERT INTO alloc_items_srch_temp(item,                 
+                                                location,             
+                                                rollup_type,          
+                                                rollup_item ,         
+                                                rollup_item_desc,     
+                                                multi_color_pack_ind ,
+                                                color_diff_id ,       
+                                                selling_uom,          
+                                                invent_ind ,          
+                                                hier1,                
+                                                hier2,                
+                                                hier3) 
+                                         SELECT gtt.item,
+                                                gtt.location,    
+                                                CASE 
+                                                    WHEN aim.pack_ind = 'Y' AND sellable_ind = 'N' 
+                                                    THEN 'NSFSP'
+                                                    WHEN aim.pack_ind = 'Y' 
+                                                    THEN 'PACK' ELSE 'STYLE' 
+                                                END rollup_type,    
+                                                aim.item_parent,
+                                                loc_status_ind   loc_status_ind,
+                                                NULL,
+                                                aim.diff1,
+                                                NULL store_ord_mult,
+                                                loc_clearance_ind loc_clearance_ind,
+                                                NULL dept,
+                                                NULL class,
+                                                NULL subclass
+                                           FROM (SELECT *
+                                                   FROM (SELECT DISTINCT item
+                                                           FROM po_item_loc ol
+                                                          WHERE EXISTS (SELECT 1
+                                                                          FROM alloc_itm_search_dtl aails,
+                                                                               item_dtl             alc
+                                                                       WHERE aails.alloc_no = %s
+                                                                         AND aails.alloc_criteria = 'P'
+                                                                         AND aails.ref_1 = ol.po_no
+                                                                         AND CASE WHEN %s = 'T' THEN alc.item ELSE alc.item_parent END = aails.item 
+                                                                         AND COALESCE(SUBSTR(aails.diff_id,INSTR(aails.diff_id,'~')+1),'$') = COALESCE(alc.diff1,'$')  
+                                                                         AND alc.item = ol.item
+                                                                         AND aails.loc = ol.location)
+                                                                AND (ol.ordered_qty
+                                                                     - COALESCE(ol.received_qty, 0)
+                                                                     - COALESCE((SELECT SUM(ald.alloc_qty)
+                                                                                   FROM alloc_sku_head alh,
+                                                                                        alloc_dtl      ald,
+                                                                                        alloc_xref     alx
+                                                                                  WHERE alh.alloc_no = alx.xref_alloc_no
+                                                                                    AND ald.alloc_no = alh.alloc_no
+                                                                                    AND alh.item = ol.item
+                                                                                    AND alh.order_no = ol.po_no
+                                                                                    AND alh.wh = ol.location
+                                                                               GROUP BY alh.item, alh.order_no),0)) >= 1) item,
+                                                        (SELECT ale.location_id location,
+                                                                ale.loc_clearance_ind,
+                                                                ale.loc_status_ind
+                                                           FROM alloc_location ale,
+                                                                alloc_loc_group_detail al
+                                                          WHERE alloc_no= %s
+                                                            AND al.loc_group_id = ale.loc_group_id)loc) gtt,
+                                                        item_dtl aim
+                                                  WHERE aim.item = gtt.item; "
+
+  Q_ins_asn: " INSERT INTO alloc_items_srch_temp(item,                 
+                                                 location,             
+                                                 rollup_type,          
+                                                 rollup_item ,         
+                                                 rollup_item_desc,     
+                                                 multi_color_pack_ind ,
+                                                 color_diff_id ,       
+                                                 selling_uom,          
+                                                 invent_ind ,          
+                                                 hier1,                
+                                                 hier2,                
+                                                 hier3) 
+                                          SELECT gtt.item,
+                                                 gtt.location,    
+                                                 CASE 
+                                                     WHEN aim.pack_ind = 'Y' AND sellable_ind = 'N' 
+                                                     THEN 'NSFSP'
+                                                     WHEN aim.pack_ind = 'Y' 
+                                                     THEN 'PACK' ELSE 'STYLE' 
+                                                 END rollup_type,    
+                                                 aim.item_parent,
+                                                 loc_status_ind   loc_status_ind,
+                                                 NULL,
+                                                 aim.diff1,
+                                                 NULL store_ord_mult,
+                                                 loc_clearance_ind loc_clearance_ind,
+                                                 NULL dept,
+                                                 NULL class,
+                                                 NULL subclass
+                                            FROM (SELECT *
+                                                    FROM (SELECT DISTINCT item 
+                                                            FROM ship_dtl                   sh,
+                                                                 ship_item                  ss,
+                                                                 warehouse                  w
+                                                           WHERE sh.ship_id = ss.shipment
+                                                             AND sh.asn_id IS NOT NULL
+                                                             AND sh.po_no  IS NOT NULL
+                                                             AND sh.received_date is NULL
+                                                             AND sh.ship_status = 'I'
+                                                             AND w.physical_wh = sh.to_location
+                                                             AND EXISTS (SELECT 1
+                                                                           FROM alloc_itm_search_dtl aails,
+                                                                                item_dtl             alc
+                                                                          WHERE aails.alloc_no = %s
+                                                                            AND aails.alloc_criteria = 'A'
+                                                                            AND aails.ref_1 = sh.po_no
+                                                                            AND aails.ref_2 = CONCAT(sh.shipment_date,'/',sh.asn_id,'/',sh.po_no)
+                                                                            AND CASE WHEN %s = 'T' THEN alc.item ELSE alc.item_parent END = aails.item 
+                                                                            AND COALESCE(SUBSTR(aails.diff_id,INSTR(aails.diff_id,'~')+1),'$') = COALESCE(alc.diff1,'$') 
+                                                                            AND alc.item = ss.item
+                                                                            AND aails.loc = w.wh)
+                                                                 AND (COALESCE(ss.qty_expected ,0)
+                                                                      - COALESCE(ss.qty_received, 0)
+                                                                      - COALESCE((SELECT SUM(alloc_qty)
+                                                                                    FROM alloc_dtl ad,
+                                                                                         alloc_sku_head ah,
+                                                                                         alloc_xref alx
+                                                                                   WHERE ah.alloc_no = ad.alloc_no
+                                                                                     AND ah.alloc_no = alx.xref_alloc_no
+                                                                                     AND ah.item     = ss.item
+                                                                                     AND ah.wh       = w.wh
+                                                                                     AND ah.ref_type = 'PO'
+                                                                                     AND COALESCE(ah.ref_no,'$') = sh.asn_id
+                                                                                     AND ah.order_no=sh.po_no) ,0)) >= 1) item,
+                                                         (SELECT ale.location_id location,
+                                                                 ale.loc_clearance_ind,
+                                                                 ale.loc_status_ind
+                                                            FROM alloc_location         ale,
+                                                                 alloc_loc_group_detail al
+                                                           WHERE alloc_no = %s
+                                                             AND al.loc_group_id = ale.loc_group_id)loc) gtt,
+                                                         item_dtl aim
+                                                   WHERE aim.item = gtt.item; "
+
+  Q_ins_tsf: " INSERT INTO alloc_items_srch_temp(item,                 
+                                                 location,             
+                                                 rollup_type,          
+                                                 rollup_item ,         
+                                                 rollup_item_desc,     
+                                                 multi_color_pack_ind ,
+                                                 color_diff_id ,       
+                                                 selling_uom,          
+                                                 invent_ind ,          
+                                                 hier1,                
+                                                 hier2,                
+                                                 hier3) 
+                                          SELECT gtt.item,
+                                                 gtt.location,    
+                                                 CASE 
+                                                     WHEN aim.pack_ind = 'Y' AND sellable_ind = 'N' 
+                                                     THEN 'NSFSP'
+                                                     WHEN aim.pack_ind = 'Y' 
+                                                     THEN 'PACK' ELSE 'STYLE' 
+                                                 END rollup_type,    
+                                                 aim.item_parent,
+                                                 loc_status_ind   loc_status_ind,
+                                                 NULL,
+                                                 aim.diff1,
+                                                 NULL store_ord_mult,
+                                                 loc_clearance_ind loc_clearance_ind,
+                                                 NULL dept,
+                                                 NULL class,
+                                                 NULL subclass
+                                            FROM (SELECT *
+                                                    FROM (SELECT DISTINCT item 
+                                                            FROM tsf_dtl                    th,
+                                                                 tsf_item_loc               td
+                                                           WHERE td.tsf_id = th.tsf_id
+                                                             AND th.to_location_type   = 'W'
+                                                             AND th.from_location_type = 'W'
+                                                             AND th.tsf_type IN ('SR','CF','AD','MR','EG','AIP','IC')
+                                                             AND EXISTS (SELECT 1
+                                                                           FROM alloc_itm_search_dtl aails,
+                                                                                item_dtl             alc
+                                                                          WHERE aails.alloc_no = %s
+                                                                            AND aails.alloc_criteria = 'T'
+                                                                            AND aails.ref_1 = th.tsf_id
+                                                                            AND CASE WHEN %s = 'T' THEN alc.item ELSE alc.item_parent END = aails.item 
+                                                                            AND COALESCE(SUBSTR(aails.diff_id,INSTR(aails.diff_id,'~')+1),'$') = COALESCE(alc.diff1,'$') 
+                                                                            AND alc.item  = td.item
+                                                                            AND aails.loc = th.to_location)
+                                                                 AND (GREATEST(COALESCE(td.transfered_qty,0)
+                                                                               - COALESCE(td.shipped_qty,0)
+                                                                               - COALESCE(td.cancelled_qty,0)
+                                                                               - COALESCE((SELECT COALESCE(SUM(GREATEST(d.alloc_qty,0)),0)
+                                                                                                                   FROM alloc_sku_head h,
+                                                                                                                        alloc_dtl      d
+                                                                                                                  WHERE h.item = td.item
+                                                                                                                    AND h.wh   = th.to_location
+                                                                                                                    AND h.status IN ('A','R')
+                                                                                                                    AND h.ref_type = 'TSF'
+                                                                                                                    AND th.tsf_id  = h.order_no
+                                                                                                                    AND d.alloc_no = h.alloc_no
+                                                                                                                    AND d.alloc_qty > 0),0),0)) >= 1) item,
+                                                         (SELECT ale.location_id location,
+                                                                 ale.loc_clearance_ind,
+                                                                 ale.loc_status_ind
+                                                            FROM alloc_location         ale,
+                                                                 alloc_loc_group_detail al
+                                                           WHERE alloc_no = %s
+                                                             AND al.loc_group_id = ale.loc_group_id)loc) gtt,
+                                                         item_dtl aim
+                                                   WHERE aim.item = gtt.item; "
+
+  Q_ins_wif: " INSERT INTO alloc_items_srch_temp(item,                 
+                                                 location,             
+                                                 rollup_type,          
+                                                 rollup_item ,         
+                                                 rollup_item_desc,     
+                                                 multi_color_pack_ind ,
+                                                 color_diff_id ,       
+                                                 selling_uom,          
+                                                 invent_ind ,          
+                                                 hier1,                
+                                                 hier2,                
+                                                 hier3) 
+                                          SELECT gtt.item,
+                                                 gtt.location,    
+                                                 CASE 
+                                                     WHEN aim.pack_ind = 'Y' AND sellable_ind = 'N' 
+                                                     THEN 'NSFSP'
+                                                     WHEN aim.pack_ind = 'Y' 
+                                                     THEN 'PACK' ELSE 'STYLE' 
+                                                 END rollup_type,    
+                                                 aim.item_parent,
+                                                 loc_status_ind   loc_status_ind,
+                                                 NULL,
+                                                 aim.diff1,
+                                                 NULL store_ord_mult,
+                                                 loc_clearance_ind loc_clearance_ind,
+                                                 NULL dept,
+                                                 NULL class,
+                                                 NULL subclass
+                                            FROM (SELECT *
+                                                    FROM (SELECT DISTINCT alc.item
+                                                            FROM alloc_itm_search_dtl aails,
+                                                                 item_dtl             alc
+                                                        WHERE aails.alloc_no       = %s
+                                                          AND aails.alloc_criteria = 'F'
+                                                          AND CASE WHEN %s = 'T' THEN alc.item ELSE alc.item_parent END      = aails.item                  
+                                                          AND COALESCE(SUBSTR(aails.diff_id,INSTR(aails.diff_id,'~')+1),'$') = COALESCE(alc.diff1,'$')) item,
+                                                         (SELECT ale.location_id location,
+                                                                 ale.loc_clearance_ind,
+                                                                 ale.loc_status_ind
+                                                            FROM alloc_location         ale,
+                                                                 alloc_loc_group_detail al
+                                                           WHERE alloc_no = %s
+                                                             AND al.loc_group_id = ale.loc_group_id)loc) gtt,
+                                                         item_dtl aim
+                                                   WHERE aim.item = gtt.item; "
+                                  
+  Q_mrge_qnty: " WITH 
+                     src 
+                     AS (SELECT DISTINCT aaae.alloc_no,
+                                aq.item_id,
+                                aq.diff_id,
+                                aq.location_id,
+                                CASE WHEN (ROUND(aadam.min_quantity/alt.som_qty,0)*alt.som_qty) = 0
+                                THEN
+                                   NULL
+                                ELSE
+                                   (round(aadam.min_quantity/alt.som_qty,0)*alt.som_qty)
+                                END AS min_quantity
+                           FROM (SELECT gtt.item_parent,
+                                        gtt.aggr_diff_id,
+                                        gtt.loc,
+                                        MIN(aadam.quantity) min_quantity
+                                   FROM alloc_default_auto_min aadam,
+                                        (SELECT DISTINCT gtt.item,
+                                                gtt.rollup_item   item_parent,
+                                                gtt.color_diff_id aggr_diff_id,
+                                                gtt.location      loc,
+                                                COALESCE(ilc.status,'A')        status,
+                                                COALESCE(ilc.clearance_ind,'N') clear_ind
+                                           FROM alloc_items_srch_temp gtt,
+                                                item_location         ilc
+                                          WHERE gtt.item = ilc.item
+                                            AND gtt.location = ilc.location
+                                            AND ilc.status IN ('A', 'C')
+                                            AND ((gtt.rollup_item_desc = 'L' )
+                                                OR (gtt.rollup_item_desc = 'A' AND ilc.status ='A')
+                                                OR (gtt.rollup_item_desc = 'D' AND ilc.status ='C'))
+                                            AND ((gtt.invent_ind = 'L' )
+                                                OR (gtt.invent_ind = ilc.clearance_ind))) gtt
+                                  WHERE gtt.item = aadam.item
+                                    AND gtt.loc  = aadam.loc
+                               GROUP BY gtt.item_parent,
+                                        gtt.aggr_diff_id,
+                                        gtt.loc) aadam,
+                                alloc_head aaae,
+                                item_dtl im,
+                                alloc_quantity_limits aq,
+                                alloc_quantity_limits_temp alt
+                          WHERE aaae.alloc_no = %s
+                            AND aaae.def_auto_pre_min_ind = 'Y'
+                            AND aaae.alloc_no = aq.alloc_no
+                            AND im.item   = aq.item_id
+                            AND aadam.loc = aq.location_id
+                            AND im.item_parent = aadam.item_parent
+                            AND im.diff1 = aadam.aggr_diff_id
+                            AND alt.alloc_no = aaae.alloc_no
+                            AND alt.item_id = aadam.item_parent
+                            AND alt.location_id = aadam.loc
+                            AND alt.diff_id = aadam.aggr_diff_id)
+                 UPDATE alloc_quantity_limits tgt, src 
+                    SET tgt.min      = src.min_quantity, 
+                        tgt.min_need = src.min_quantity
+                  WHERE tgt.alloc_no = src.alloc_no
+                    AND tgt.item_id  = src.item_id
+                    AND tgt.diff_id  = src.diff_id
+                    AND tgt.location_id = src.location_id; "
+
+  Q_ins_pack: " INSERT INTO alloc_items_srch_temp(item,                 
+                                                 location,             
+                                                 rollup_type,          
+                                                 rollup_item ,         
+                                                 rollup_item_desc,     
+                                                 multi_color_pack_ind ,
+                                                 color_diff_id ,       
+                                                 selling_uom,          
+                                                 invent_ind ,          
+                                                 hier1,                
+                                                 hier2,                
+                                                 hier3) 
+                                          SELECT DISTINCT pb.item,
+                                                 gtt.location,
+                                                 'STYLE' rollup_type,
+                                                 gtt.rollup_item,
+                                                 gtt.rollup_item_desc,
+                                                 gtt.multi_color_pack_ind,
+                                                 gtt.color_diff_id,
+                                                 gtt.selling_uom,
+                                                 gtt.invent_ind,
+                                                 gtt.hier1,
+                                                 gtt.hier2,
+                                                 gtt.hier3
+                                            FROM alloc_items_srch_temp gtt,
+                                                 packitem_breakout pb
+                                           WHERE gtt.item = pb.pack_no
+                                             AND gtt.rollup_type = 'NSFSP'; "
+
+  Q_del_pack: " DELETE FROM alloc_items_srch_temp WHERE rollup_type = 'NSFSP'; "
+
+  L_mer1: "WITH dr AS
+           (SELECT DISTINCT aq.alloc_no, 
+                   aadam.item item_id,
+                   aadam.loc location_id,
+                   aadam.min_quantity,
+                   (CASE WHEN (round(aadam.min_quantity/aq.som_qty,0)*aq.som_qty) = 0 
+                         THEN  NULL  
+                         ELSE (round(aadam.min_quantity/aq.som_qty,0)*aq.som_qty)  
+                     END) as min_need_qty
+              FROM (SELECT gtt.item,
+                           gtt.loc,
+                           MIN(aadam.quantity) min_quantity 
+                      FROM alloc_default_auto_min aadam,
+                           (SELECT DISTINCT gtt.item,
+                                   gtt.rollup_item item_parent,
+                                   gtt.color_diff_id aggr_diff_id,
+                                   gtt.location loc,
+                                   coalesce(ilc.status,'A') status,
+                                   coalesce(ilc.clearance_ind,'N') clear_ind
+                              FROM alloc_items_srch_temp gtt,
+                                   item_location ilc
+                             WHERE gtt.item = ilc.item
+                               AND gtt.location = ilc.location
+                               AND ilc.status IN ('A', 'C') 
+                               /*AND ((   gtt.rollup_item_desc = 'L' )
+                                     OR (gtt.rollup_item_desc = 'A' AND ilc.status ='A')
+                                     OR (gtt.rollup_item_desc = 'D' AND ilc.status ='C'))
+                               AND (   (gtt.invent_ind = 'L' )
+                                    OR (gtt.invent_ind = ilc.clearance_ind))*/) gtt
+                     WHERE gtt.item = aadam.item
+                       AND gtt.loc = aadam.loc 
+                     GROUP BY gtt.item,
+                              gtt.loc) aadam,
+                   alloc_head aaae,
+                   alloc_quantity_limits aq
+             WHERE aaae.alloc_no = %s
+               AND aaae.def_auto_pre_min_ind = 'Y'
+               AND aaae.alloc_no = aq.alloc_no
+               AND aadam.item = aq.item_id
+               AND aadam.loc = aq.location_id)
+               
+            UPDATE alloc_quantity_limits aql, dr 
+               SET aql.min = dr.min_quantity, 
+                   aql.min_need = dr.min_need_qty 
+             WHERE dr.alloc_no = aql.alloc_no 
+               AND dr.item_id=aql.item_id 
+               AND dr.location_id=dr.location_id;"  
+  
+  L_mer2: "WITH dr AS
+           (SELECT DISTINCT aaae.alloc_no,
+                            aadam.item,
+                            aadam.loc,
+                            aadam.min_quantity,
+                            aaql.som_qty
+             FROM (SELECT gtt.item,
+                          gtt.loc,
+                          MIN(aadam.quantity) min_quantity 
+                     FROM alloc_default_auto_min aadam,
+                          (SELECT DISTINCT gtt.item,
+                                  gtt.rollup_item item_parent,
+                                  gtt.color_diff_id aggr_diff_id,
+                                  gtt.location loc,
+                                  COALESCE(ilc.status,'A') status,
+                                  COALESCE(ilc.clearance_ind,'N') clear_ind
+                             FROM alloc_items_srch_temp gtt,
+                                  item_location              ilc
+                            WHERE gtt.item = ilc.item
+                              AND gtt.location = ilc.LOCATION
+                              AND ilc.status IN ('A', 'C') 
+                              /*AND (   (gtt.rollup_item_desc = 'L' )
+                                   OR (gtt.rollup_item_desc = 'A' AND ilc.status ='A')
+                                   OR (gtt.rollup_item_desc = 'D' AND ilc.status ='C'))
+                              AND (   (gtt.invent_ind = 'L' )
+                                   OR (gtt.invent_ind = ilc.clearance_ind))*/) gtt
+                    WHERE gtt.item = aadam.item
+                      AND gtt.loc = aadam.loc 
+                    GROUP BY gtt.item,
+                             gtt.loc) aadam,
+                  alloc_head aaae,
+                  alloc_quantity_limits_temp aaql
+            WHERE aaae.alloc_no = %s
+              AND aaae.def_auto_pre_min_ind = 'Y'
+              AND aaae.alloc_no = aaql.alloc_no
+              AND aadam.item = aaql.item_id
+              AND aadam.loc = aaql.location_id)
+                   
+            UPDATE alloc_calc_qty_limits_temp aacql, dr 
+               SET aacql.min   = dr.min_quantity*dr.som_qty 
+             WHERE dr.alloc_no = aacql.alloc_no
+               AND dr.item     = aacql.tran_item
+               AND dr.loc      = aacql.store;"
+
+insert_rule:
+   Q_del_rule: "DELETE FROM alloc_rule WHERE alloc_no = %s;"
+   
+   Q_ins_rule: "INSERT INTO alloc_rule(ALLOC_NO
+                                      ,TEMPLATE_NO
+                                      ,RULE_TYPE
+                                      ,RULE_LEVEL
+                                      ,EXACT_IND
+                                      ,SIZE_PROFILE_IND
+                                      ,CASCADE_IND
+                                      ,NET_NEED_IND
+                                      ,USE_RULE_LEVEL_ON_HAND_IND
+                                      ,INCLUDE_CLEARANCE_STOCK_IND
+                                      ,REGULAR_SALES_IND
+                                      ,PROMO_SALES_IND
+                                      ,CLEARANCE_SALES_IND
+                                      ,INCLUDE_INV_IN_MIN_IND
+                                      ,INCLUDE_INV_IN_MAX_IND
+                                      ,ON_ORDER_COMMIT_DATE
+                                      ,ON_ORDER_COMMIT_WEEKS
+                                      ,IWOS_WEEKS
+                                      ,WEEKS_THIS_YEAR
+                                      ,WEEKS_LAST_YEAR
+                                      ,WEEKS_FUTURE
+                                      ,START_DATE1
+                                      ,END_DATE1
+                                      ,START_DATE2
+                                      ,END_DATE2
+                                      ,CORPORATE_RULE_ID
+                                      ,INCLUDE_MID_TIER_ON_HAND_IND
+                                      ,ENFORCE_PRES_MIN_IND
+                                      ,LEAD_TIME_NEED_IND
+                                      ,LEAD_TIME_NEED_RULE_TYPE
+                                      ,LEAD_TIME_NEED_START_DATE
+                                      ,LEAD_TIME_NEED_END_DATE
+                                      ,CONVERT_TO_PACK
+                                      ,CREATE_ID
+                                      ,CREATE_DATETIME
+                                      ,LAST_UPDATE_ID
+                                      ,LAST_UPDATE_DATETIME)
+                VALUES(%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,%s
+                       ,user()
+                       ,now()
+                       ,user()
+                       ,now());"

@@ -1,0 +1,330 @@
+#############################################################
+#Created By - Naveen Ramanathan                             #                
+#File Name  - setup_like_item_queries.yaml                  #
+#Purpose    - All queries for Like Item screen functions    #
+#############################################################
+
+retreive_like_item_map:
+ 
+  C_temp_tbl1: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_like_item_diff_temp
+                (ALLOC_NO    NUMERIC(15) NOT NULL
+                ,ITEM        VARCHAR(25)  
+                ,ITEM_DESC   VARCHAR(250)
+                ,DIFF_ID     VARCHAR(25)  
+                ,NO_OF_SIZES NUMERIC(10)  
+                ,SEL_IND     VARCHAR(1));"
+
+  C_temp_tbl2: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_like_item_diff_map_temp
+                (ALLOC_NO          NUMERIC(15) NOT NULL
+                ,ITEM              VARCHAR(25)  
+                ,ITEM_DESC         VARCHAR(250)
+                ,DIFF_ID           VARCHAR(25)  
+                ,MERCH_TYPE_CODE   VARCHAR(10)  
+                ,MERCH_TYPE_VALUE  VARCHAR(25)  
+                ,LIKE_ITEM         VARCHAR(25)  
+                ,LIKE_ITEM_DESC    VARCHAR(250)
+                ,LIKE_ITEM_DIFF_ID VARCHAR(25)  
+                ,WEIGHT            NUMERIC(20)  
+                ,DEL_IND           VARCHAR(1)  
+                ,MAP_SIZE_PROF_IND VARCHAR(1));"
+
+  C_temp_tbl3: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_like_item_map_temp
+                (ALLOC_NO             NUMERIC(15) NOT NULL  
+                ,ITEM                 VARCHAR(25)  
+                ,ITEM_DESC            VARCHAR(250)
+                ,MERCH_TYPE_CODE      VARCHAR(10)  
+                ,MERCH_TYPE_VALUE     VARCHAR(25)  
+                ,LIKE_ITEM            VARCHAR(25)  
+                ,LIKE_ITEM_DESC       VARCHAR(250)
+                ,WEIGHT               NUMERIC(20)  
+                ,DEL_IND              VARCHAR(1));"
+
+  C_alloc_level: "SELECT COALESCE(MAX(alloc_level),'$') alloc_level
+                    FROM alloc_head
+                   WHERE alloc_no = %s;"
+
+  C_left_out:  "SELECT tmp.*, CASE WHEN id.DIFFS = '$'
+                                   THEN NULL 
+                                   ELSE id.DIFFS
+                               END DIFFS
+                  FROM alloc_like_item_diff_temp tmp,
+                       (SELECT REPLACE(CASE WHEN id.AGGR_DIFF_COLUMN = 1
+                                            THEN CONCAT(COALESCE(id.DIFF2,'$'),',',COALESCE(id.DIFF3,'$'),',',COALESCE(id.DIFF4,'$'))
+                                            WHEN id.AGGR_DIFF_COLUMN = 2
+                                            THEN CONCAT(COALESCE(id.DIFF1,'$'),',',COALESCE(id.DIFF3,'$'),',',COALESCE(id.DIFF4,'$'))
+                                            WHEN id.AGGR_DIFF_COLUMN = 3
+                                            THEN CONCAT(COALESCE(id.DIFF1,'$'),',',COALESCE(id.DIFF2,'$'),',',COALESCE(id.DIFF4,'$'))
+                                            WHEN id.AGGR_DIFF_COLUMN = 4
+                                            THEN CONCAT(COALESCE(id.DIFF1,'$'),',',COALESCE(id.DIFF2,'$'),',',COALESCE(id.DIFF3,'$'))
+                                        END,
+                               ',$','') DIFFS,
+                              item 
+                         FROM item_dtl id )id 
+                 WHERE tmp.alloc_no = %s
+                   AND id.item = tmp.item;"
+
+  C_right_out:  "SELECT * FROM alloc_like_item_diff_map_temp WHERE alloc_no = %s;"
+
+  L_del_1: "DELETE FROM alloc_like_item_diff_temp
+             WHERE alloc_no = %s;"
+                         
+  L_del_2: "DELETE FROM alloc_like_item_diff_temp
+             WHERE alloc_no = %s AND no_of_sizes =0;"
+ 
+  L_del_3: "DELETE FROM alloc_like_item_diff_map_temp
+             WHERE alloc_no = %s;"
+ 
+  L_del_4: "DELETE FROM alloc_like_item_map_temp
+             WHERE alloc_no = %s;"
+ 
+  L_ins_1: "INSERT INTO alloc_like_item_source(item_source_id,
+                                               alloc_no,
+                                               item_type,
+                                               source_item,
+                                               source_item_level,
+                                               source_tran_level,
+                                               source_pack_ind,
+                                               source_diff1_id,
+                                               source_diff2_id,
+                                               source_diff3_id,
+                                               source_diff4_id,
+                                               hier1,
+                                               hier2,
+                                               hier3,
+                                               pack_no,
+                                               like_source_item,
+                                               like_source_item_level,
+                                               like_source_tran_level,
+                                               like_source_pack_ind,
+                                               like_source_diff1_id,
+                                               like_source_diff2_id,
+                                               like_source_diff3_id,
+                                               like_source_diff4_id,
+                                               like_hier1,
+                                               like_hier2,
+                                               like_hier3,
+                                               like_pack_no,
+                                               like_item_weight,
+                                               like_size_prof_ind,
+                                               create_id,
+                                               create_datetime,
+                                               last_update_id,
+                                               last_update_datetime)
+                                        SELECT DISTINCT item_source_id,
+                                        alloc_no,
+                                        item_type,
+                                        source_item,
+                                        source_item_level,
+                                        source_tran_level,
+                                        source_pack_ind,
+                                        source_diff1_id,
+                                        source_diff2_id,
+                                        source_diff3_id,
+                                        source_diff4_id,
+                                        hier1,
+                                        hier2,
+                                        hier3,
+                                        pack_no,
+                                        like_source_item,
+                                        like_source_item_level,
+                                        like_source_tran_level,
+                                        like_source_pack_ind,
+                                        like_source_diff1_id,
+                                        like_source_diff2_id,
+                                        like_source_diff3_id,
+                                        like_source_diff4_id,
+                                        like_hier1,
+                                        like_hier2,
+                                        like_hier3,
+                                        like_pack_no,
+                                        like_item_weight,
+                                        like_size_prof_ind,
+                                        create_id,
+                                        create_datetime,
+                                        last_update_id,
+                                        last_update_datetime
+                                        FROM alloc_calc_source_temp tmp
+                                        WHERE alloc_no = %s
+                                            AND tmp.item_type IS NULL  
+                                            AND NOT EXISTS
+                                        (SELECT 1
+                                        FROM alloc_like_item_source ais
+                                        WHERE ais.alloc_no = tmp.alloc_no
+                                        AND ais.item_source_id = tmp.item_source_id
+                                        AND ais.source_item = tmp.source_item);"  
+ 
+  L_ins_2: "INSERT INTO alloc_like_item_diff_temp (alloc_no,
+                                        item,
+                                        item_desc,
+                                        diff_id,
+                                        no_of_sizes,
+                                        sel_ind)
+               SELECT alloc_no,
+                      source_item,
+                      mn.item_desc    item_desc,
+                      diff1_id,
+                      no_of_sizes,
+                      sel_ind         sel_ind
+                 FROM (SELECT alloc_no,
+                              source_item,
+                              MAX(im.item_desc)            item_desc,
+                              COALESCE(source_diff1_id,
+                                        source_diff2_id,
+                                        source_diff3_id,
+                                        source_diff4_id)    diff1_id,
+                              COALESCE((SELECT COUNT(1) im
+                                 WHERE EXISTS (SELECT 1
+                                  FROM item_location  il,
+                                       (SELECT store
+                                          FROM store st
+                                         WHERE st.status IN ('A')
+                                           AND st.stock_holding_ind = 'Y'
+                                           AND(   st.close_ord_date IS NULL
+                                               OR st.close_ord_date>=curdate())
+                                           AND st.open_date<=curdate()
+                                           AND st.def_wh IS NOT NULL)st1
+                                 WHERE il.item = source_item
+                                   AND il.location = st1.store
+                                   AND il.status IN ('A', 'C')
+                                 GROUP BY il.item,
+                                          st1.store
+                                   LIMIT 1)),0)                    no_of_sizes,
+                              'N'                           sel_ind
+                         FROM alloc_like_item_source ai, item_dtl im
+                        WHERE alloc_no = %s
+                          AND im.item = ai.source_item
+                          AND like_source_item IS NULL
+                    AND ai.source_pack_ind<>'Y'
+                  GROUP BY alloc_no,
+                           source_item,
+                           COALESCE(source_diff1_id,
+                                     source_diff2_id,
+                                     source_diff3_id,
+                                     source_diff4_id)) mn;"
+
+#Changes for style/diff  by shubham  start#
+  L_ins_2_style: "INSERT INTO alloc_like_item_diff_temp (alloc_no,
+                                        item,
+                                        item_desc,
+                                        diff_id,
+                                        no_of_sizes,
+                                        sel_ind)
+            SELECT alloc_no,
+                  source_item,
+                  mn.item_desc    item_desc,
+                  diff1_id,
+                  COALESCE (
+                     (SELECT COUNT(im.aggr_diff_id)
+                       FROM item_dtl im
+                      WHERE     im.item_parent = mn.source_item
+                           AND EXISTS
+                                 (SELECT 1
+                                   FROM item_location  il,
+                                       (SELECT store
+                                         FROM store ST21
+                                        WHERE     ST21.CLOSE_ORD_DATE IS NULL
+                                             AND ST21.store_type = 'C'
+                                             AND ST21.STOCK_HOLDING_IND = 'Y'
+                                             AND ST21.OPEN_DATE IS NOT NULL
+                                             AND ST21.OPEN_DATE <= curdate()
+                                             AND ST21.DEF_WH IS NOT NULL
+                                             AND ST21.store NOT IN
+                                                  (SELECT ST22.store
+                                                     FROM store ST22
+                                                    WHERE ST22.open_date <= date(current_date)
+                                                        AND ST22.stock_holding_ind = 'Y'
+                                                        AND ST22.store_type = 'C'
+                                                        AND store in (SELECT CAST(code AS SIGNED)
+                                                                        FROM code_detail
+                                                                       WHERE code_type = 'ALAR')))
+                                       ST1
+                                  WHERE     il.item = im.item
+                                       AND il.location = ST1.store
+                                       AND il.status IN ('A', 'C')
+                                     LIMIT 1)
+                           AND im.aggr_diff_id = mn.diff1_id),
+                     0)          no_of_sizes,
+                  sel_ind         sel_ind
+              FROM (  SELECT alloc_no,
+                         source_item,
+                         MAX(im.item_desc)            item_desc,
+                         COALESCE (source_diff1_id,
+                                 source_diff2_id,
+                                 source_diff3_id,
+                                 source_diff4_id)    diff1_id,
+                         COUNT(1)                     no_of_sizes,
+                         'N'                           sel_ind
+                     FROM alloc_like_item_source ai, item_dtl im
+                     WHERE     alloc_no = %s
+                         AND im.item = ai.source_item
+                         AND like_source_item IS NULL
+                  GROUP BY alloc_no,
+                         source_item,
+                         COALESCE (source_diff1_id,
+                                 source_diff2_id,
+                                 source_diff3_id,
+                                 source_diff4_id)) mn;"
+#Changes for style/diff  by shubham  end#                                           
+  L_ins_4: "INSERT INTO alloc_like_item_diff_map_temp (alloc_no,
+                                           item,
+                                           item_desc,
+                                           diff_id,
+                                           like_item,
+                                           like_item_desc,
+                                           like_item_diff_id,
+                                           weight,
+                                           del_ind,
+                                           map_size_prof_ind)
+                   SELECT src.alloc_no,
+                                      src.item,
+                                      im.item_desc      item_desc,
+                                      src.diff_id,
+                                      src.like_item,
+                                      im2.item_desc     like_item_desc,
+                                      src.like_item_diff_id,
+                                      src.weight * 100,
+                                      'N',
+                                      like_size_prof_ind
+                                 FROM (SELECT DISTINCT
+                                              alloc_no,
+                                              source_item
+                                                  item,
+                                              COALESCE(source_diff1_id,
+                                                        source_diff2_id,
+                                                        source_diff3_id,
+                                                        source_diff4_id)
+                                                  diff_id,
+                                              like_source_item
+                                                  like_item,
+                                              COALESCE(like_source_diff1_id,
+                                                        like_source_diff2_id,
+                                                        like_source_diff3_id,
+                                                        like_source_diff4_id)
+                                                  like_item_diff_id,
+                                              like_item_weight
+                                                  weight,
+                                              like_size_prof_ind
+                                         FROM alloc_like_item_source
+                                        WHERE     alloc_no = %s
+                                              AND like_source_item IS NOT NULL) src
+                        JOIN item_dtl  im
+                          ON (    src.item = im.item)
+                        JOIN item_dtl  im2
+                          ON (    src.like_item = im2.item); "
+
+  L_ins_5: "INSERT INTO alloc_like_item_map_temp (alloc_no,
+                                                  item,
+                                                  item_desc,
+                                                  like_item,
+                                                  like_item_desc,
+                                                  weight,
+                                                  del_ind)
+            SELECT DISTINCT alloc_no,
+                            item,
+                            item_desc,
+                            like_item,
+                            like_item_desc,
+                            weight,
+                            'N'
+              FROM alloc_like_item_diff_map_temp
+             WHERE alloc_no = %s;"

@@ -1,0 +1,2397 @@
+#############################################################
+# Created By - Priyanshu Pandey                             #                
+# File Name - calculate.yaml                                #
+# Purpose - contains all queries for calculation            #
+#############################################################
+
+calculate:
+  Q_chk_alloc: "SELECT COALESCE(MAX(alloc_criteria),'$') alloc_criteria
+                       ,COALESCE(MAX(status),'$') status
+                       ,COALESCE(MAX(alloc_type),'$') alloc_type
+                       ,COALESCE(MAX(alloc_level),'$') alloc_level
+                       ,MAX(release_date) release_date
+                       ,MAX(wh_store_rel_ind) wh_store_rel_ind
+                  FROM alloc_head
+                 WHERE alloc_no = %s;"
+
+  Q_fetch_rule: "SELECT CASE 
+                           WHEN on_order_commit_weeks IS NOT NULL 
+                           THEN DATE_ADD(curdate(),INTERVAL (on_order_commit_weeks * 7) DAY)
+                           WHEN on_order_commit_date IS NOT NULL
+                           THEN on_order_commit_date
+                       END commit_date,
+                       on_order_commit_date,
+                       on_order_commit_weeks
+                  FROM alloc_rule
+                 WHERE alloc_no =%s;"
+
+  Q_cre_calc_itm_loc_tbl: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_calc_item_loc_temp(ALLOC_NO                   NUMERIC(20) ,
+                                                                                         TRAN_ITEM                  VARCHAR(25) ,
+                                                                                         SOURCE_ITEM                VARCHAR(25) ,
+                                                                                         DIFF_ID                    VARCHAR(10) ,
+                                                                                         WH_ID                      VARCHAR(40) ,
+                                                                                         ORDER_NO                   VARCHAR(40) ,
+                                                                                         TO_LOC                     DECIMAL(10,0) ,
+                                                                                         ASSIGN_DEFAULT_WH          DECIMAL(10,0) ,
+                                                                                         NEED_VALUE                 DECIMAL(12,4) ,
+                                                                                         TOTAL_NEED_VALUE           DECIMAL(12,4) ,
+                                                                                         TOTAL_AVAIL_QTY            DECIMAL(12,4) ,
+                                                                                         TREND                      DECIMAL(12,4) ,
+                                                                                         WOS                        DECIMAL(12,4) ,
+                                                                                         MIN                        DECIMAL(12,4) ,
+                                                                                         MAX                        DECIMAL(12,4) ,
+                                                                                         TRESHOLD                   DECIMAL(12,4) ,
+                                                                                         MIN_NEED                   DECIMAL(12,4) ,
+                                                                                         MIN_PACK                   DECIMAL(12,4) ,
+                                                                                         MAX_PACK                   DECIMAL(12,4) ,
+                                                                                         AVAIL_QTY                  DECIMAL(12,4) ,
+                                                                                         SKU_AVAIL_QTY              DECIMAL(12,4) ,
+                                                                                         HOLD_BACK_PCT_FLAG         VARCHAR(1) ,
+                                                                                         HOLD_BACK_VALUE            DECIMAL(12,4) ,
+                                                                                         TOTAL_NEED_COUNT           DECIMAL(12,4) ,
+                                                                                         OWNERSHIP_RATIO            DECIMAL(12,4) ,
+                                                                                         SKU_OWNERSHIP_RATIO        DECIMAL(12,4) ,
+                                                                                         SIZE_PROFILE_IND           VARCHAR(1) ,
+                                                                                         SIZE_PROFILE_ID            VARCHAR(10) ,
+                                                                                         SIZE_PROFILE_QTY           DECIMAL(12,4) ,
+                                                                                         TOTAL_PROFILE_QTY          DECIMAL(12,4) ,
+                                                                                         RULE_TYPE                  VARCHAR(10) ,
+                                                                                         RULE_LEVEL                 VARCHAR(10) ,
+                                                                                         EXACT_IND                  VARCHAR(1) ,
+                                                                                         NET_NEED_IND               VARCHAR(1) ,
+                                                                                         GROSS_NEED_NO_OWN_SHIP     DECIMAL(12,4) ,
+                                                                                         SKU_GROSS_NEED_NO_OWN_SHIP DECIMAL(12,4) ,
+                                                                                         STOCK_ON_HAND              DECIMAL(12,4) ,
+                                                                                         ON_ORDER                   DECIMAL(12,4) ,
+                                                                                         ON_ALLOC                   DECIMAL(12,4) ,
+                                                                                         ALLOC_OUT                  DECIMAL(12,4) ,
+                                                                                         IN_TRANSIT_QTY             DECIMAL(12,4) ,
+                                                                                         BACKORDER_QTY              DECIMAL(12,4) ,
+                                                                                         GROSS_NEED                 DECIMAL(12,4) ,
+                                                                                         CALC_QTY                   DECIMAL(12,4) ,
+                                                                                         SKU_CALC_QTY               DECIMAL(12,4) ,
+                                                                                         SKU_CALC_QTY_BFR_QTLM      DECIMAL(12,4) ,
+                                                                                         SKU_CALC_QTY_BFR_SPRD      DECIMAL(12,4) ,
+                                                                                         ALLOC_SKU_CALC_QTY         DECIMAL(12,4) ,
+                                                                                         SOM_QTY                    DECIMAL(20,4) ,
+                                                                                         ALLOC_QTY                  DECIMAL(12,4) ,
+                                                                                         STATUS                     VARCHAR(1) ,
+                                                                                         ERROR_MESSAGE_TXT          VARCHAR(250) ,
+                                                                                         CREATE_ID                  VARCHAR(30) ,
+                                                                                         CREATE_DATETIME            DATE ,
+                                                                                         LAST_UPDATE_ID             VARCHAR(30) ,
+                                                                                         LAST_UPDATE_DATETIME       DATE ,
+                                                                                         INCLUDE_INV_IN_MIN_IND     VARCHAR(1) ,
+                                                                                         INCLUDE_INV_IN_MAX_IND     VARCHAR(1) ,
+                                                                                         SKU_SPREAD_QTY             DECIMAL(12,0) ,
+                                                                                         ORIG_SKU_CALC_QTY          DECIMAL(12,0) ,
+                                                                                         WH_ON_ORDER_QTY            DECIMAL(12,4) ,
+                                                                                         WH_ON_ALLOC_QTY            DECIMAL(12,4));"
+
+  Q_cre_item_loc_spread_tbl: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_item_loc_spread_temp(ALLOC_NO                NUMERIC(20) ,
+                                                                                              WH_ID                   VARCHAR(25) ,
+                                                                                              ORDER_NO                VARCHAR(40) ,
+                                                                                              SOURCE_ITEM             VARCHAR(25) ,
+                                                                                              TRAN_ITEM               VARCHAR(25) ,
+                                                                                              SKU_AVAIL_QTY           DECIMAL(20,4) ,
+                                                                                              TOTAL_TRAN_SKU_CALC_QTY DECIMAL(20,4) ,
+                                                                                              SOM_QTY                 DECIMAL(20,4) ,
+                                                                                              NO_OF_STORES            DECIMAL(20,4) ,
+                                                                                              ADJ_UNITS               DECIMAL(20,4));"
+
+  Q_chk_avail_qty: "SELECT CASE WHEN SUM(avail_qty)>0
+                                THEN 1
+                                ELSE 0
+                            END avail_qty
+                      FROM alloc_itm_search_dtl
+                     WHERE alloc_no = %s;"
+
+  Q_update_ql: "UPDATE alloc_calc_qty_limits_temp
+                   SET min      = NULL,
+                       max      = NULL,
+                       treshold = NULL,
+                       trend    = NULL,
+                       wos      = NULL,
+                       min_need = NULL
+                  WHERE alloc_no = %s;"
+
+  Q_del_cal_item_loc: "DELETE FROM alloc_calc_item_loc_temp
+                        WHERE alloc_no = %s;" #truncate
+
+  Q_seed_calc_item_loc: "SELECT DISTINCT alloc_no, 
+                                 diff_id,
+                                 tran_item,
+                                 source_item,
+                                 wh_id,
+                                 assign_default_wh,
+                                 order_no,
+                                 to_loc,
+                                 need_value,
+                                 total_need_value,
+                                 total_avail_qty,
+                                 trend,
+                                 wos,
+                                 min as ql_min,
+                                 max as ql_max,
+                                 treshold,
+                                 min_need,
+                                 min_pack,
+                                 max_pack,
+                                 avail_qty,
+                                 NULL sku_avail_qty,
+                                 hold_back_pct_flag,
+                                 hold_back_value,
+                                 total_need_count,
+                                 CASE
+                                     WHEN ownership_ratio > 0 AND ownership_ratio < 1
+                                     THEN
+                                         1
+                                     WHEN exact_ind = 'N' AND ownership_ratio > 1
+                                     THEN
+                                         1
+                                     ELSE
+                                         ownership_ratio
+                                 END ownership_ratio,
+                                 NULL sku_ownership_ratio,
+                                 NULL size_profile_ind,
+                                 size_profile,
+                                 size_profile_id,
+                                 size_profile_qty,
+                                 total_profile_qty,
+                                 rule_type,
+                                 rule_level,
+                                 exact_ind,
+                                 net_need_ind,
+                                 gross_need AS gross_need_no_own_ship,
+                                 NULL sku_gross_need_no_own_ship,
+                                 stock_on_hand,
+                                 on_order,
+                                 on_alloc,
+                                 0        wh_on_alloc_qty,   
+                                 alloc_out,
+                                 in_transit_qty,
+                                 backorder_qty,
+                                 ROUND(gross_need * ownership_ratio) gross_need,
+                                 GREATEST(
+                                        CASE WHEN GREATEST(
+                                                      (CASE WHEN size_profile IS NOT NULL
+                                                             AND (SUM(gross_need * ownership_ratio)
+                                                                      OVER(PARTITION BY alloc_no,
+                                                                                        to_loc,
+                                                                                        wh_id,
+                                                                                        order_no,
+                                                                                        source_item,
+                                                                                        diff_id)
+                                                                      * (size_profile_qty)) < 0
+                                                            THEN
+                                                               0
+                                                            WHEN size_profile IS NULL
+                                                             AND(gross_need * ownership_ratio) < 0
+                                                            THEN
+                                                               0
+                                                            WHEN size_profile IS NOT NULL
+                                                             AND(SUM(gross_need * ownership_ratio)
+                                                                     OVER(PARTITION BY alloc_no,
+                                                                                       to_loc,
+                                                                                       wh_id,
+                                                                                       order_no,
+                                                                                       source_item,
+                                                                                       diff_id)
+                                                                      * (size_profile_qty)) >= 0
+                                                            THEN
+                                                               (SUM(gross_need * ownership_ratio)
+                                                                    OVER(PARTITION BY alloc_no,
+                                                                                      to_loc,
+                                                                                      wh_id,
+                                                                                      order_no,
+                                                                                      source_item,
+                                                                                      diff_id)
+                                                                    * (size_profile_qty))
+                                                            WHEN size_profile IS NULL
+                                                             AND(gross_need * ownership_ratio) >= 0
+                                                            THEN
+                                                               (gross_need * ownership_ratio)
+                                                       END),
+                                                      0) < min_need
+                                             AND min_need IS NOT NULL
+                                            THEN
+                                               min_need
+                                            ELSE
+                                               GREATEST(
+                                                   (CASE WHEN size_profile IS NOT NULL
+                                                          AND (SUM(gross_need * ownership_ratio)
+                                                                  OVER(PARTITION BY alloc_no,
+                                                                                    to_loc,
+                                                                                    wh_id,
+                                                                                    order_no,
+                                                                                    source_item,
+                                                                                    diff_id)
+                                                                   * (size_profile_qty)) < 0
+                                                         THEN
+                                                            0
+                                                         WHEN size_profile IS NULL
+                                                          AND(gross_need * ownership_ratio) < 0
+                                                         THEN
+                                                            0
+                                                         WHEN size_profile IS NOT NULL
+                                                          AND(SUM(gross_need * ownership_ratio)
+                                                                  OVER(PARTITION BY alloc_no,
+                                                                                    to_loc,
+                                                                                    wh_id,
+                                                                                    order_no,
+                                                                                    source_item,
+                                                                                    diff_id)
+                                                                   * (size_profile_qty)) >= 0
+                                                         THEN
+                                                            (SUM(gross_need * ownership_ratio)
+                                                                 OVER(PARTITION BY alloc_no,
+                                                                                   to_loc,
+                                                                                   wh_id,
+                                                                                   order_no,
+                                                                                   source_item,
+                                                                                   diff_id)
+                                                                 * (size_profile_qty))
+                                                         WHEN size_profile IS NULL
+                                                          AND (gross_need * ownership_ratio) >= 0
+                                                         THEN
+                                                            (gross_need * ownership_ratio)
+                                                    END),
+                                                      0)
+                                         END
+                                        - CASE WHEN net_need_ind = 'Y' AND exact_ind = 'Y'
+                                               THEN
+                                                  stock_on_hand
+                                               ELSE
+                                                  0
+                                          END,
+                                        0) calc_qty,
+                                 0 AS sku_calc_qty,
+                                 0 AS sku_calc_qty_bfr_qtlm,
+                                 0 AS sku_calc_qty_bfr_sprd,
+                                 0 AS alloc_sku_calc_qty,
+                                 som_qty,
+                                 0 AS alloc_qty,
+                                 'A'
+                                  status,
+                                 NULL error_message_txt,
+                                 include_inv_in_min_ind,
+                                 include_inv_in_max_ind,
+                                 0 AS sku_spread_qty,
+                                 0 AS orig_sku_calc_qty,
+                                 0 AS wh_on_order_qty,
+                                 USER()    AS create_id,
+                                 CURDATE() AS create_datetime,
+                                 USER()    AS last_update_id,
+                                 CURDATE() AS last_update_datetime
+                            FROM (WITH 
+                                   wks AS
+                                         (SELECT alloc_no, 
+                                                 COUNT(1) counts
+                                            FROM alloc_calc_need_dates
+                                           WHERE alloc_no = %s
+                                           GROUP BY alloc_no)
+                                   ,its AS
+                                          (SELECT item_source_id,
+                                                  alloc_no,
+                                                  item_id,
+                                                  default_level,
+                                                  pack_ind,
+                                                  hold_back_pct_flag,
+                                                  hold_back_value,
+                                                  som_qty,
+                                                  GREATEST( avail_qty
+                                                           -(CASE WHEN hold_back_pct_flag = 'Y'
+                                                                   AND hold_back_value IS NOT NULL
+                                                                  THEN
+                                                                     ROUND(avail_qty * (hold_back_value/ 100))
+                                             
+                                                                  WHEN hold_back_pct_flag = 'N'
+                                                                   AND hold_back_value IS NOT NULL
+                                                                  THEN 
+                                                                     hold_back_value
+                                                                  ELSE
+                                                                     0
+                                                              END),
+                                                           0) avail_qty,
+                                                  release_date,
+                                                  source_type,
+                                                  order_no,
+                                                  wh_id,
+                                                  diff1_id,
+                                                  diff1_desc,
+                                                  diff2_id,
+                                                  inner_size,
+                                                  case_size,
+                                                  pallet,
+                                                  calc_multiple,
+                                                  on_hand_qty,
+                                                  future_on_hand_qty,
+                                                  min_avail_qty,
+                                                  threshold_percent
+                                             FROM alloc_item_source_dtl
+                                            WHERE alloc_no = %s)
+                                   ,asg AS
+                                          (SELECT 1 size_prof_gtt_ind,
+                                                im.item_parent,
+                                                im.diff1     /*im.aggr_diff_id*/ 
+                                           FROM alloc_size_profile asg1, 
+                                                item_dtl im 
+                                          WHERE im.item=asg1.item)                
+                            
+                                  SELECT dt.alloc_no,
+                                         COALESCE(dt.source_diff1_id,
+                                                  dt.source_diff2_id,
+                                                  dt.source_diff3_id,
+                                                  dt.source_diff4_id) diff_id,
+                                         dt.tran_item,
+                                         dt.source_item,
+                                         dt.to_loc,
+                                         dt.need_value,
+                                         SUM(dt.need_value)
+                                             OVER(PARTITION BY dt.alloc_no,
+                                                                its.item_source_id,
+                                                                its.wh_id,
+                                                                dt.to_loc,
+                                                                its.order_no)
+                                             total_need_value,
+                                         SUM( its.avail_qty)
+                                             OVER(PARTITION BY dt.alloc_no,
+                                                                its.item_source_id,
+                                                                its.wh_id,
+                                                                its.order_no)
+                                             total_avail_qty,
+                                         ql.trend,
+                                         ql.wos,
+                                         ql.min,
+                                         ql.max,
+                                         ql.treshold,
+                                         min_need,
+                                         min_pack,
+                                         max_pack,
+                                         ar.include_inv_in_min_ind,
+                                         ar.include_inv_in_max_ind,
+                                         ar.size_profile_ind,
+                                         size_prof_gtt_ind,
+                                         sp.profile_id AS size_profile_id,
+                                         CASE WHEN ar.size_profile_ind = 'Y' 
+                                               AND COALESCE(size_prof_gtt_ind,0) =1 
+                                              THEN 1
+                                              ELSE NULL
+                                          END size_profile,
+                                         COALESCE(ROUND(COALESCE(sp.contrib_pct, 0) / IFNULL(SUM(TRIM(sp.contrib_pct))
+                                                                                               OVER(PARTITION BY dt.source_item,
+                                                                                                                 COALESCE(dt.source_diff1_id,
+                                                                                                                          dt.source_diff2_id,
+                                                                                                                          dt.source_diff3_id,
+                                                                                                                          dt.source_diff4_id),
+                                                                                                                 dt.to_loc,
+                                                                                                                 sp.profile_id), 0), 4),
+                                                  0) size_profile_qty,
+                                         NULL total_profile_qty,
+                                         GREATEST(
+                                               COALESCE(dt.stock_on_hand, 0)
+                                             + COALESCE(dt.on_order, 0)
+                                             + COALESCE(dt.on_alloc, 0)
+                                             - COALESCE(dt.alloc_out, 0)
+                                             + COALESCE(dt.in_transit_qty, 0),
+                                             0)
+                                             stock_on_hand,
+                                         dt.on_order,
+                                         dt.on_alloc,
+                                         dt.alloc_out,
+                                         dt.in_transit_qty,
+                                         dt.backorder_qty,
+                                         rule_type,
+                                         rule_level,
+                                         exact_ind,
+                                         net_need_ind,
+                                         its.avail_qty,
+                                         its.hold_back_pct_flag,
+                                         its.hold_back_value,
+                                         CASE WHEN rule_level = 1
+                                              THEN
+                                                 COUNT(dt.tran_item)
+                                                     OVER(PARTITION BY dt.alloc_no,
+                                                                      dt.to_loc,
+                                                                      dt.hier1)
+                                              WHEN rule_level = 2
+                                              THEN
+                                                  COUNT(dt.tran_item)
+                                                      OVER(PARTITION BY dt.alloc_no,
+                                                                         dt.to_loc,
+                                                                         dt.hier1,
+                                                                         dt.hier2)
+                                              WHEN rule_level = 3
+                                              THEN
+                                                  COUNT(dt.tran_item)
+                                                      OVER(PARTITION BY dt.alloc_no,
+                                                                         dt.to_loc,
+                                                                         dt.hier1,
+                                                                         dt.hier2,
+                                                                         dt.hier3)
+                                              WHEN rule_level = 4
+                                              THEN
+                                                  COUNT(dt.tran_item)
+                                                                      OVER(PARTITION BY dt.alloc_no,
+                                                                                       dt.to_loc,
+                                                                                       dt.source_item,
+                                                                                       COALESCE(dt.source_diff1_id,
+                                                                                                dt.source_diff2_id,
+                                                                                                dt.source_diff3_id,
+                                                                                                dt.source_diff4_id))
+                                              WHEN rule_level = 5
+                                              THEN
+                                                  COUNT(dt.tran_item)
+                                                      OVER(PARTITION BY dt.alloc_no,
+                                                                       dt.to_loc,
+                                                                       dt.tran_item)
+                                              WHEN rule_level = 6
+                                              THEN
+                                                  COUNT(dt.tran_item)
+                                                      OVER(PARTITION BY dt.alloc_no,
+                                                                       dt.to_loc,
+                                                                       dt.source_item)
+                                          END total_need_count,
+                                         CASE WHEN ar.size_profile_ind = 'Y'
+                                               AND COALESCE(size_prof_gtt_ind,0) =1  
+                                               AND COALESCE (sp.contrib_pct, 0) = 0
+                                              THEN 0
+                                              ELSE 1
+                                         END ownership_ratio,
+                               
+                                          CASE WHEN 
+                                                CASE WHEN COALESCE(
+                                                                ((CASE WHEN ar.size_profile_ind = 'Y'
+                                                                        AND COALESCE(size_prof_gtt_ind,0) = 1   
+                                                                        AND COALESCE (sp.contrib_pct,0) = 0
+                                                                        THEN 0
+                                                                        ELSE
+                                                                            dt.need_value
+                                                                    END
+                                                                    + COALESCE(
+                                                                                CASE WHEN ar.size_profile_ind = 'Y'
+                                                                                    AND COALESCE(size_prof_gtt_ind,0) = 1 
+                                                                                    AND COALESCE (sp.contrib_pct,0) = 0
+                                                                                    THEN 0
+                                                                                    ELSE
+                                                                                        dt.need_value
+                                                                                END
+                                                                                *(COALESCE(trend,0)/100),
+                                                                                0))
+                                                                    / CASE WHEN ql.wos IS NOT NULL
+                                                                            THEN
+                                                                            COALESCE(wks.counts,0)
+                                                                            ELSE 1
+                                                                        END)
+                                                                    * COALESCE(ql.wos, 1),0) = 0
+                                                    THEN
+                                                        CASE WHEN ar.size_profile_ind = 'Y'
+                                                            AND COALESCE(size_prof_gtt_ind,0) =1 
+                                                            AND COALESCE(sp.contrib_pct,0) = 0
+                                                            THEN 0
+                                                            ELSE
+                                                                dt.need_value
+                                                        END
+                                                    ELSE
+                                                        ((CASE WHEN ar.size_profile_ind = 'Y'
+                                                                AND COALESCE(size_prof_gtt_ind,0) = 1 
+                                                                AND COALESCE (sp.contrib_pct,0) = 0
+                                                            THEN 0
+                                                            ELSE
+                                                                dt.need_value
+                                                        END
+                                                        + COALESCE(
+                                                                    CASE WHEN ar.size_profile_ind = 'Y'
+                                                                        AND COALESCE(size_prof_gtt_ind,0) = 1 
+                                                                        AND COALESCE (sp.contrib_pct,0) = 0
+                                                                        THEN 0
+                                                                        ELSE
+                                                                            dt.need_value
+                                                                    END
+                                                                    *(COALESCE(trend,0)/100)
+                                                                    ,0)
+                                                        )
+                                                        / CASE WHEN ql.wos IS NOT NULL
+                                                                THEN
+                                                                    COALESCE(wks.counts,0)
+                                                                ELSE 1
+                                                            END)
+                                                                * COALESCE (ql.wos, 1)
+                                                    END <                               
+                                                        GREATEST(COALESCE(min,0),COALESCE(min_need,0)) 
+                               
+                                            THEN
+                                                GREATEST(COALESCE(min,0),COALESCE(min_need,0)) 
+                                 
+                                            ELSE
+                                                CASE WHEN 
+                                                        COALESCE(((CASE WHEN ar.size_profile_ind = 'Y'
+                                                                        AND COALESCE(size_prof_gtt_ind,0) =1   
+                                                                        AND COALESCE(sp.contrib_pct,0) = 0
+                                                                        THEN 0
+                                                                        ELSE
+                                                                        dt.need_value
+                                                                    END
+                                                                    + COALESCE(
+                                                                            CASE WHEN ar.size_profile_ind = 'Y'
+                                                                                    AND COALESCE(size_prof_gtt_ind,0) = 1   
+                                                                                    AND COALESCE (sp.contrib_pct,0) = 0
+                                                                                THEN 0
+                                                                                ELSE
+                                                                                    dt.need_value
+                                                                            END
+                                                                            *(COALESCE(trend,0) / 100),
+                                                                            0)
+                                                                )
+                                                                / CASE WHEN ql.wos IS NOT NULL
+                                                                        THEN COALESCE(wks.counts,0)
+                                                                        ELSE 1
+                                                                    END
+                                                                )* COALESCE(ql.wos, 1),0) = 0
+                                                    THEN
+                                                        CASE WHEN ar.size_profile_ind = 'Y' 
+                                                            AND COALESCE(size_prof_gtt_ind,0) =1  
+                                                            AND COALESCE( sp.contrib_pct,0) = 0 
+                                                            AND dt.need_value IS NULL 
+                                                            THEN 
+                                                                dt.need_value
+                                                     
+                                                            WHEN ar.size_profile_ind = 'Y'
+                                                            AND COALESCE(size_prof_gtt_ind,0) = 1  
+                                                            AND COALESCE(sp.contrib_pct,0) = 0
+                                                            THEN 0
+                                                            ELSE
+                                                                dt.need_value
+                                                        END
+                                                    ELSE
+                                                        ((CASE WHEN ar.size_profile_ind = 'Y'
+                                                                AND COALESCE(size_prof_gtt_ind,0) = 1 
+                                                                AND COALESCE (sp.contrib_pct,0) = 0
+                                                            THEN 0
+                                                            ELSE
+                                                                dt.need_value
+                                                        END
+                                                        + COALESCE(
+                                                                    CASE WHEN ar.size_profile_ind = 'Y'
+                                                                        AND COALESCE(size_prof_gtt_ind,0) = 1   
+                                                                        AND COALESCE (sp.contrib_pct,0) = 0
+                                                                        THEN 0
+                                                                        ELSE
+                                                                            dt.need_value
+                                                                    END
+                                                                    *(COALESCE(trend,0)/ 100)
+                                                                    ,0)
+                                                        )/ CASE WHEN ql.wos IS NOT NULL
+                                                                THEN
+                                                                    COALESCE(wks.counts,0)
+                                                                ELSE 1
+                                                            END
+                                                        )* COALESCE(ql.wos, 1)
+                                                END
+                                        END gross_need,
+                                         its.wh_id,
+                                         its.order_no,
+                                         its.som_qty,
+                                         dt.assign_default_wh
+                                    FROM alloc_calc_destination_temp dt
+                                    LEFT JOIN wks
+                                           ON (dt.alloc_no = wks.alloc_no)
+                                    LEFT JOIN alloc_size_profile sp
+                                           ON(    dt.tran_item = sp.item
+                                              AND dt.to_loc = sp.loc)
+                                         ,its
+                                    LEFT JOIN asg
+                                           ON(    asg.item_parent = its.item_id
+                                              AND COALESCE(diff1,'$')= COALESCE(its.diff1_id,'$'))
+                                         ,alloc_rule ar, 
+                                         alloc_calc_source_temp si,
+                                         alloc_calc_qty_limits_temp ql
+                                   WHERE dt.alloc_no = %s
+                                     AND its.alloc_no = dt.alloc_no
+                                     AND ar.alloc_no = its.alloc_no 
+                                     AND ar.alloc_no = dt.alloc_no 
+                                     AND si.alloc_no = dt.alloc_no 
+                                     AND si.item_source_id = its.item_source_id
+                                     AND si.source_item = its.item_id
+                                     AND (COALESCE(si.source_diff1_id, '$') =
+                                              COALESCE(its.diff1_id,'$')
+                                          OR COALESCE(si.source_diff2_id, '$') =
+                                                  COALESCE(
+                                                      SUBSTR(
+                                                          its.diff1_id,
+                                                          INSTR(its.diff1_id, '~') + 1),
+                                                      '$')
+                                          OR COALESCE(si.source_diff3_id, '$') =
+                                                  COALESCE(
+                                                      SUBSTR(
+                                                          its.diff1_id,
+                                                          INSTR(its.diff1_id, '~') + 1),
+                                                      '$')
+                                          OR COALESCE(si.source_diff4_id, '$') =
+                                                  COALESCE(
+                                                      SUBSTR(
+                                                          its.diff1_id,
+                                                          INSTR (its.diff1_id, '~') + 1),
+                                                      '$'))
+                                     AND si.source_item = dt.source_item
+                                     AND si.tran_item = dt.tran_item
+                                     AND (   (    %s = 'Y'    /*L_enforce_wh_store_rel_ind*/
+                                              AND its.wh_id = dt.assign_default_wh)
+                                          OR (%s = 'N'))        /*L_enforce_wh_store_rel_ind*/
+                                     AND ql.alloc_no = dt.alloc_no
+                                     AND ql.store = dt.to_loc
+                                     AND ql.source_item = si.source_item                                   
+                                     AND if(%s='T',ql.source_item,ql.tran_item) = si.tran_item   /*L_alloc_level*/               
+                                  ) calculation;"
+
+  Q_ins_calc_item_loc: "INSERT INTO alloc_calc_item_loc_temp(alloc_no
+                                                             ,tran_item
+                                                             ,source_item
+                                                             ,diff_id
+                                                             ,wh_id
+                                                             ,order_no
+                                                             ,to_loc
+                                                             ,assign_default_wh
+                                                             ,need_value
+                                                             ,total_need_value
+                                                             ,total_avail_qty
+                                                             ,trend
+                                                             ,wos
+                                                             ,min
+                                                             ,max
+                                                             ,treshold
+                                                             ,min_need
+                                                             ,min_pack
+                                                             ,max_pack
+                                                             ,avail_qty
+                                                             ,sku_avail_qty
+                                                             ,hold_back_pct_flag
+                                                             ,hold_back_value
+                                                             ,total_need_count
+                                                             ,ownership_ratio
+                                                             ,sku_ownership_ratio
+                                                             ,size_profile_ind
+                                                             ,size_profile_id
+                                                             ,size_profile_qty
+                                                             ,total_profile_qty
+                                                             ,rule_type
+                                                             ,rule_level
+                                                             ,exact_ind
+                                                             ,net_need_ind
+                                                             ,gross_need_no_own_ship
+                                                             ,sku_gross_need_no_own_ship
+                                                             ,stock_on_hand
+                                                             ,on_order
+                                                             ,on_alloc
+                                                             ,alloc_out
+                                                             ,in_transit_qty
+                                                             ,backorder_qty
+                                                             ,gross_need
+                                                             ,calc_qty
+                                                             ,sku_calc_qty
+                                                             ,sku_calc_qty_bfr_qtlm
+                                                             ,sku_calc_qty_bfr_sprd
+                                                             ,alloc_sku_calc_qty
+                                                             ,som_qty
+                                                             ,alloc_qty
+                                                             ,status
+                                                             ,error_message_txt
+                                                             ,create_id
+                                                             ,create_datetime
+                                                             ,last_update_id
+                                                             ,last_update_datetime
+                                                             ,include_inv_in_min_ind
+                                                             ,include_inv_in_max_ind
+                                                             ,sku_spread_qty
+                                                             ,orig_sku_calc_qty
+                                                             ,wh_on_order_qty
+                                                             ,wh_on_alloc_qty)
+                          VALUES(%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s
+                                 ,%s);"
+
+calculate2:
+    Q_upd_gross_no_own: "WITH src
+                           AS(SELECT DISTINCT tmp.alloc_no,
+                                     tmp.source_item,
+                                     tmp.to_loc
+                                      FROM alloc_calc_destination_temp tmp
+                                     WHERE tmp.alloc_no = %s
+                                       AND item_type IS NULL)
+                         UPDATE alloc_calc_item_loc_temp tgt,src
+                            SET tgt.sku_gross_need_no_own_ship = tgt.gross_need
+                          WHERE tgt.alloc_no    = src.alloc_no
+                            AND tgt.source_item = src.source_item
+                            AND tgt.to_loc      = src.to_loc;"
+                            
+    Q_upd_wi_wh_on_ord_qty: "WITH
+                            il_explode
+                            AS
+                            (SELECT tmp.alloc_no,
+                                    tmp.source_item,
+                                    tmp.tran_item         item,
+                                    tmp.assign_default_wh loc,
+                                    1                     pack_multiplier,
+                                    tmp.tran_item         tran_item
+                               FROM alloc_calc_destination_temp tmp
+                              WHERE alloc_no = %s
+                            UNION
+                            SELECT tmp.alloc_no,
+                                   tmp.source_item,
+                                   sd.sub_item           item,
+                                   tmp.assign_default_wh loc,
+                                   1                     pack_multiplier,
+                                   tmp.tran_item         tran_item
+                              FROM alloc_calc_destination_temp  tmp,
+                                   subs_item_dtl                 sd
+                             WHERE tmp.alloc_no = %s
+                               AND tmp.tran_item = sd.item
+                               AND tmp.to_loc = sd.location
+                               AND sd.use_stock_ind = 'Y'
+                               AND curdate() >= (sd.start_date)
+                               AND curdate() <= (sd.end_date))       
+                            ,use_this
+                            AS
+                            (SELECT il_explode.alloc_no,
+                                    il_explode.tran_item,
+                                    il_explode.loc,
+                                    GREATEST(COALESCE(SUM(GREATEST(  il_explode.pack_multiplier
+                                                                    * (  ol.ordered_qty
+                                                                    - COALESCE(ol.received_qty, 0)
+                                                                    - COALESCE((SELECT SUM(ald.alloc_qty)
+                                                                                    FROM alloc_sku_head alh,
+                                                                                        alloc_dtl ald
+                                                                                    WHERE ald.alloc_no = alh.alloc_no
+                                                                                    AND alh.item = ol.item
+                                                                                    AND alh.status = 'A'
+                                                                                    AND alh.order_no = oh.po_no
+                                                                                    AND alh.wh = ol.location
+                                                                                GROUP BY alh.item, alh.order_no),0)
+                                                                    ),0)
+                                                        ),0),
+                                            0) on_order_qty
+                            FROM il_explode, 
+                                    po_item_loc ol, 
+                                    po_dtl oh
+                            WHERE ol.location = il_explode.loc
+                                AND ol.item = il_explode.item
+                                AND ol.ordered_qty > COALESCE(ol.received_qty, 0)
+                                AND oh.po_no = ol.po_no
+                                AND oh.status = 'A'
+                                AND oh.po_type != 'CO'
+                                AND NOT (oh.include_on_order_ind = 'N')
+                                AND (   (oh.not_before_date) <= %s/*L_alc_rule_row.on_order_commit_date*/
+                                    OR %s/*L_alc_rule_row.on_order_commit_date*/ IS NULL)
+                        GROUP BY il_explode.alloc_no,
+                                    il_explode.tran_item,
+                                    il_explode.loc) 
+
+                        UPDATE alloc_calc_item_loc_temp target, use_this 
+                            SET target.wh_on_order_qty = use_this.on_order_qty
+                            WHERE target.alloc_no = use_this.alloc_no
+                            AND target.wh_id = use_this.loc
+                            AND target.tran_item = use_this.tran_item;"
+
+    Q_upd_wi_on_ord_qty_else: "WITH il_explode
+                                 AS
+                                    (SELECT tmp.alloc_no,
+                                            tmp.source_item,
+                                            tmp.tran_item         item,
+                                            tmp.assign_default_wh loc,
+                                            1                     pack_multiplier,
+                                            tmp.tran_item         tran_item
+                                       FROM alloc_calc_destination_temp tmp
+                                      WHERE alloc_no = %s
+                                    UNION
+                                    SELECT tmp.alloc_no,
+                                           tmp.source_item,
+                                           sd.sub_item           item,
+                                           tmp.assign_default_wh loc,
+                                           1                     pack_multiplier,
+                                           tmp.tran_item         tran_item
+                                      FROM alloc_calc_destination_temp  tmp,
+                                           subs_item_dtl                 sd
+                                     WHERE tmp.alloc_no = %s
+                                       AND tmp.tran_item = sd.item
+                                       AND tmp.assign_default_wh = sd.location
+                                       AND sd.use_stock_ind = 'Y'
+                                       AND curdate() >= (sd.start_date)
+                                       AND curdate() <= (sd.end_date))       
+                                 ,use_this
+                                 AS(SELECT il_explode.alloc_no,
+                                             il_explode.tran_item,
+                                             il_explode.loc,
+                                             GREATEST(COALESCE(SUM(GREATEST(   il_explode.pack_multiplier
+                                                                             * (   ol.ordered_qty
+                                                                                 - COALESCE(ol.received_qty, 0)
+                                                                                 - COALESCE((SELECT SUM(ald.alloc_qty)
+                                                                                             FROM alloc_sku_head alh,
+                                                                                                     alloc_dtl ald
+                                                                                             WHERE ald.alloc_no = alh.alloc_no
+                                                                                                 AND alh.item = ol.item
+                                                                                                 AND alh.status = 'A'
+                                                                                                 AND alh.order_no = oh.po_no
+                                                                                                 AND alh.wh = ol.location
+                                                                                             GROUP BY alh.item, alh.order_no)
+                                                                                         ,0)
+                                                                             )
+                                                                         ,0)
+                                                                 ),
+                                                             0),
+                                                     0) on_order_qty
+                                     FROM il_explode, 
+                                             po_item_loc ol, 
+                                             po_dtl oh
+                                     WHERE ol.location = il_explode.loc
+                                         AND ol.item = il_explode.item
+                                         AND ol.ordered_qty > COALESCE(ol.received_qty, 0)
+                                         AND oh.po_no = ol.po_no
+                                         AND oh.status = 'A'
+                                         AND oh.po_type != 'CO'
+                                         AND NOT (oh.include_on_order_ind = 'N')
+                                     GROUP BY il_explode.alloc_no,
+                                             il_explode.tran_item,
+                                             il_explode.loc)
+                                     UPDATE alloc_calc_item_loc_temp target, use_this
+                                         SET target.wh_on_order_qty = use_this.on_order_qty
+                                     WHERE target.alloc_no = use_this.alloc_no
+                                         AND target.wh_id = use_this.loc
+                                         AND target.tran_item = use_this.tran_item;"
+
+    Q_wi_on_alloc_qty: "WITH src
+                          AS
+                          (SELECT gtt.tran_item,
+                                  gtt.wh_id loc,
+                                  COALESCE(SUM(d.transfered_qty - COALESCE(d.shipped_qty, 0) - COALESCE(d.cancelled_qty, 0)),0)    pl_tsf_qty
+                           FROM tsf_dtl h,
+                                tsf_item_loc d, 
+                                (SELECT DISTINCT tran_item,
+                                        assign_default_wh wh_id 
+                                   FROM alloc_calc_destination_temp 
+                                  WHERE alloc_no = %s) gtt
+                          WHERE h.tsf_id = d.tsf_id
+                            AND h.to_location = gtt.wh_id       
+                            AND h.status NOT IN ('I','C')  
+                            AND h.tsf_type <> 'CO'
+                            AND d.item = gtt.tran_item
+                            AND d.transfered_qty > COALESCE(d.shipped_qty, 0) + COALESCE(d.cancelled_qty, 0) 
+                            AND h.approval_datetime <= COALESCE(%s/*L_alc_rule_row.on_order_commit_date*/, h.approval_datetime)
+                          GROUP BY gtt.tran_item,
+                                gtt.wh_id)
+      
+                          UPDATE alloc_calc_item_loc_temp target, src
+                             SET target.wh_on_alloc_qty = src.pl_tsf_qty
+                           WHERE target.wh_id = src.loc
+                             AND target.tran_item = src.tran_item;"
+
+    Q_wi_on_alloc_qty_else: "WITH src
+                               AS
+                               (SELECT gtt.tran_item,
+                                       gtt.wh_id loc,
+                                       COALESCE(SUM(d.transfered_qty - COALESCE(d.shipped_qty, 0) - COALESCE(d.cancelled_qty, 0)),0)    pl_tsf_qty
+                                FROM tsf_dtl h,
+                                     tsf_item_loc d, 
+                                     (SELECT DISTINCT tran_item,
+                                             assign_default_wh wh_id 
+                                        FROM alloc_calc_destination_temp 
+                                       WHERE alloc_no = %s) gtt
+                               WHERE h.tsf_id = d.tsf_id
+                                 AND h.to_location = gtt.wh_id       
+                                 AND h.status NOT IN ('I','C')  
+                                 AND h.tsf_type <> 'CO'
+                                 AND d.item = gtt.tran_item
+                                 AND d.transfered_qty > COALESCE(d.shipped_qty, 0) + COALESCE(d.cancelled_qty, 0) 
+                               GROUP BY gtt.tran_item,
+                                     gtt.wh_id)
+                               
+                               UPDATE alloc_calc_item_loc_temp target, src
+                                  SET target.wh_on_alloc_qty = src.pl_tsf_qty
+                                WHERE target.wh_id = src.loc
+                                  AND target.tran_item = src.tran_item;"
+
+    Q_upd_wi_ord_on_alloc_qty: "WITH src
+                                  AS (SELECT gtt.tran_item,
+                                            gtt.wh_id loc,
+                                            COALESCE(SUM(  d.alloc_qty - COALESCE(d.tsf_qty, 0)),0) alloc_in_qty
+                                       FROM (SELECT DISTINCT tran_item,
+                                                   assign_default_wh wh_id 
+                                              FROM alloc_calc_destination_temp 
+                                             WHERE alloc_no = %s
+                                            ) gtt,
+                                            alloc_sku_head h,
+                                            alloc_dtl d
+                                      WHERE h.status = 'A'
+                                        AND h.item = gtt.tran_item
+                                        AND d.alloc_no = h.alloc_no
+                                        AND d.to_loc = gtt.wh_id
+                                        AND d.alloc_qty > COALESCE(d.tsf_qty, 0)
+                                      /*AND COALESCE(L_hist_start_date,h.release_date) <= h.release_date*/
+                                        AND COALESCE(%s/*L_alc_rule_row.on_order_commit_date*/, h.release_date)  >= h.release_date
+                                      GROUP BY  gtt.tran_item,
+                                                gtt.wh_id)
+
+                                  UPDATE alloc_calc_item_loc_temp target, src
+                                     SET target.wh_on_alloc_qty = target.wh_on_alloc_qty + src.alloc_in_qty
+                                   WHERE target.tran_item = src.tran_item
+                                     AND target.wh_id = src.loc;"
+                                      
+    Q_upd_wi_ord_on_alloc_qty_else: "WITH src
+                                       AS (SELECT gtt.tran_item,
+                                                 gtt.wh_id loc,
+                                                 COALESCE(SUM(  d.alloc_qty - COALESCE(d.tsf_qty, 0)),0) alloc_in_qty
+                                            FROM (SELECT DISTINCT tran_item,
+                                                        assign_default_wh wh_id 
+                                                   FROM alloc_calc_destination_temp 
+                                                  WHERE alloc_no = %s
+                                                 ) gtt,
+                                                 alloc_sku_head h,
+                                                 alloc_dtl d
+                                           WHERE h.status = 'A'
+                                             AND h.item = gtt.tran_item
+                                             AND d.alloc_no = h.alloc_no
+                                             AND d.to_loc = gtt.wh_id
+                                             AND d.alloc_qty > COALESCE(d.tsf_qty, 0)
+                                           GROUP BY  gtt.tran_item,
+                                                     gtt.wh_id)
+                                       
+                                       UPDATE alloc_calc_item_loc_temp target, src
+                                          SET target.wh_on_alloc_qty = target.wh_on_alloc_qty + src.alloc_in_qty
+                                        WHERE target.tran_item = src.tran_item
+                                          AND target.wh_id = src.loc;"
+
+                           
+
+    Q_upd_wh_on_ord_qty: "WITH
+                            il_explode
+                            AS
+                            (SELECT tmp.alloc_no,
+                                    tmp.item_id           item,
+                                    tmp.wh_id             loc,
+                                    1                     pack_multiplier,
+                                    tmp.item_id           tran_item
+                               FROM alloc_item_source_dtl tmp
+                              WHERE alloc_no = %s
+                            UNION
+                            SELECT tmp.alloc_no,
+                                   sd.sub_item           item,
+                                   tmp.wh_id             loc,
+                                   1                     pack_multiplier,
+                                   tmp.item_id           tran_item
+                              FROM alloc_item_source_dtl  tmp,
+                                   subs_item_dtl          sd
+                             WHERE tmp.alloc_no = %s
+                               AND tmp.item_id  = sd.item
+                               AND tmp.wh_id    = sd.location
+                               AND sd.use_stock_ind = 'Y'
+                               AND curdate() >= (sd.start_date)
+                               AND curdate() <= (sd.end_date))       
+                            ,use_this
+                            AS
+                            (SELECT il_explode.alloc_no,
+                                    il_explode.tran_item,
+                                    il_explode.loc,
+                                    GREATEST(COALESCE(SUM(GREATEST(  il_explode.pack_multiplier
+                                                                    * (  ol.ordered_qty
+                                                                    - COALESCE(ol.received_qty, 0)
+                                                                    - COALESCE((SELECT SUM(ald.alloc_qty)
+                                                                                    FROM alloc_sku_head alh,
+                                                                                        alloc_dtl ald
+                                                                                    WHERE ald.alloc_no = alh.alloc_no
+                                                                                    AND alh.item = ol.item
+                                                                                    AND alh.status = 'A'
+                                                                                    AND alh.order_no = oh.po_no
+                                                                                    AND alh.wh = ol.location
+                                                                                GROUP BY alh.item, alh.order_no),0)
+                                                                    ),0)
+                                                        ),0),
+                                            0) on_order_qty
+                            FROM il_explode, 
+                                    po_item_loc ol, 
+                                    po_dtl oh
+                            WHERE ol.location = il_explode.loc
+                                AND ol.item = il_explode.item
+                                AND ol.ordered_qty > COALESCE(ol.received_qty, 0)
+                                AND oh.po_no = ol.po_no
+                                AND oh.status = 'A'
+                                AND oh.po_type != 'CO'
+                                AND NOT (oh.include_on_order_ind = 'N')
+                                AND (   (oh.not_before_date) <= %s/*L_alc_rule_row.on_order_commit_date*/
+                                    OR %s/*L_alc_rule_row.on_order_commit_date*/ IS NULL)
+                        GROUP BY il_explode.alloc_no,
+                                    il_explode.tran_item,
+                                    il_explode.loc) 
+
+                        UPDATE alloc_calc_item_loc_temp target, use_this 
+                            SET target.wh_on_order_qty = use_this.on_order_qty
+                            WHERE target.alloc_no = use_this.alloc_no
+                            AND target.wh_id = use_this.loc
+                            AND target.tran_item = use_this.tran_item;"
+
+    Q_upd_wh_on_ord_qty_else: "WITH
+                                 il_explode
+                                 AS
+                                 (SELECT tmp.alloc_no,
+                                         tmp.item_id           item,
+                                         tmp.wh_id             loc,
+                                         1                     pack_multiplier,
+                                         tmp.item_id           tran_item
+                                    FROM alloc_item_source_dtl tmp
+                                   WHERE alloc_no = %s
+                                 UNION
+                                 SELECT tmp.alloc_no,
+                                        sd.sub_item           item,
+                                        tmp.wh_id             loc,
+                                        1                     pack_multiplier,
+                                        tmp.item_id           tran_item
+                                   FROM alloc_item_source_dtl  tmp,
+                                        subs_item_dtl          sd
+                                  WHERE tmp.alloc_no = %s
+                                    AND tmp.item_id  = sd.item
+                                    AND tmp.wh_id    = sd.location
+                                    AND sd.use_stock_ind = 'Y'
+                                    AND curdate() >= (sd.start_date)
+                                    AND curdate() <= (sd.end_date))     
+                                ,use_this
+                                AS(SELECT il_explode.alloc_no,
+                                            il_explode.tran_item,
+                                            il_explode.loc,
+                                            GREATEST(COALESCE(SUM(GREATEST(   il_explode.pack_multiplier
+                                                                            * (   ol.ordered_qty
+                                                                                - COALESCE(ol.received_qty, 0)
+                                                                                - COALESCE((SELECT SUM(ald.alloc_qty)
+                                                                                            FROM alloc_sku_head alh,
+                                                                                                    alloc_dtl ald
+                                                                                            WHERE ald.alloc_no = alh.alloc_no
+                                                                                                AND alh.item = ol.item
+                                                                                                AND alh.status = 'A'
+                                                                                                AND alh.order_no = oh.po_no
+                                                                                                AND alh.wh = ol.location
+                                                                                            GROUP BY alh.item, alh.order_no)
+                                                                                        ,0)
+                                                                            )
+                                                                        ,0)
+                                                                ),
+                                                            0),
+                                                    0) on_order_qty
+                                    FROM il_explode, 
+                                            po_item_loc ol, 
+                                            po_dtl oh
+                                    WHERE ol.location = il_explode.loc
+                                        AND ol.item = il_explode.item
+                                        AND ol.ordered_qty > COALESCE(ol.received_qty, 0)
+                                        AND oh.po_no = ol.po_no
+                                        AND oh.status = 'A'
+                                        AND oh.po_type != 'CO'
+                                        AND NOT (oh.include_on_order_ind = 'N')
+                                    GROUP BY il_explode.alloc_no,
+                                            il_explode.tran_item,
+                                            il_explode.loc)
+                                    UPDATE alloc_calc_item_loc_temp target, use_this
+                                        SET target.wh_on_order_qty = use_this.on_order_qty
+                                    WHERE target.alloc_no = use_this.alloc_no
+                                        AND target.wh_id = use_this.loc
+                                        AND target.tran_item = use_this.tran_item;"
+
+    Q_wh_on_alloc_qty: "WITH src
+                          AS
+                          (SELECT gtt.tran_item,
+                                  gtt.wh_id loc,
+                                  COALESCE(SUM(d.transfered_qty - COALESCE(d.shipped_qty, 0) - COALESCE(d.cancelled_qty, 0)),0)    pl_tsf_qty
+                           FROM tsf_dtl h,
+                                tsf_item_loc d, 
+                                (SELECT DISTINCT item_id tran_item,
+                                        wh_id 
+                                   FROM alloc_item_source_dtl 
+                                  WHERE alloc_no = %s) gtt
+                          WHERE h.tsf_id = d.tsf_id
+                            AND h.to_location = gtt.wh_id       
+                            AND h.status NOT IN ('I','C')  
+                            AND h.tsf_type <> 'CO'
+                            AND d.item = gtt.tran_item
+                            AND d.transfered_qty > COALESCE(d.shipped_qty, 0) + COALESCE(d.cancelled_qty, 0) 
+                            AND h.approval_datetime <= COALESCE(%s/*L_alc_rule_row.on_order_commit_date*/, h.approval_datetime)
+                          GROUP BY gtt.tran_item,
+                                gtt.wh_id)      
+                          UPDATE alloc_calc_item_loc_temp target, src
+                             SET target.wh_on_alloc_qty = src.pl_tsf_qty
+                           WHERE target.wh_id = src.loc
+                             AND target.tran_item = src.tran_item;"
+
+    Q_wh_on_alloc_qty_else: "WITH src
+                               AS
+                               (SELECT gtt.tran_item,
+                                       gtt.wh_id loc,
+                                       COALESCE(SUM(d.transfered_qty - COALESCE(d.shipped_qty, 0) - COALESCE(d.cancelled_qty, 0)),0)    pl_tsf_qty
+                                FROM tsf_dtl h,
+                                     tsf_item_loc d, 
+                                     (SELECT DISTINCT item_id tran_item,
+                                             wh_id 
+                                        FROM alloc_item_source_dtl 
+                                       WHERE alloc_no = %s) gtt
+                               WHERE h.tsf_id = d.tsf_id
+                                 AND h.to_location = gtt.wh_id       
+                                 AND h.status NOT IN ('I','C')  
+                                 AND h.tsf_type <> 'CO'
+                                 AND d.item = gtt.tran_item
+                                 AND d.transfered_qty > COALESCE(d.shipped_qty, 0) + COALESCE(d.cancelled_qty, 0) 
+                               GROUP BY gtt.tran_item,
+                                     gtt.wh_id)
+                               
+                               UPDATE alloc_calc_item_loc_temp target, src
+                                  SET target.wh_on_alloc_qty = src.pl_tsf_qty
+                                WHERE target.wh_id = src.loc
+                                  AND target.tran_item = src.tran_item;"
+
+    Q_upd_ord_on_alloc_qty: "WITH src
+                                   AS (SELECT gtt.tran_item,
+                                             gtt.wh_id loc,
+                                             COALESCE(SUM(  d.alloc_qty - COALESCE(d.tsf_qty, 0)),0) alloc_in_qty
+                                        FROM (SELECT DISTINCT item_id tran_item,
+                                                     wh_id 
+                                                FROM alloc_item_source_dtl 
+                                               WHERE alloc_no = %s
+                                             ) gtt,
+                                             alloc_sku_head h,
+                                             alloc_dtl d
+                                       WHERE h.status = 'A'
+                                         AND h.item = gtt.tran_item
+                                         AND d.alloc_no = h.alloc_no
+                                         AND d.to_loc = gtt.wh_id
+                                         AND d.alloc_qty > COALESCE(d.tsf_qty, 0)
+                                       /*AND COALESCE(L_hist_start_date,h.release_date) <= h.release_date*/
+                                         AND COALESCE(%s, h.release_date)  >= h.release_date
+                                       GROUP BY  gtt.tran_item,
+                                                 gtt.wh_id)
+                                   UPDATE alloc_calc_item_loc_temp target, src
+                                      SET target.wh_on_alloc_qty = target.wh_on_alloc_qty + src.alloc_in_qty
+                                    WHERE target.tran_item = src.tran_item
+                                      AND target.wh_id = src.loc;"
+                                      
+    Q_upd_ord_on_alloc_qty_else: "WITH src
+                                    AS (SELECT gtt.tran_item,
+                                              gtt.wh_id loc,
+                                              COALESCE(SUM(  d.alloc_qty - COALESCE(d.tsf_qty, 0)),0) alloc_in_qty
+                                         FROM (SELECT DISTINCT item_id tran_item,
+                                                      wh_id 
+                                                 FROM alloc_item_source_dtl 
+                                                WHERE alloc_no = %s
+                                              ) gtt,
+                                              alloc_sku_head h,
+                                              alloc_dtl d
+                                        WHERE h.status = 'A'
+                                          AND h.item = gtt.tran_item
+                                          AND d.alloc_no = h.alloc_no
+                                          AND d.to_loc = gtt.wh_id
+                                          AND d.alloc_qty > COALESCE(d.tsf_qty, 0)
+                                        GROUP BY  gtt.tran_item,
+                                                  gtt.wh_id)
+                                    UPDATE alloc_calc_item_loc_temp target, src
+                                       SET target.wh_on_alloc_qty = target.wh_on_alloc_qty + src.alloc_in_qty
+                                     WHERE target.tran_item = src.tran_item
+                                       AND target.wh_id = src.loc;"
+
+    Q_cre_temp_sku: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_calc_item_loc_temp1
+                         AS 
+                         SELECT alloc_no,
+                                      wh_id loc,
+                                      COALESCE(order_no, '$') order_no,
+                                      tran_item item,
+                                      source_item,
+                                      max(hold_back_value) hold_back_value,
+                                      max(hold_back_pct_flag) hold_back_pct_flag,
+                                      SUM(COALESCE(calc_qty, 0)) total_calc_qty
+                                 FROM alloc_calc_item_loc_temp tmp
+                                WHERE alloc_no = %s
+                                  AND COALESCE(order_no, '$') = '$'
+                             GROUP BY alloc_no,
+                                      wh_id,
+                                      COALESCE(order_no, '$'),
+                                      tran_item,
+                                      source_item;"
+
+    Q_upd_sku_avail_qty: "WITH src
+                            AS (SELECT tmp.*,
+                                       GREATEST(  (GREATEST((COALESCE(ils.item_soh,0)), 0))
+                                                - (  GREATEST(COALESCE(ils.reserved_qty,0), 0)
+                                                   + GREATEST(COALESCE(ils.rtv_qty,0), 0)
+                                                   + GREATEST(COALESCE(ils.non_sellable_qty,0), 0)
+                                                   + GREATEST(COALESCE(ils.cust_resv_qty,0), 0))
+                                                - (SELECT COALESCE(SUM(GREATEST(d.distro_qty,0)),0)
+                                                     FROM alloc_sku_head h,
+                                                          po_item_loc    ol,
+                                                          po_dtl         oh,
+                                                          alloc_dtl      d
+                                                    WHERE h.item = tmp.item
+                                                      AND h.wh = tmp.loc
+                                                      AND h.status IN ('A', 'R')
+                                                      AND h.order_no IS NOT NULL
+                                                      AND ol.po_no = h.order_no
+                                                      AND ol.item = h.item
+                                                      AND ol.location = h.wh
+                                                      AND ol.received_qty > 0
+                                                      AND oh.po_no = ol.po_no
+                                                      AND oh.status IN ('A', 'C')
+                                                      AND d.alloc_no = h.alloc_no
+                                                      AND d.alloc_qty > 0
+                                                      AND d.distro_qty > 0),
+                                                0) avail_qty
+                                  FROM item_location ils, 
+                                       alloc_calc_item_loc_temp1 tmp
+                                 WHERE ils.item     = tmp.item
+                                   AND ils.location = tmp.loc) 
+
+                            UPDATE alloc_calc_item_loc_temp tgt, src
+                               SET tgt.sku_avail_qty =
+                                                    GREATEST (  src.avail_qty
+                                                              - (CASE WHEN src.hold_back_pct_flag = 'Y'
+                                                                       AND src.hold_back_value IS NOT NULL
+                                                                      THEN
+                                                                         ROUND(  src.avail_qty
+                                                                               * (src.hold_back_value / 100))
+                                                                      WHEN src.hold_back_pct_flag = 'N'
+                                                                       AND src.hold_back_value IS NOT NULL
+                                                                      THEN
+                                                                         src.hold_back_value
+                                                                      ELSE
+                                                                         0
+                                                                 END),0),
+                                   tgt.sku_ownership_ratio =
+                                                        CASE WHEN GREATEST(  src.avail_qty
+                                                                           - (CASE WHEN src.hold_back_pct_flag = 'Y'
+                                                                                    AND src.hold_back_value IS NOT NULL
+                                                                                   THEN
+                                                                                      ROUND(  src.avail_qty
+                                                                                            * (  src.hold_back_value
+                                                                                               / 100))
+                                                                                   WHEN src.hold_back_pct_flag = 'N'
+                                                                                    AND src.hold_back_value IS NOT NULL
+                                                                                   THEN
+                                                                                      src.hold_back_value
+                                                                                   ELSE
+                                                                                      0
+                                                                               END),0) / NULLIF(src.total_calc_qty, 0) >1
+                                                              AND tgt.exact_ind = 'Y'
+                                                             THEN
+                                                                1
+                                                             WHEN GREATEST(  src.avail_qty
+                                                                            - (CASE WHEN src.hold_back_pct_flag = 'Y'
+                                                                                     AND src.hold_back_value IS NOT NULL
+                                                                                    THEN
+                                                                                       ROUND(  src.avail_qty
+                                                                                             * (  src.hold_back_value
+                                                                                                / 100))
+                                                                                    WHEN src.hold_back_pct_flag = 'N'
+                                                                                     AND src.hold_back_value IS NOT NULL
+                                                                                    THEN
+                                                                                       src.hold_back_value
+                                                                                    ELSE
+                                                                                       0
+                                                                                END),0) / NULLIF(src.total_calc_qty, 0) > 0
+                                                              AND GREATEST(  src.avail_qty
+                                                                           - (CASE WHEN src.hold_back_pct_flag = 'Y'
+                                                                                    AND src.hold_back_value IS NOT NULL
+                                                                                   THEN
+                                                                                       ROUND(  src.avail_qty
+                                                                                             * (  src.hold_back_value
+                                                                                                / 100))
+                                                                                   WHEN src.hold_back_pct_flag = 'N'
+                                                                                    AND src.hold_back_value IS NOT NULL
+                                                                                   THEN
+                                                                                      src.hold_back_value
+                                                                                   ELSE
+                                                                                      0
+                                                                              END),0) / NULLIF(src.total_calc_qty, 0) < .0001
+                                                             THEN
+                                                                0.0001
+                                                             ELSE
+                                                                GREATEST(  src.avail_qty
+                                                                         - (CASE WHEN src.hold_back_pct_flag = 'Y'
+                                                                                  AND src.hold_back_value IS NOT NULL
+                                                                                 THEN
+                                                                                    ROUND(  src.avail_qty
+                                                                                          * (  src.hold_back_value
+                                                                                             / 100))
+                                                                                 WHEN src.hold_back_pct_flag = 'N'
+                                                                                  AND src.hold_back_value IS NOT NULL
+                                                                                 THEN
+                                                                                    src.hold_back_value
+                                                                                 ELSE
+                                                                                    0
+                                                                             END),0) / NULLIF(src.total_calc_qty, 0)
+                                                         END
+                            WHERE tgt.alloc_no = src.alloc_no
+                              AND tgt.wh_id = src.loc
+                              AND tgt.tran_item = src.item;"
+
+    Q_fetch_itm_loc_spread: "SELECT alloc_no,
+                                  wh_id,
+                                  order_no,
+                                  source_item,
+                                  tran_item,
+                                  sku_avail_qty,
+                                  total_tran_sku_calc_qty,
+                                  som_qty,
+                                  no_of_stores,
+                                  adj_units
+                             FROM (SELECT alloc_no,
+                                          wh_id,
+                                          order_no,
+                                          source_item,
+                                          tran_item,
+                                          sku_avail_qty,
+                                          total_tran_sku_calc_qty,
+                                          som_qty,
+                                          no_of_stores,
+                                          GREATEST(
+                                                ROUND(
+                                                      (  (  sku_avail_qty
+                                                          - total_tran_sku_calc_qty)
+                                                       / no_of_stores)
+                                                    / som_qty,
+                                                    0)
+                                              * som_qty,
+                                              som_qty) adj_units
+                                     FROM (SELECT DISTINCT
+                                                  alloc_no,
+                                                  wh_id,
+                                                  order_no,
+                                                  source_item,
+                                                  tran_item,
+                                                  sku_avail_qty,
+                                                  SUM(sku_calc_qty)
+                                                      OVER(
+                                                          PARTITION BY alloc_no,
+                                                                    wh_id,
+                                                                    order_no,
+                                                                    source_item,
+                                                                    tran_item)
+                                                  total_tran_sku_calc_qty,
+                                                  COUNT(
+                                                      CASE
+                                                          WHEN  gross_need_no_own_ship
+                                                               - CASE
+                                                                  WHEN net_need_ind = 'Y'
+                                                                  THEN
+                                                                     stock_on_hand
+                                                                  ELSE
+                                                                     0
+                                                               END > 0
+                                                        AND sku_ownership_ratio > 0
+                                                        AND sku_ownership_ratio < 1
+                                                        AND ROUND(
+                                                                  gross_need_no_own_ship
+                                                                - CASE
+                                                                      WHEN net_need_ind = 'Y'
+                                                                      THEN
+                                                                          stock_on_hand
+                                                                      ELSE
+                                                                          0
+                                                                  END) > sku_calc_qty 
+                                                        AND exact_ind = 'Y'
+                                                          THEN
+                                                           1
+                               
+                                                          WHEN exact_ind = 'N'
+                                                          THEN
+                                                           1
+                                                          ELSE
+                                                           1
+                                                      END)
+                                                      OVER(
+                                                          PARTITION BY alloc_no,
+                                                                    wh_id,
+                                                                    order_no,
+                                                                    source_item,
+                                                                    tran_item)
+                                                  no_of_stores,
+                                                  tmp.som_qty
+                                             FROM alloc_calc_item_loc_temp tmp
+                                            WHERE alloc_no = %s) temp
+                                    WHERE sku_avail_qty > total_tran_sku_calc_qty
+                                      AND (  sku_avail_qty
+                                           - total_tran_sku_calc_qty) >= som_qty) tmp
+                            WHERE NOT EXISTS
+                                      (SELECT 1
+                                         FROM alloc_item_loc_spread_temp gtt
+                                        WHERE gtt.alloc_no = tmp.alloc_no
+                                          AND gtt.wh_id = tmp.wh_id
+                                          AND COALESCE(gtt.order_no, '$') = COALESCE(tmp.order_no,COALESCE(gtt.order_no, '$'))
+                                          AND gtt.source_item = tmp.source_item
+                                          AND gtt.tran_item = tmp.tran_item
+                                          AND gtt.sku_avail_qty = tmp.sku_avail_qty
+                                          AND gtt.total_tran_sku_calc_qty = tmp.total_tran_sku_calc_qty
+                                          AND gtt.adj_units = tmp.adj_units);"
+
+    Q_ins_spread_itm_loc: "INSERT INTO alloc_item_loc_spread_temp (alloc_no,
+                                                                 wh_id,
+                                                                 order_no,
+                                                                 source_item,
+                                                                 tran_item,
+                                                                 sku_avail_qty,
+                                                                 total_tran_sku_calc_qty,
+                                                                 som_qty,
+                                                                 no_of_stores,
+                                                                 adj_units)
+                             VALUES(%s
+                                    ,%s
+                                    ,%s
+                                    ,%s
+                                    ,%s
+                                    ,%s
+                                    ,%s
+                                    ,%s
+                                    ,%s
+                                    ,%s);"
+
+    Q_del_spread_itm_loc: "DELETE FROM alloc_item_loc_spread_temp
+                               WHERE alloc_no = %s;"
+
+    Q_chk_inval_ql_data: "SELECT 'Y'
+                          FROM (SELECT alloc_no,
+                                       wh_id,
+                                       order_no,
+                                       source_item,
+                                       tran_item,
+                                       sku_avail_qty,
+                                       total_tran_sku_calc_qty,
+                                       som_qty,
+                                       no_of_stores,
+                                       GREATEST(
+                                             ROUND(
+                                                   (  (  sku_avail_qty
+                                                       - total_tran_sku_calc_qty)
+                                                    / no_of_stores)
+                                                 / som_qty,
+                                                 0)
+                                           * som_qty,
+                                           som_qty)    adj_units
+                                  FROM (SELECT DISTINCT alloc_no,
+                                               wh_id,
+                                               order_no,
+                                               source_item,
+                                               tran_item,
+                                               sku_avail_qty,
+                                               SUM(sku_calc_qty)
+                                                   OVER(
+                                                       PARTITION BY alloc_no,
+                                                                    wh_id,
+                                                                    order_no,
+                                                                    source_item,
+                                                                    tran_item)
+                                               total_tran_sku_calc_qty,
+                                               COUNT(1)
+                                                   OVER(PARTITION BY alloc_no,
+                                                                      wh_id,
+                                                                      order_no,
+                                                                      source_item,
+                                                                      tran_item)
+                                               no_of_stores,
+                                               tmp.som_qty
+                                          FROM alloc_calc_item_loc_temp tmp
+                                         WHERE alloc_no = %s AND exact_ind = 'N') temp
+                                 WHERE sku_avail_qty > total_tran_sku_calc_qty
+                                   AND (sku_avail_qty - total_tran_sku_calc_qty) >= som_qty) tmp
+                         WHERE EXISTS
+                                   (SELECT 1
+                                      FROM alloc_item_loc_spread_temp gtt
+                                     WHERE gtt.alloc_no = tmp.alloc_no
+                                       AND gtt.wh_id = tmp.wh_id
+                                       AND COALESCE(gtt.order_no, '$') = COALESCE(tmp.order_no,COALESCE(gtt.order_no, '$'))
+                                       AND gtt.source_item = tmp.source_item
+                                       AND gtt.tran_item = tmp.tran_item
+                                       AND gtt.sku_avail_qty = tmp.sku_avail_qty
+                                       AND gtt.total_tran_sku_calc_qty = tmp.total_tran_sku_calc_qty
+                                       AND gtt.adj_units = tmp.adj_units);"
+
+    Q_adj_itm_priority: "SELECT 1 chk, adj_items_priority
+                          FROM (SELECT alloc_no,
+                                       wh_id,
+                                       order_no,
+                                       source_item,
+                                       tran_item,
+                                       sku_avail_qty,
+                                       total_tran_sku_calc_qty,
+                                       som_qty,
+                                       no_of_stores,
+                                       GREATEST(
+                                             ROUND(
+                                                   (  (  sku_avail_qty
+                                                       - total_tran_sku_calc_qty)
+                                                    / no_of_stores)
+                                                 / som_qty,
+                                                 0)
+                                           * som_qty,
+                                           som_qty)    adj_units,
+                                       adj_items_priority
+                                  FROM (SELECT DISTINCT
+                                               alloc_no,
+                                               wh_id,
+                                               order_no,
+                                               source_item,
+                                               tran_item,
+                                               sku_avail_qty,
+                                               SUM(sku_calc_qty)
+                                                   OVER(
+                                                       PARTITION BY alloc_no,
+                                                                    wh_id,
+                                                                    order_no,
+                                                                    source_item,
+                                                                    tran_item)
+                                                   total_tran_sku_calc_qty,
+                                               COUNT(1)
+                                                   OVER(PARTITION BY alloc_no,
+                                                                      wh_id,
+                                                                      order_no,
+                                                                      source_item,
+                                                                      tran_item)
+                                                   no_of_stores,
+                                               tmp.som_qty,
+                                               CASE
+                                                   WHEN (   (      gross_need_no_own_ship
+                                                                 - CASE
+                                                                       WHEN net_need_ind =
+                                                                            'Y'
+                                                                       THEN
+                                                                           stock_on_hand
+                                                                       ELSE
+                                                                           0
+                                                                   END >
+                                                                 0
+                                                             AND sku_ownership_ratio > 0
+                                                             AND sku_ownership_ratio < 1
+                                                             AND ROUND(
+                                                                       gross_need_no_own_ship
+                                                                     - CASE
+                                                                           WHEN net_need_ind =
+                                                                                'Y'
+                                                                           THEN
+                                                                               stock_on_hand
+                                                                           ELSE
+                                                                               0
+                                                                       END) >
+                                                                 sku_calc_qty
+                                                             AND exact_ind = 'Y')
+                                                         OR exact_ind = 'N')
+                                                   THEN
+                                                       1
+                                                   ELSE
+                                                       0
+                                               END
+                                                   adj_items_priority
+                                          FROM alloc_calc_item_loc_temp tmp
+                                         WHERE alloc_no =%s
+                                                                    ) temp
+                                 WHERE     sku_avail_qty > total_tran_sku_calc_qty
+                                       AND (sku_avail_qty - total_tran_sku_calc_qty) >=
+                                           som_qty) tmp
+                         WHERE NOT EXISTS
+                                   (SELECT 1
+                                      FROM alloc_item_loc_spread_temp gtt
+                                     WHERE     gtt.alloc_no = tmp.alloc_no
+                                           AND gtt.wh_id = tmp.wh_id
+                                           AND COALESCE(gtt.order_no, '$') =
+                                               COALESCE(tmp.order_no,
+                                                    COALESCE(gtt.order_no, '$'))
+                                           AND gtt.source_item = tmp.source_item
+                                           AND gtt.tran_item = tmp.tran_item
+                                           AND gtt.sku_avail_qty = tmp.sku_avail_qty
+                                           AND gtt.total_tran_sku_calc_qty =
+                                               tmp.total_tran_sku_calc_qty
+                                           AND gtt.adj_units = tmp.adj_units);"
+
+    Q_adj_itm_priority1: "SELECT 1 chk, adj_items_priority
+                            FROM (SELECT alloc_no,
+                                         wh_id,
+                                         order_no,
+                                         source_item,
+                                         tran_item,
+                                         to_loc,
+                                         gross_need,
+                                         exact_ind,
+                                         SUM(avail_Qty)
+                                             OVER(PARTITION BY alloc_no,
+                                                                wh_id,
+                                                                order_no,
+                                                                source_item)
+                                             total_avail_Qty,
+                                         sku_avail_qty,
+                                         tmp.STOCK_ON_HAND,
+                                         sku_calc_qty,
+                                         SUM(sku_calc_qty)
+                                             OVER(PARTITION BY alloc_no,
+                                                                wh_id,
+                                                                order_no,
+                                                                source_item,
+                                                                tran_item)
+                                             total_tran_sku_calc_qty,
+                                         tmp.som_qty,
+                                         SUM(sku_calc_qty)
+                                             OVER(PARTITION BY alloc_no,
+                                                                wh_id,
+                                                                order_no,
+                                                                source_item)
+                                             total_sku_calc_qty,
+                                         CASE
+                                             WHEN ROUND(
+                                                        gross_need_no_own_ship
+                                                      - CASE
+                                                            WHEN net_need_ind = 'Y'
+                                                            THEN
+                                                                stock_on_hand
+                                                            ELSE
+                                                                0
+                                                        END) >
+                                                  sku_calc_qty 
+                                             THEN
+                                                 1
+                                             ELSE
+                                                 0
+                                         END
+                                             adj_items_priority
+                                    FROM alloc_calc_item_loc_temp tmp
+                                   WHERE     alloc_no = %s
+                                         AND COALESCE(sku_calc_qty, 0) <> 0)temp
+                           WHERE sku_avail_qty < total_tran_sku_calc_qty
+                           ORDER BY adj_items_priority DESC;"
+
+    Q_update_inac_wh: "UPDATE alloc_calc_item_loc_temp gtt
+                          SET sku_avail_qty = 0,
+                              sku_ownership_ratio = 0
+                        WHERE alloc_no = %s
+                          AND EXISTS(SELECT 1 
+                                       FROM item_location
+                                      WHERE item = gtt.tran_item 
+                                        AND location = gtt.wh_id 
+                                        AND status NOT IN ('A','C'));"
+
+    Q_update_inac_wh_wi: "DELETE FROM alloc_calc_item_loc_temp gtt
+                           WHERE alloc_no = %s
+                           AND EXISTS(SELECT 1 
+                                        FROM item_location 
+                                       WHERE item=gtt.tran_item 
+                                         AND location=gtt.assign_default_wh 
+                                         AND status not in ('A'));"
+
+    Q_wi_sku_ownship: "UPDATE alloc_calc_item_loc_temp 
+                          SET sku_ownership_ratio = 1
+                        WHERE alloc_no = %s
+                          AND avail_qty IS NULL;"
+
+    Q_update_sku_calc_qty: "UPDATE alloc_calc_item_loc_temp
+                             SET sku_calc_qty = COALESCE(
+                                                         GREATEST(CASE WHEN exact_ind = 'N'
+                                                                  AND net_need_ind = 'Y'
+                                                                 THEN
+                                                                      (calc_qty * sku_ownership_ratio)
+                                                                     - COALESCE(stock_on_hand, 0)
+                                                                 ELSE
+                                                                    (calc_qty * sku_ownership_ratio)
+                                                                END,0)
+                                                         ,0)
+                           WHERE alloc_no = %s;"
+
+    Q_upd_sku_calc_qty_bfr_qtlm: "UPDATE alloc_calc_item_loc_temp
+                                   SET sku_calc_qty_bfr_qtlm = sku_calc_qty,
+                                       sku_calc_qty = GREATEST(
+                                                               (CASE WHEN sku_calc_qty < 0
+                                                                     THEN
+                                                                        0
+                                                                     WHEN (sku_calc_qty) < treshold
+                                                                      AND treshold IS NOT NULL
+                                                                    THEN
+                                                                        0
+                                                                    WHEN(CASE
+                                                                             WHEN sku_calc_qty > gross_need_no_own_ship
+                                                                                 - CASE WHEN net_need_ind = 'Y'
+                                                                                        THEN
+                                                                                           stock_on_hand
+                                                                                        ELSE 0
+                                                                                    END
+                                                                              AND exact_ind = 'Y'
+                                                                              AND sku_ownership_ratio < 1
+                                                                             THEN
+                                                                                GREATEST( gross_need_no_own_ship
+                                                                                         - CASE WHEN net_need_ind = 'Y'
+                                                                                                THEN
+                                                                                                   stock_on_hand
+                                                                                                ELSE 0
+                                                                                            END, 0)
+                                                                             ELSE
+                                                                                sku_calc_qty
+                                                                          END) >
+                                                                                 GREATEST( max
+                                                                                          - CASE WHEN include_inv_in_max_ind = 'Y'
+                                                                                                 THEN
+                                                                                                    stock_on_hand
+                                                                                                 ELSE 0
+                                                                                             END,0)
+                                                                     AND (sku_calc_qty) > treshold
+                                                                     AND max IS NOT NULL
+                                                                     AND treshold IS NOT NULL
+                                                                    THEN
+                                                                        GREATEST(  max
+                                                                                 - CASE WHEN include_inv_in_max_ind = 'Y'
+                                                                                         THEN
+                                                                                            stock_on_hand
+                                                                                         ELSE
+                                                                                            0
+                                                                                    END,0)
+                                                                    WHEN (CASE WHEN  sku_calc_qty > gross_need_no_own_ship
+                                                                                    -CASE WHEN net_need_ind = 'Y'
+                                                                                          THEN
+                                                                                             stock_on_hand
+                                                                                          ELSE
+                                                                                             0
+                                                                                      END
+                                                                                AND exact_ind = 'Y'
+                                                                                AND sku_ownership_ratio < 1
+                                                                               THEN
+                                                                                  GREATEST( gross_need_no_own_ship
+                                                                                           - CASE WHEN net_need_ind = 'Y'
+                                                                                                  THEN
+                                                                                                     stock_on_hand
+                                                                                                  ELSE
+                                                                                                       0
+                                                                                              END, 0)
+                                                                               ELSE
+                                                                                  sku_calc_qty
+                                                                           END) >
+                                                                                 GREATEST( max
+                                                                                          - CASE WHEN include_inv_in_max_ind = 'Y'
+                                                                                                 THEN
+                                                                                                    stock_on_hand
+                                                                                                 ELSE
+                                                                                                    0
+                                                                                             END,0)
+                                                                     AND max IS NOT NULL
+                                                                     AND treshold IS NULL
+                                                                    THEN
+                                                                        GREATEST( max
+                                                                                 - CASE WHEN include_inv_in_max_ind = 'Y'
+                                                                                        THEN
+                                                                                           stock_on_hand
+                                                                                        ELSE
+                                                                                           0
+                                                                                    END,0)
+                                                                    ELSE
+                                                                        (CASE
+                                                                             WHEN sku_calc_qty > gross_need_no_own_ship
+                                                                                 - CASE WHEN net_need_ind = 'Y'
+                                                                                        THEN
+                                                                                           stock_on_hand
+                                                                                        ELSE
+                                                                                            0
+                                                                                    END
+                                                                              AND exact_ind = 'Y'
+                                                                              AND sku_ownership_ratio < 1
+                                                                             THEN
+                                                                                 GREATEST( gross_need_no_own_ship
+                                                                                          - CASE WHEN net_need_ind = 'Y'
+                                                                                                 THEN
+                                                                                                    stock_on_hand
+                                                                                                 ELSE
+                                                                                                    0
+                                                                                             END, 0)
+                                                                             ELSE
+                                                                                 sku_calc_qty
+                                                                          END)
+                                                                END),0)
+                                 WHERE alloc_no = %s;"
+
+    Q_upd_sku_calc_qty_bfr_sprd: "UPDATE alloc_calc_item_loc_temp
+                                   SET sku_calc_qty_bfr_sprd =
+                                             ROUND(  CASE WHEN sku_calc_qty > 0
+                                                             AND sku_calc_qty < (som_qty / 2)
+                                                          THEN
+                                                               0  
+                                                           WHEN  gross_need_no_own_ship
+                                                                 - CASE WHEN net_need_ind = 'Y'
+                                                                             THEN
+                                                                                stock_on_hand
+                                                                             ELSE
+                                                                                0
+                                                                       END < 1
+                                                              AND sku_ownership_ratio < 1
+                                                           THEN
+                                                                0
+                                                           ELSE
+                                                                sku_calc_qty
+                                                      END
+                                                    / som_qty, 0)
+                                                    * som_qty,
+                                       sku_calc_qty =
+                                             ROUND(  CASE WHEN sku_calc_qty > 0
+                                                           AND sku_calc_qty < (som_qty / 2) 
+                                                          THEN
+                                                             0                          
+                                                          WHEN 
+                                                               gross_need_no_own_ship
+                                                             - CASE WHEN net_need_ind = 'Y'
+                                                                    THEN
+                                                                       stock_on_hand
+                                                                    ELSE
+                                                                       0
+                                                                END < 1
+                                                           AND sku_ownership_ratio < 1
+                                                          THEN
+                                                             0
+                                                          ELSE
+                                                             sku_calc_qty
+                                                      END
+                                                   / som_qty,0)
+                                                   * som_qty
+                                 WHERE alloc_no = %s;"
+
+    Q_upd_sprd_sku_calc_qty: "UPDATE alloc_calc_item_loc_temp
+                               SET sku_calc_qty = CASE WHEN exact_ind = 'Y'
+                                                        AND   sku_calc_qty
+                                                            + %s > gross_need_no_own_ship    /*adj_units */
+                                                            - CASE
+                                                                  WHEN net_need_ind = 'Y'
+                                                                  THEN
+                                                                      stock_on_hand
+                                                                  ELSE
+                                                                      0
+                                                              END
+                                                       THEN
+                                                             gross_need_no_own_ship
+                                                           - CASE WHEN net_need_ind = 'Y'
+                                                                  THEN
+                                                                     stock_on_hand
+                                                                  ELSE
+                                                                     0
+                                                             END
+                                                       ELSE
+                                                             sku_calc_qty
+                                                           + %s /*#.adj_units*/
+                                                   END,
+                                   orig_sku_calc_qty = CASE WHEN exact_ind = 'Y'
+                                                             AND   sku_calc_qty
+                                                                 + %s > gross_need_no_own_ship /*L_rec_spread_items_tbl (i).adj_units*/
+                                                                 - CASE WHEN net_need_ind = 'Y'
+                                                                        THEN
+                                                                           stock_on_hand
+                                                                        ELSE
+                                                                           0
+                                                                    END
+                                                            THEN
+                                                                  gross_need_no_own_ship
+                                                                - CASE WHEN net_need_ind = 'Y'
+                                                                       THEN
+                                                                          stock_on_hand
+                                                                       ELSE
+                                                                          0
+                                                                   END
+                                                            ELSE
+                                                                 sku_calc_qty
+                                                               + %s /*L_rec_spread_items_tbl (i).adj_units*/
+                                                        END
+                             WHERE alloc_no = %s /*L_rec_spread_items_tbl (i).alloc_id*/
+                               AND (  (   gross_need_no_own_ship
+                                       - CASE WHEN net_need_ind = 'Y'
+                                              THEN
+                                                 stock_on_hand
+                                              ELSE
+                                                 0
+                                          END > 0
+                                       AND sku_ownership_ratio > 0
+                                       AND sku_ownership_ratio < 1
+                                       AND ROUND(  gross_need_no_own_ship
+                                                    - CASE WHEN net_need_ind = 'Y'
+                                                        THEN
+                                                           stock_on_hand
+                                                        ELSE
+                                                           0
+                                                       END) > sku_calc_qty
+                                       AND exact_ind = 'Y')
+                                    OR exact_ind = 'N')
+                               AND source_item =%s /*L_rec_spread_items_tbl (i).source_item*/
+                               AND COALESCE(order_no, '$') = COALESCE(%s /*L_rec_spread_items_tbl (i).order_no*/,COALESCE(order_no, '$'))
+                               AND wh_id = %s   /*L_rec_spread_items_tbl (i).wh_id*/
+                               AND tran_item = %s;" #L_rec_spread_items_tbl (i).tran_item
+
+    Q_upd_sprd_orig_sku_calc_qty:   "UPDATE alloc_calc_item_loc_temp tgt
+                                    SET sku_calc_qty =
+                                            GREATEST(ROUND(
+                                                        (CASE WHEN sku_calc_qty < treshold
+                                                                AND treshold IS NOT NULL
+                                                                THEN
+                                                                0
+                                                                WHEN sku_calc_qty > GREATEST(  max
+                                                                                            - CASE WHEN include_inv_in_max_ind = 'Y'
+                                                                                                    THEN
+                                                                                                    stock_on_hand
+                                                                                                    ELSE
+                                                                                                    0
+                                                                                                END,0)
+                                                                AND sku_calc_qty > treshold
+                                                                AND max IS NOT NULL
+                                                                AND treshold IS NOT NULL
+                                                                THEN
+                                                                GREATEST(  max
+                                                                            - CASE WHEN include_inv_in_max_ind =  'Y'
+                                                                                THEN
+                                                                                    stock_on_hand
+                                                                                ELSE
+                                                                                    0
+                                                                            END,0)
+                                                                WHEN sku_calc_qty > GREATEST (  max
+                                                                                            - CASE  WHEN include_inv_in_max_ind = 'Y'
+                                                                                                    THEN
+                                                                                                        stock_on_hand
+                                                                                                    ELSE
+                                                                                                        0
+                                                                                                END,0)
+                                                                AND max IS NOT NULL
+                                                                AND treshold IS NULL
+                                                                THEN
+                                                                GREATEST(  max
+                                                                            - CASE WHEN include_inv_in_max_ind = 'Y'
+                                                                                THEN 
+                                                                                    stock_on_hand
+                                                                                ELSE
+                                                                                    0
+                                                                            END,0)
+                                                                ELSE
+                                                                sku_calc_qty
+                                                            END)
+                                                        / tgt.som_qty,0)
+                                                        * tgt.som_qty,0),
+                                        orig_sku_calc_qty =
+                                            GREATEST(ROUND(
+                                                        (CASE WHEN sku_calc_qty < treshold
+                                                                AND treshold IS NOT NULL
+                                                                THEN
+                                                                0
+                                                                WHEN sku_calc_qty >
+                                                                            GREATEST(  max
+                                                                                    - CASE WHEN include_inv_in_max_ind = 'Y'
+                                                                                            THEN
+                                                                                            stock_on_hand
+                                                                                            ELSE
+                                                                                            0
+                                                                                        END,0)
+                                                                AND sku_calc_qty > treshold
+                                                                AND max IS NOT NULL
+                                                                AND treshold IS NOT NULL
+                                                                THEN
+                                                                GREATEST(  max
+                                                                            - CASE WHEN include_inv_in_max_ind = 'Y'
+                                                                                THEN
+                                                                                    stock_on_hand
+                                                                                ELSE
+                                                                                    0
+                                                                            END,0)
+                                                                WHEN sku_calc_qty > GREATEST (  max
+                                                                                            - CASE WHEN include_inv_in_max_ind = 'Y'
+                                                                                                    THEN
+                                                                                                        stock_on_hand
+                                                                                                    ELSE
+                                                                                                        0
+                                                                                                END,0)
+                                                                AND max IS NOT NULL
+                                                                AND treshold IS NULL
+                                                                THEN
+                                                                GREATEST(  max
+                                                                            - CASE WHEN include_inv_in_max_ind = 'Y'
+                                                                                THEN
+                                                                                    stock_on_hand
+                                                                                ELSE
+                                                                                    0
+                                                                            END,0)
+                                                                ELSE
+                                                                sku_calc_qty
+                                                            END)
+                                                        / tgt.som_qty,0)
+                                                        * tgt.som_qty,0)
+                                    WHERE alloc_no = %s;"
+
+    Q_upd_tot_sku_calc: "WITH src
+                        AS 
+                        (SELECT * 
+                           FROM( SELECT alloc_no,
+                                        wh_id,
+                                        order_no,
+                                        source_item,
+                                        tran_item,
+                                        sku_avail_qty,
+                                        total_tran_sku_calc_qty,
+                                        som_qty,
+                                        no_of_stores,
+                                        GREATEST(ROUND( (  (  sku_avail_qty
+                                                           - total_tran_sku_calc_qty)
+                                                        / no_of_stores)
+                                                      / som_qty,0)
+                                               * som_qty,som_qty)  adj_units
+                                  FROM (SELECT DISTINCT alloc_no,
+                                               wh_id,
+                                               order_no,
+                                               source_item,
+                                               tran_item,
+                                               sku_avail_qty,
+                                               SUM(sku_calc_qty)
+                                                   OVER(PARTITION BY alloc_no,
+                                                                     wh_id,
+                                                                     order_no,
+                                                                     source_item,
+                                                                     tran_item)  total_tran_sku_calc_qty,
+                                               COUNT(CASE WHEN   gross_need_no_own_ship
+                                                               - CASE WHEN net_need_ind = 'Y'
+                                                                      THEN
+                                                                          stock_on_hand
+                                                                      ELSE
+                                                                          0
+                                                                  END > 0
+                                                            AND sku_ownership_ratio > 0
+                                                            AND sku_ownership_ratio < 1
+                                                            AND ROUND(  gross_need_no_own_ship
+                                                                      - CASE WHEN net_need_ind = 'Y'
+                                                                             THEN
+                                                                                stock_on_hand
+                                                                             ELSE
+                                                                                0
+                                                                         END) > sku_calc_qty 
+                                                            AND exact_ind = 'Y'
+                                                           THEN
+                                                              1
+                                                           WHEN exact_ind = 'N'
+                                                           THEN
+                                                               1
+                                                           ELSE
+                                                               0
+                                                       END)
+                                                   OVER(PARTITION BY alloc_no,
+                                                                     wh_id,
+                                                                     order_no,
+                                                                     source_item,
+                                                                     tran_item)   no_of_stores,
+                                               tmp.som_qty
+                                          FROM alloc_calc_item_loc_temp tmp
+                                         WHERE alloc_no = %s) temp
+                                 WHERE sku_avail_qty > total_tran_sku_calc_qty
+                                   AND(  sku_avail_qty
+                                       - total_tran_sku_calc_qty) >= som_qty) tmp)
+                        
+                        UPDATE alloc_item_loc_spread_temp tgt, src
+                           SET tgt.total_tran_sku_calc_qty = src.total_tran_sku_calc_qty
+                         WHERE tgt.alloc_no = src.alloc_no
+                           AND tgt.wh_id = src.wh_id
+                           AND COALESCE(tgt.order_no, '$') = COALESCE(src.order_no, COALESCE(tgt.order_no, '$'))
+                           AND tgt.source_item = src.source_item
+                           AND tgt.tran_item = src.tran_item
+                           /*chk*/
+                           AND tgt.sku_avail_qty = src.sku_avail_qty
+                           AND tgt.total_tran_sku_calc_qty = src.total_tran_sku_calc_qty
+                           AND tgt.adj_units = src.adj_units;"
+
+    Q_spread_rec_loop: "SELECT *
+                        FROM (SELECT alloc_no,
+                                    wh_id,
+                                    order_no,
+                                    source_item,
+                                    tran_item,
+                                    to_loc,
+                                    gross_need,
+                                    exact_ind,
+                                    SUM(avail_Qty)
+                                        OVER(PARTITION BY alloc_no,
+                                                        wh_id,
+                                                        order_no,
+                                                        source_item)
+                                        total_avail_qty,
+                                    sku_avail_qty,
+                                    tmp.stock_on_hand,
+                                    sku_calc_qty,
+                                    SUM(sku_calc_qty)
+                                        OVER(PARTITION BY alloc_no,
+                                                            wh_id,
+                                                            order_no,
+                                                            source_item,
+                                                            tran_item)
+                                        total_tran_sku_calc_qty,
+                                    tmp.som_qty,
+                                    SUM(sku_calc_qty)
+                                        OVER(PARTITION BY alloc_no,
+                                                            wh_id,
+                                                            order_no,
+                                                            source_item)
+                                        total_sku_calc_qty,
+                                    CASE
+                                        WHEN (   (      gross_need_no_own_ship
+                                                        - CASE
+                                                            WHEN net_need_ind =
+                                                                'Y'
+                                                            THEN
+                                                                stock_on_hand
+                                                            ELSE
+                                                                0
+                                                        END >
+                                                        0
+                                                    AND sku_ownership_ratio >
+                                                        0
+                                                    AND sku_ownership_ratio <
+                                                        1
+                                                    AND 
+                                                        sku_calc_qty > 0 
+                                                    AND exact_ind = 'Y')
+                                                OR exact_ind = 'N')
+                                        THEN
+                                            1
+                                        ELSE
+                                            0
+                                    END
+                                        adj_items_priority
+                                FROM alloc_calc_item_loc_temp tmp
+                                WHERE alloc_no = %s 
+                                  AND COALESCE(sku_calc_qty, 0) <> 0
+                            ORDER BY alloc_no,
+                                     wh_id,
+                                     order_no,
+                                     source_item,
+                                     tran_item,
+                                     adj_items_priority DESC,
+                                     gross_need_no_own_ship
+                                     - CASE WHEN net_need_ind = 'Y'
+                                            THEN
+                                                stock_on_hand
+                                            ELSE
+                                                0
+                                     END ASC,
+                                     to_loc DESC)temp
+                        WHERE sku_avail_qty < total_tran_sku_calc_qty;"
+
+    Q_chk_tot_tran_sku_calc_qty: "SELECT SUM(sku_calc_qty) AS total_tran_sku_calc_qty
+                                  FROM alloc_calc_item_loc_temp tmp
+                                  WHERE alloc_no = %s
+                                   AND exact_ind = %s
+                                   AND wh_id = %s
+                                   AND COALESCE(order_no, '$') = COALESCE(%s, COALESCE(order_no, '$'))
+                                   AND source_item = %s
+                                   AND tran_item = %s
+                                  GROUP BY alloc_no,
+                                           wh_id,
+                                           order_no,
+                                           source_item,
+                                           tran_item;"
+
+    Q_no_avail_qty: "UPDATE alloc_itm_search_dtl tmp
+                      SET err_message = SUBSTR(CONCAT(err_message, 'There are no active item/locations on this allocation.'),1,500)
+                    WHERE tmp.alloc_no = %s 
+                      AND tmp.sel_ind = 'Y';"
+
+    Q_calc_chk: "SELECT 1
+                 FROM alloc_calc_item_loc_temp
+                WHERE alloc_no = %s;"
+
+    Q_upd_sprd_sku_calc_qty1: "UPDATE aso_alc_calc_item_loc_temp
+                                SET sku_calc_qty =
+                                        GREATEST(
+                                              FLOOR(
+                                                    (sku_calc_qty - %s) /*L_new_calc_qty*/
+                                                  / %s)  /*rec_spread.som_qty*/
+                                            * %s, /*rec_spread.som_qty*/
+                                            0),
+                                    orig_sku_calc_qty =
+                                        GREATEST(
+                                              FLOOR(
+                                                    (sku_calc_qty - %s)   /*L_new_calc_qty*/
+                                                  / %s)  /*rec_spread.som_qty*/
+                                            * %s, /*rec_spread.som_qty*/
+                                            0)
+                              WHERE alloc_no    = %s
+                                AND wh_id       = %s
+                                AND order_no    = %s
+                                AND source_item = %s
+                                AND tran_item   = %s
+                                AND to_loc      = %s;"
+
+calculate3:
+  Q_del_main_tbl: "DELETE FROM alloc_calc_item_loc WHERE alloc_no = %s;"
+
+  Q_ins_main_tbl: "INSERT INTO alloc_calc_item_loc(ALLOC_NO
+                                                   ,TRAN_ITEM
+                                                   ,SOURCE_ITEM
+                                                   ,DIFF_ID
+                                                   ,WH_ID
+                                                   ,ORDER_NO
+                                                   ,TO_LOC
+                                                   ,ASSIGN_DEFAULT_WH
+                                                   ,NEED_VALUE
+                                                   ,TOTAL_NEED_VALUE
+                                                   ,TOTAL_AVAIL_QTY
+                                                   ,TREND
+                                                   ,WOS
+                                                   ,MIN
+                                                   ,MAX
+                                                   ,TRESHOLD
+                                                   ,MIN_NEED
+                                                   ,MIN_PACK
+                                                   ,MAX_PACK
+                                                   ,AVAIL_QTY
+                                                   ,SKU_AVAIL_QTY
+                                                   ,HOLD_BACK_PCT_FLAG
+                                                   ,HOLD_BACK_VALUE
+                                                   ,TOTAL_NEED_COUNT
+                                                   ,OWNERSHIP_RATIO
+                                                   ,SKU_OWNERSHIP_RATIO
+                                                   ,SIZE_PROFILE_IND
+                                                   ,SIZE_PROFILE_ID
+                                                   ,SIZE_PROFILE_QTY
+                                                   ,TOTAL_PROFILE_QTY
+                                                   ,RULE_TYPE
+                                                   ,RULE_LEVEL
+                                                   ,EXACT_IND
+                                                   ,NET_NEED_IND
+                                                   ,GROSS_NEED_NO_OWN_SHIP
+                                                   ,SKU_GROSS_NEED_NO_OWN_SHIP
+                                                   ,STOCK_ON_HAND
+                                                   ,ON_ORDER
+                                                   ,ON_ALLOC
+                                                   ,ALLOC_OUT
+                                                   ,IN_TRANSIT_QTY
+                                                   ,BACKORDER_QTY
+                                                   ,GROSS_NEED
+                                                   ,CALC_QTY
+                                                   ,SKU_CALC_QTY
+                                                   ,SKU_CALC_QTY_BFR_QTLM
+                                                   ,SKU_CALC_QTY_BFR_SPRD
+                                                   ,ALLOC_SKU_CALC_QTY
+                                                   ,SOM_QTY
+                                                   ,ALLOC_QTY
+                                                   ,STATUS
+                                                   ,ERROR_MESSAGE_TXT
+                                                   ,CREATE_ID
+                                                   ,CREATE_DATETIME
+                                                   ,LAST_UPDATE_ID
+                                                   ,LAST_UPDATE_DATETIME
+                                                   ,INCLUDE_INV_IN_MIN_IND
+                                                   ,INCLUDE_INV_IN_MAX_IND
+                                                   ,SKU_SPREAD_QTY
+                                                   ,ORIG_SKU_CALC_QTY
+                                                   ,WH_ON_ORDER_QTY
+                                                   ,WH_ON_ALLOC_QTY)
+                     SELECT ALLOC_NO
+                            ,TRAN_ITEM
+                            ,SOURCE_ITEM
+                            ,DIFF_ID
+                            ,WH_ID
+                            ,ORDER_NO
+                            ,TO_LOC
+                            ,ASSIGN_DEFAULT_WH
+                            ,NEED_VALUE
+                            ,TOTAL_NEED_VALUE
+                            ,TOTAL_AVAIL_QTY
+                            ,TREND
+                            ,WOS
+                            ,MIN
+                            ,MAX
+                            ,TRESHOLD
+                            ,MIN_NEED
+                            ,MIN_PACK
+                            ,MAX_PACK
+                            ,AVAIL_QTY
+                            ,SKU_AVAIL_QTY
+                            ,HOLD_BACK_PCT_FLAG
+                            ,HOLD_BACK_VALUE
+                            ,TOTAL_NEED_COUNT
+                            ,OWNERSHIP_RATIO
+                            ,SKU_OWNERSHIP_RATIO
+                            ,SIZE_PROFILE_IND
+                            ,SIZE_PROFILE_ID
+                            ,SIZE_PROFILE_QTY
+                            ,TOTAL_PROFILE_QTY
+                            ,RULE_TYPE
+                            ,RULE_LEVEL
+                            ,EXACT_IND
+                            ,NET_NEED_IND
+                            ,GROSS_NEED_NO_OWN_SHIP
+                            ,SKU_GROSS_NEED_NO_OWN_SHIP
+                            ,STOCK_ON_HAND
+                            ,ON_ORDER
+                            ,ON_ALLOC
+                            ,ALLOC_OUT
+                            ,IN_TRANSIT_QTY
+                            ,BACKORDER_QTY
+                            ,GROSS_NEED
+                            ,CALC_QTY
+                            ,SKU_CALC_QTY
+                            ,SKU_CALC_QTY_BFR_QTLM
+                            ,SKU_CALC_QTY_BFR_SPRD
+                            ,ALLOC_SKU_CALC_QTY
+                            ,SOM_QTY
+                            ,ALLOC_QTY
+                            ,STATUS
+                            ,ERROR_MESSAGE_TXT
+                            ,CREATE_ID
+                            ,CREATE_DATETIME
+                            ,LAST_UPDATE_ID
+                            ,LAST_UPDATE_DATETIME
+                            ,INCLUDE_INV_IN_MIN_IND
+                            ,INCLUDE_INV_IN_MAX_IND
+                            ,SKU_SPREAD_QTY
+                            ,ORIG_SKU_CALC_QTY
+                            ,WH_ON_ORDER_QTY
+                            ,WH_ON_ALLOC_QTY
+                       FROM alloc_calc_item_loc_temp
+                      WHERE alloc_no = %s;"
+
+  Q_fetch_items: "SELECT * FROM alloc_itm_search_dtl WHERE alloc_no = %s ORDER BY loc;"

@@ -1,0 +1,128 @@
+func_load_split_data:
+  Q_chck_split: " SELECT 1 chck
+                    FROM alloc_itm_search_dtl tmp,
+                         po_dtl oh
+                   WHERE tmp.alloc_no = %s
+                       AND tmp.ref_1 = oh.po_no
+                     AND tmp.alloc_criteria = 'P'
+                     AND oh.status = 'S'
+                     AND tmp.ref_1 IS NOT NULL
+                     AND split_ind = 'Y'; "
+   
+  Q_create_tbl: " CREATE TEMPORARY TABLE IF NOT EXISTS alloc_item_loc_split_temp(SEL_IND             VARCHAR(1),
+                                                                                ALLOC_NO             NUMERIC(15),
+                                                                                ALLOC_CRITERIA       VARCHAR(3),
+                                                                                ITEM                 VARCHAR(25),
+                                                                                ITEM_DESC            VARCHAR(250),
+                                                                                DIFF_ID              VARCHAR(25),
+                                                                                LOC                  NUMERIC(10),
+                                                                                HIER1                VARCHAR(10),
+                                                                                HIER2                VARCHAR(10),
+                                                                                HIER3                VARCHAR(10),
+                                                                                PACK_IND             VARCHAR(1),
+                                                                                INNER_SIZE           DECIMAL(12,4),
+                                                                                CASE_SIZE            DECIMAL(12,4),
+                                                                                AVAIL_QTY            NUMERIC(12),
+                                                                                INACTIVE_QTY         NUMERIC(12),
+                                                                                HOLDBACK_QTY         NUMERIC(12),
+                                                                                HOLDBACK_TYPE        VARCHAR(4),
+                                                                                SIZE_PRF_IND         VARCHAR(1),
+                                                                                SUBSTITUTE_IND       VARCHAR(1),
+                                                                                CLEARANCE_IND        VARCHAR(1),
+                                                                                INVENT_IND           VARCHAR(1),
+                                                                                SPLIT_IND            VARCHAR(1),
+                                                                                SOM_TYPE             VARCHAR(5),
+                                                                                SOM_QTY              NUMERIC(10),
+                                                                                VPN                  VARCHAR(30),
+                                                                                SEASON               VARCHAR(250),
+                                                                                DOC_ID               VARCHAR(50),
+                                                                                DOC_TYPE             VARCHAR(1),
+                                                                                DOC_DESC             VARCHAR(150),
+                                                                                ERR_IND              VARCHAR(1),
+                                                                                ERR_MESSAGE          VARCHAR(50),
+                                                                                CREATE_ID            VARCHAR(20),
+                                                                                CREATE_DATETIME      DATE,
+                                                                                LAST_UPDATE_ID       VARCHAR(25),
+                                                                                LAST_UPDATE_DATETIME DATE); "
+  
+  Q_chck_tbl: " SELECT count(1) chk
+                  FROM information_schema.tables
+                 WHERE table_schema = database()
+                   AND LOWER(table_name) = 'alloc_item_loc_split_temp'; "
+
+  Q_ins_split: " INSERT INTO alloc_item_loc_split_temp(sel_ind,                          
+                                                      alloc_no,                      
+                                                      alloc_criteria,                    
+                                                      item,                            
+                                                      item_desc,                      
+                                                      diff_id,                          
+                                                      loc,                              
+                                                      hier1,                          
+                                                      hier2,                          
+                                                      hier3,                          
+                                                      pack_ind,                      
+                                                      inner_size,                      
+                                                      case_size,                      
+                                                      avail_qty,                      
+                                                      inactive_qty,                 
+                                                      holdback_qty,                  
+                                                      holdback_type,                 
+                                                      size_prf_ind,                  
+                                                      substitute_ind,                  
+                                                      clearance_ind,                  
+                                                      invent_ind,                      
+                                                      split_ind,                        
+                                                      som_type,                      
+                                                      som_qty,                          
+                                                      vpn,                              
+                                                      season,                          
+                                                      doc_id,                          
+                                                      doc_type,                        
+                                                      doc_desc,                      
+                                                      err_ind,                            
+                                                      err_message,                      
+                                                      create_id,          
+                                                      create_datetime,      
+                                                      last_update_id,      
+                                                      last_update_datetime)
+                                                SELECT sel_ind,
+                                                       alloc_no,
+                                                       alloc_criteria,
+                                                       item,
+                                                       item_desc,
+                                                       diff_id,
+                                                       loc,
+                                                       hier1,
+                                                       hier2,
+                                                       hier3,
+                                                       pack_ind,
+                                                       0 inner_size,
+                                                       0 case_size,
+                                                       avail_qty,
+                                                       inactive_qty,
+                                                       holdback_qty,
+                                                       holdback_type,
+                                                       size_prf_ind,
+                                                       substitute_ind,
+                                                       clearance_ind,
+                                                       invent_ind,
+                                                       split_ind,
+                                                       som_type,
+                                                       som_qty,
+                                                       vpn,
+                                                       0 season,
+                                                       ref_1,
+                                                       ref_2,
+                                                       po_type,
+                                                       err_ind,
+                                                       err_message,
+                                                       create_id,
+                                                       create_datetime,
+                                                       last_update_id,
+                                                       CURRENT_TIMESTAMP() last_update_datetime
+                                                  FROM alloc_itm_search_dtl
+                                                 WHERE alloc_no = %s; "
+
+  Q_update_dtl: " UPDATE alloc_itm_search_dtl
+                      SET sel_ind = 'Y'
+                    WHERE alloc_no = %s; "

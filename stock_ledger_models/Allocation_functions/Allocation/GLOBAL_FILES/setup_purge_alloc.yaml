@@ -1,0 +1,356 @@
+retreive_purge_alloc:
+
+    c_get_purge_approve_days:       "SELECT cast(code_desc as unsigned) AS DAYS
+                                         FROM code_detail
+                                        WHERE code_type = 'APAD' AND code = 'APRD';"
+
+    c_get_status:                   "SELECT status, DATE(create_datetime) AS create_date
+                                       FROM alloc_head
+                                      WHERE alloc_no = %s;"
+
+    c_get_item_search:              "SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END AS '1'
+                                       FROM alloc_itm_search_dtl
+                                      WHERE alloc_no = %s;"
+
+    Q_insert_alloc_itm_search_dtl:  "INSERT INTO alloc_itm_search_dtl (
+                                            alloc_no,
+                                            item,
+                                            item_desc,
+                                            diff_id,
+                                            loc,
+                                            HIER1,
+                                            HIER2,
+                                            HIER3,
+                                            holdback_qty,
+                                            holdback_type,
+                                            avail_qty,
+                                            inactive_qty, 
+                                            doc_id,
+                                            doc_type,
+                                            doc_desc,
+                                            size_prf_ind,
+                                            substitute_ind,
+                                            clearance_ind, 
+                                            invent_ind,
+                                            pack_ind,
+                                            inner_size,
+                                            case_size,
+                                            som_type,
+                                            som_qty,
+                                            err_message,
+                                            sel_ind,
+                                            vpn,             
+                                            season,          
+                                            create_id,
+                                            create_datetime,
+                                            last_update_id,
+                                            last_update_datetime,
+                                            err_ind)
+                                    SELECT 
+                                            alloc_no,
+                                            item,
+                                            item_desc,
+                                            diff_id,
+                                            loc,
+                                            dept,
+                                            class,
+                                            subclass,
+                                            holdback_qty,
+                                            holdback_qty_type,
+                                            available_qty,
+                                            inactive_qty, 
+                                            doc_id,
+                                            doc_type,
+                                            doc_desc,
+                                            size_profile_ind,
+                                            substitute_ind,
+                                            clearance_ind,
+                                            invent_ind,   
+                                            pack_ind,
+                                            inner_size,
+                                            case_size,
+                                            calc_multiple,
+                                            som_qty,
+                                            error_message,
+                                            sel_ind,
+                                            vpn, 
+                                            season,   
+                                            create_id,
+                                            create_datetime,
+                                            last_update_id,
+                                            last_update_datetime,
+                                            error_ind
+                                       FROM alloc_itm_search_dtl_hst tmp
+                                      WHERE alloc_no = %s;"
+
+    Q_del_alloc_itm_search_dtl_hst:     "DELETE FROM alloc_itm_search_dtl_hst
+                                               WHERE alloc_no = %s;"
+                                          
+    Q_insert_alloc_calc_source_temp:    "INSERT INTO alloc_calc_source_temp (alloc_no,
+                                                item_source_id,
+                                                release_date,
+                                                item_type,
+                                                source_item,
+                                                source_item_level,
+                                                source_tran_level,
+                                                source_pack_ind,
+                                                source_diff1_id,
+                                                source_diff2_id,
+                                                source_diff3_id,
+                                                source_diff4_id,
+                                                tran_item,
+                                                tran_item_level,
+                                                tran_tran_level,
+                                                tran_pack_ind,
+                                                tran_diff1_id,
+                                                tran_diff2_id,
+                                                tran_diff3_id,
+                                                tran_diff4_id,
+                                                HIER1,
+                                                HIER2,
+                                                HIER3,
+                                                pack_no,
+                                                like_source_item,
+                                                like_source_item_level,
+                                                like_source_tran_level,
+                                                like_source_pack_ind,
+                                                like_source_diff1_id,
+                                                like_source_diff2_id,
+                                                like_source_diff3_id,
+                                                like_source_diff4_id,
+                                                like_tran_item,
+                                                like_tran_item_level,
+                                                like_tran_tran_level,
+                                                like_tran_pack_ind,
+                                                like_tran_diff1_id,
+                                                like_tran_diff2_id,
+                                                like_tran_diff3_id,
+                                                like_tran_diff4_id,
+                                                like_HIER1,
+                                                like_HIER2,
+                                                like_HIER3,
+                                                like_pack_no,
+                                                like_item_weight,  
+                                                create_id,
+                                                create_datetime,
+                                                last_update_id,
+                                                last_update_datetime,
+                                                like_size_prof_ind,                                   
+                                                som_qty)
+                                         SELECT 
+                                                alloc_no,
+                                                item_source_id,
+                                                release_date,
+                                                item_type,
+                                                source_item,
+                                                source_item_level,
+                                                source_tran_level,
+                                                source_pack_ind,
+                                                source_diff1_id,
+                                                source_diff2_id,
+                                                source_diff3_id,
+                                                source_diff4_id,
+                                                tran_item,
+                                                tran_item_level,
+                                                tran_tran_level,
+                                                tran_pack_ind,
+                                                tran_diff1_id,
+                                                tran_diff2_id,
+                                                tran_diff3_id,
+                                                tran_diff4_id,
+                                                dept,
+                                                class,
+                                                subclass,
+                                                pack_no,
+                                                like_source_item,
+                                                like_source_item_level,
+                                                like_source_tran_level,
+                                                like_source_pack_ind,
+                                                like_source_diff1_id,
+                                                like_source_diff2_id,
+                                                like_source_diff3_id,
+                                                like_source_diff4_id,
+                                                like_tran_item,
+                                                like_tran_item_level,
+                                                like_tran_tran_level,
+                                                like_tran_pack_ind,
+                                                like_tran_diff1_id,
+                                                like_tran_diff2_id,
+                                                like_tran_diff3_id,
+                                                like_tran_diff4_id,
+                                                like_dept,
+                                                like_class,
+                                                like_subclass,
+                                                like_pack_no,
+                                                like_item_weight,  
+                                                create_id,
+                                                create_datetime,
+                                                last_update_id,
+                                                last_update_datetime,
+                                                like_size_prof_ind,                                   
+                                                som_qty
+                                           FROM alloc_calc_source_hst tmp
+                                          WHERE alloc_no = %s;"
+
+    Q_del_alloc_calc_source_hst:          "DELETE FROM alloc_calc_source_hst tmp            
+                                           WHERE alloc_no = %s;"
+
+    c_get_rule_rec:                       "SELECT * FROM alloc_rule 
+                                                  WHERE alloc_no = %s;"
+
+    Q_del_alc_quantity_limits:            "WITH src AS (SELECT alloc_no,
+                                                              item_id,
+                                                              location_id
+                                                       FROM alloc_quantity_limits ql
+                                                      WHERE alloc_no = %s		
+                                                        AND NOT EXISTS (SELECT tmp.alloc_no,
+                                                                               tmp.tran_item      item_id,
+                                                                               tmp.to_loc    location_id
+                                                                          FROM (SELECT alc.alloc_no,
+                                                                                       alc.tran_item,
+                                                                                       alc.to_loc
+                                                                                  FROM alloc_calc_allitemloc alc
+                                                                                 WHERE alloc_no = %s
+                                                                                   AND COALESCE(item_type,'$') = 'NSFSP'
+                                                                                 UNION
+                                                                                SELECT alloc_no,
+                                                                                       tran_item,
+                                                                                       to_loc
+                                                                                  FROM alloc_calc_allitemloc
+                                                                                 WHERE alloc_no = %s
+                                                                                   AND coalesce(item_type,'$') <> 'NSFSP') tmp
+                                                                         WHERE tmp.tran_item != ql.item_id 
+                                                                           AND tmp.to_loc != ql.location_id 
+                                                                           AND tmp.alloc_no = ql.alloc_no))
+                                                      DELETE FROM alloc_quantity_limits aql
+                                                                         WHERE EXISTS (SELECT 1
+                                                                          FROM src
+                                                                         WHERE src.alloc_no = aql.alloc_no
+                                                                           AND src.item_id = aql.item_id
+                                                                           AND src.location_id = aql.location_id);"
+
+    c_get_item_loc:                        "SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END AS '1'
+                                              FROM alloc_calc_item_loc
+                                             WHERE alloc_no = %s;"
+
+    Q_insert_alloc_calc_item_loc:          "INSERT INTO alloc_calc_item_loc (
+                                                   alloc_no,
+                                                   tran_item,
+                                                   source_item,
+                                                   diff_id,
+                                                   wh_id,
+                                                   order_no,
+                                                   to_loc,
+                                                   assign_default_wh,
+                                                   need_value,
+                                                   total_need_value,
+                                                   total_avail_qty,
+                                                   trend,
+                                                   wos,
+                                                   MIN,
+                                                   MAX,
+                                                   treshold,
+                                                   min_need,
+                                                   min_pack,
+                                                   max_pack,
+                                                   avail_qty,
+                                                   sku_avail_qty,
+                                                   hold_back_pct_flag,
+                                                   hold_back_value,
+                                                   total_need_count,
+                                                   ownership_ratio,
+                                                   sku_ownership_ratio,
+                                                   size_profile_ind,
+                                                   size_profile_id,
+                                                   size_profile_qty,
+                                                   total_profile_qty,
+                                                   rule_type,
+                                                   rule_level,
+                                                   exact_ind,
+                                                   net_need_ind,
+                                                   gross_need_no_own_ship,
+                                                   sku_gross_need_no_own_ship,
+                                                   stock_on_hand,
+                                                   on_order,
+                                                   on_alloc,
+                                                   alloc_out,
+                                                   in_transit_qty,
+                                                   backorder_qty,
+                                                   gross_need,
+                                                   calc_qty,
+                                                   sku_calc_qty,
+                                                   sku_calc_qty_bfr_qtlm,
+                                                   sku_calc_qty_bfr_sprd,
+                                                   alloc_sku_calc_qty,
+                                                   som_qty,
+                                                   alloc_qty,
+                                                   status,
+                                                   error_message_txt,
+                                                   create_id,
+                                                   create_datetime,
+                                                   last_update_id,
+                                                   last_update_datetime,
+                                                   wh_on_alloc_qty)        
+                                            SELECT 
+                                                   alloc_no,
+                                                   tran_item,
+                                                   source_item,
+                                                   diff_id,
+                                                   wh_id,
+                                                   order_no,
+                                                   to_loc,
+                                                   assign_default_wh,
+                                                   need_value,
+                                                   total_need_value,
+                                                   total_avail_qty,
+                                                   trend,
+                                                   wos,
+                                                   MIN,
+                                                   MAX,
+                                                   treshold,
+                                                   min_need,
+                                                   min_pack,
+                                                   max_pack,
+                                                   avail_qty,
+                                                   sku_avail_qty,
+                                                   hold_back_pct_flag,
+                                                   hold_back_value,
+                                                   total_need_count,
+                                                   ownership_ratio,
+                                                   sku_ownership_ratio,
+                                                   size_profile_ind,
+                                                   size_profile_id,
+                                                   size_profile_qty,
+                                                   total_profile_qty,
+                                                   rule_type,
+                                                   rule_level,
+                                                   exact_ind,
+                                                   net_need_ind,
+                                                   gross_need_no_own_ship,
+                                                   sku_gross_need_no_own_ship,
+                                                   stock_on_hand,
+                                                   on_order,
+                                                   on_alloc,
+                                                   alloc_out,
+                                                   in_transit_qty,
+                                                   backorder_qty,
+                                                   gross_need,
+                                                   calc_qty,
+                                                   sku_calc_qty,
+                                                   sku_calc_qty_bfr_qtlm,
+                                                   sku_calc_qty_bfr_sprd,
+                                                   alloc_sku_calc_qty,
+                                                   som_qty,
+                                                   alloc_qty,
+                                                   status,
+                                                   error_message_txt,
+                                                   create_id,
+                                                   create_datetime,
+                                                   last_update_id,
+                                                   last_update_datetime,
+                                                   wh_on_alloc_qty               
+                                              FROM alloc_calc_item_loc_hst tmp
+                                             WHERE alloc_no = %s;"
+
+    Q_del_alloc_calc_item_loc_hst:          "DELETE FROM alloc_calc_item_loc_hst
+                                              WHERE alloc_no = %s;"

@@ -1,0 +1,788 @@
+import json
+from pickle import FALSE
+import pandas as pd
+from django.db import IntegrityError
+#from .models import LOCATION, STG_TRN_DATA,TRN_DATA,PNDG_DLY_ROLLUP,STG_TRN_DATA_DEL_RECORDS,SYSTEM_CONFIG,ERR_TRN_DATA,DAILY_SKU,DAILY_ROLLUP,TRN_DATA_HISTORY,TRN_DATA_REV,CURRENCY,ITEM_LOCATION,ITEM_DTL,HIER1,HIER2,HIER3
+from django.http import JsonResponse
+from datetime import datetime,date
+from django.views.decorators.csrf import csrf_exempt
+import time
+import decimal
+import os
+from datetime import datetime, timedelta,date
+from decimal import Decimal
+from decimal import *
+import numpy as np
+from django.db import connection
+from stock_ledger_models.views_global import cancel_transaction
+from .DIFF_STOCK_QTY.sale_alloc_wrapper import wrapper_process_sales_qty
+
+#count of different indicators in TRN_DATA table:
+def count_trn_data(request):
+    if request.method == 'GET':
+        count1 = pd.read_sql("SELECT COUNT(PROCESS_IND) FROM trn_data WHERE PROCESS_IND='N';",connection)
+        count2 = pd.read_sql("SELECT COUNT(PROCESS_IND) FROM trn_data WHERE PROCESS_IND='I';",connection)
+        count3 = pd.read_sql("SELECT COUNT(PROCESS_IND) FROM trn_data WHERE PROCESS_IND='E';",connection)
+        count4 = pd.read_sql("SELECT COUNT(PROCESS_IND) FROM trn_data WHERE PROCESS_IND='Y';",connection)
+        count5 = pd.read_sql("SELECT COUNT(PROCESS_IND) FROM trn_data WHERE PROCESS_IND='W';",connection)
+        count6 = pd.read_sql("SELECT COUNT(PROCESS_IND) FROM trn_data WHERE PROCESS_IND='C';",connection)
+        count7 = pd.read_sql("SELECT RECORDS_CLEANED FROM stg_trn_data_del_records WHERE DATE=curdate() AND PROCESS='TRN_DATA'",connection)
+        count1=(count1.values)[0][0]
+        count2=(count2.values)[0][0]
+        count3=(count3.values)[0][0]
+        count4=(count4.values)[0][0]
+        count5=(count5.values)[0][0]
+        count6=(count6.values)[0][0]
+        if len(count7.values)==0:
+            count8=(count4+count5+count6)
+        else:
+            count7=int((count7.values)[0][0])
+            count8=(count4+count5+count6+count7)
+        return JsonResponse(
+            {
+                "Ready to process": f"{count1}",
+                "In process": f"{count2}",
+                "Error records": f"{count3}",
+                "Processed records": f"{count8}"
+            }
+        )
+
+
+#Fetching the data from TRN_DATA based on the input parameters: 
+@csrf_exempt            
+def trn_data_table(request):
+    if request.method == 'POST':
+        try:
+            json_object = json.loads(request.body)
+            json_object=json_object[0]
+            keys=[]
+            mycursor=connection.cursor()
+            for key1 in json_object:
+                if key1=="TRN_NAME":
+                    TRN_NAME=json_object.get("TRN_NAME")
+                else:
+                    TRN_NAME=[]
+                if isinstance(json_object[key1], list):
+                    if (len(json_object[key1]))==0:
+                        json_object[key1]="NULL"
+            for key in json_object:
+                if json_object[key]=="NULL" or json_object[key]=="" or key=="TRN_NAME":
+                    json_object[key]=None
+                    keys.append(key)
+            for k in keys:
+                json_object.pop(k)
+            #fetch DECIMAL type columns
+            mycursor.execute("desc trn_data")
+            d_type=mycursor.fetchall()
+            list_type=[]
+            for col2 in d_type:
+                if "decimal" in col2[1]:
+                    if "LOCATION" in col2[0] or "REV_NO" in col2[0]:
+                        list_type.append(col2[0])
+            #checking the inputs are mutliple or not
+            count=0
+            for keys_2 in json_object:
+                if isinstance(json_object[keys_2], list):
+                    count=1
+            if len(json_object)==0:
+                query="SELECT TD.*,ITD.ITEM_DESC,LOC.LOCATION_NAME,TTD.TRN_NAME,DT.HIER1_DESC,CL.HIER2_DESC,SCL.HIER3_DESC FROM trn_data TD left join item_dtl ITD on TD.ITEM =ITD.ITEM left join location LOC on TD.location=LOC.location left join trn_type_dtl TTD on TD.trn_type=TTD.trn_type and TD.aref=TTD.aref left join hier1 DT on TD.HIER1 = DT.HIER1 left join hier2 CL on TD.HIER2 =CL.HIER2 left join hier3  SCL on TD.HIER3=SCL.HIER3 AND "
+            else:
+                if count==1:
+                    for keys1 in json_object:
+                        if isinstance(json_object[keys1], list):
+                            if len(json_object[keys1])>1:
+                                json_object[keys1]=str(tuple(json_object[keys1]))
+                        else:
+                            json_object[keys1]=("('"+str(json_object[keys1])+"')")
+                    query="SELECT TD.*,ITD.ITEM_DESC,LOC.LOCATION_NAME,TTD.TRN_NAME,DT.HIER1_DESC,CL.HIER2_DESC,SCL.HIER3_DESC FROM trn_data TD,item_dtl ITD,location LOC,trn_type_dtl TTD,hier1 DT,hier2 CL,hier3 SCL WHERE TD.ITEM=ITD.ITEM AND LOC.LOCATION=TD.LOCATION AND TD.hier1=DT.hier1 AND TD.TRN_TYPE=TTD.TRN_TYPE AND CL.hier2=TD.hier2 AND SCL.hier3=TD.hier3 AND IFNULL(TD.AREF,0)=IFNULL(TTD.AREF,0) AND {}".format(' '.join('TD.{} IN ({}) AND'.format(k,str(json_object[k])[1:-1]) for k in json_object))
+                else:
+                    query="SELECT TD.*,ITD.ITEM_DESC,LOC.LOCATION_NAME,TTD.TRN_NAME,DT.HIER1_DESC,CL.HIER2_DESC,SCL.HIER3_DESC FROM trn_data TD,item_dtl ITD,location LOC,trn_type_dtl TTD,hier1 DT,hier2 CL,hier3 SCL WHERE TD.ITEM=ITD.ITEM AND LOC.LOCATION=TD.LOCATION AND TD.hier1=DT.hier1 AND TD.TRN_TYPE=TTD.TRN_TYPE AND CL.hier2=TD.hier2 AND SCL.hier3=TD.hier3 AND IFNULL(TD.AREF,0)=IFNULL(TTD.AREF,0) AND {}".format(' '.join('TD.{} LIKE "%{}%" AND'.format(k,json_object[k]) for k in json_object))
+            if len(json_object)==0:
+                query=query[:-4]+';'
+                results55=pd.read_sql(query,connection)
+            else:
+                if len(TRN_NAME)>0:
+                    query=query[:-4]+' AND TTD.TRN_NAME IN ('+str(TRN_NAME)[1:-1]+');'
+                else:
+                    query=query[:-4]+';'
+                results55=pd.read_sql(query,connection)
+            res_list=[]
+            rec={}
+            results55 =  results55.replace(np.NaN, "NULL", regex=True)
+            for val2 in results55.values:
+                count=0
+                for col4 in results55.columns:
+                    rec[col4]=val2[count]
+                    count=count+1
+                for col5 in list_type:
+                    if col5 in rec:
+                        if rec[col5]!=None or rec[col5]!="NULL":
+                            rec[col5]=int(rec[col5])
+                res_list.append(rec.copy())
+            if len(res_list)==0:
+                return JsonResponse({"status": 500, "message": "NO DATA FOUND"})
+            else:
+                return JsonResponse(res_list, content_type="application/json",safe=False)
+        except Exception as error:
+            return JsonResponse({"status": 500, "message": str(error)})
+        except ValueError:
+            return JsonResponse({"status": 500, "message": "error"})
+        finally:
+             connection.close()
+
+
+#Fetching the data from TRN_DATA_HISTORY based on the input parameters:
+@csrf_exempt            
+def trn_data_history_table(request):
+    if request.method == 'POST':
+        try:
+            json_object = json.loads(request.body)
+            json_object=json_object[0]
+            keys=[]
+            mycursor=connection.cursor()
+            for key1 in json_object:
+                if key1=="TRN_NAME":
+                    TRN_NAME=json_object.get("TRN_NAME")
+                else:
+                    TRN_NAME=[]
+                if isinstance(json_object[key1], list):
+                    if (len(json_object[key1]))==0:
+                        json_object[key1]="NULL"
+            for key in json_object:
+                if json_object[key]=="NULL" or json_object[key]=="" or key=="TRN_NAME":
+                    json_object[key]=None
+                    keys.append(key)
+            for k in keys:
+                json_object.pop(k)
+            #fetch DECIMAL type columns
+            mycursor.execute("desc trn_data_history")
+            d_type=mycursor.fetchall()
+            list_type=[]
+            for col2 in d_type:
+                if "decimal" in col2[1]:
+                    if "LOCATION" in col2[0] or "REV_NO" in col2[0]:
+                        list_type.append(col2[0])
+            #checking the inputs are mutliple or not
+            count=0
+            for keys_2 in json_object:
+                if isinstance(json_object[keys_2], list):
+                    count=1
+            if len(json_object)==0:
+                query="SELECT TDH.*,ITD.ITEM_DESC,LOC.LOCATION_NAME,TTD.TRN_NAME,DT.HIER1_DESC,CL.HIER2_DESC,SCL.HIER3_DESC FROM trn_data_history TDH left join item_dtl ITD on TDH.ITEM =ITD.ITEM left join location LOC on TDH.location=LOC.location left join trn_type_dtl TTD on TDH.trn_type=TTD.trn_type and TDH.aref=TTD.aref left join hier1 DT on TDH.HIER1 = DT.HIER1 left join hier2 CL on TDH.HIER2 =CL.HIER2 left join hier3 SCL on TDH.HIER3=SCL.HIER3 AND "
+            else:
+                if count==1:
+                    for keys1 in json_object:
+                        if isinstance(json_object[keys1], list):
+                            if len(json_object[keys1])>1:
+                                json_object[keys1]=str(tuple(json_object[keys1]))
+                        else:
+                            json_object[keys1]=("('"+str(json_object[keys1])+"')")
+                    query="SELECT TDH.*,ITD.ITEM_DESC,LOC.LOCATION_NAME,TTD.TRN_NAME,DT.HIER1_DESC,CL.HIER2_DESC,SCL.HIER3_DESC FROM trn_data_history TDH,item_dtl ITD,location LOC,trn_type_dtl TTD,hier1 DT,hier2 CL,hier3 SCL WHERE TDH.ITEM=ITD.ITEM AND LOC.LOCATION=TDH.LOCATION AND TDH.hier1=DT.hier1 AND TDH.TRN_TYPE=TTD.TRN_TYPE AND CL.hier2=TDH.hier2 AND SCL.hier3=TDH.hier3 AND IFNULL(TDH.AREF,0)=IFNULL(TTD.AREF,0) AND {}".format(' '.join('TDH.{} IN ({}) AND'.format(k,str(json_object[k])[1:-1]) for k in json_object))
+                else:
+                    query="SELECT TDH.*,ITD.ITEM_DESC,LOC.LOCATION_NAME,TTD.TRN_NAME,DT.HIER1_DESC,CL.HIER2_DESC,SCL.HIER3_DESC FROM trn_data_history TDH,item_dtl ITD,location LOC,trn_type_dtl TTD,hier1 DT,hier2 CL,hier3 SCL WHERE TDH.ITEM=ITD.ITEM AND LOC.LOCATION=TDH.LOCATION AND TDH.hier1=DT.hier1 AND TDH.TRN_TYPE=TTD.TRN_TYPE AND CL.hier2=TDH.hier2 AND SCL.hier3=TDH.hier3 AND IFNULL(TDH.AREF,0)=IFNULL(TTD.AREF,0) AND {}".format(' '.join('TDH.{} LIKE "%{}%" AND'.format(k,json_object[k]) for k in json_object))
+            if len(json_object)==0:
+                query=query[:-4]+' ORDER BY cast(TDH.ITEM as unsigned);'
+                results55=pd.read_sql(query,connection)
+            else:
+                if len(TRN_NAME)>0:
+                    query=query[:-4]+' AND TTD.TRN_NAME IN ('+str(TRN_NAME)[1:-1]+') ORDER BY cast(TDH.ITEM as unsigned);'
+                else:
+                    query=query[:-4]+' ORDER BY cast(TDH.ITEM as unsigned);'
+                results55=pd.read_sql(query,connection)
+            res_list=[]
+            rec={}
+            results55 =  results55.replace(np.NaN, "NULL", regex=True)
+            for val2 in results55.values:
+                count=0
+                for col4 in results55.columns:
+                    rec[col4]=val2[count]
+                    count=count+1
+                for col5 in list_type:
+                    if col5 in rec:
+                        if rec[col5]!=None  or rec[col5]!="NULL":
+                            rec[col5]=int(rec[col5])
+                res_list.append(rec.copy())
+            if len(res_list)==0:
+                return JsonResponse({"status": 500, "message": "NO DATA FOUND"})
+            else:
+                return JsonResponse(res_list, content_type="application/json",safe=False)
+        except Exception as error:
+            return JsonResponse({"status": 500, "message": str(error)})
+        except ValueError:
+            return JsonResponse({"status": 500, "message": "error"})
+        finally:
+             connection.close()
+
+
+#Transaction reversal(Fetch the record from TRN_DATA_HISTORY table, insert the original data in TRN_DATA_REV, insert the updated record values in STG_TRN_DATA table & insert the QTY*(-1) into record in STG_TRN_DATA table with new TRAN_SEQ_NO)
+@csrf_exempt             
+def trn_data_rev_table(request):
+    if request.method == 'POST':
+        try:
+            json_object_list = json.loads(request.body)
+            list1=[]
+            list2=[]
+            count1=0
+            mycursor = connection.cursor()
+            CREATE_ID=(json_object_list[0])["CREATE_ID"]
+            for json_object in json_object_list:
+                for key in json_object:
+                    if key not in ["TRAN_SEQ_NO","QTY","UNIT_COST","UNIT_RETAIL"]:
+                        list1.append(key)
+                for k in list1:
+                    json_object.pop(k)
+                list1.clear()
+            sample_list=[]
+            for json_object in json_object_list:
+                #Storing the value of TRAN_SEQ_NO column
+                TRANS_NO=json_object.get("TRAN_SEQ_NO", None)
+                #Taking a record from TRN_DATA_HISTORY table based on TRAN_SEQ_NO.
+                my_data = pd.read_sql("SELECT * FROM trn_data_history WHERE TRAN_SEQ_NO={};".format(TRANS_NO),connection)
+                res_list=[]
+                #Converting the Queryset into the json format
+                for val in my_data.values:
+                    count=0
+                    l_dict={}
+                    for col in my_data.columns:
+                        l_dict[col]=val[count]
+                        count=count+1
+                    res_list.append(l_dict)
+                rec1=res_list[0]
+                mycursor.execute("desc trn_data_history")
+                d_type=mycursor.fetchall()
+                list_type=[]
+                list_type1=[]
+                col_list=[]
+                for col2 in d_type:
+                    if "decimal" in col2[1]:
+                        col_list.append(col2[0])
+                        if col2[0]=="LOCATION" or col2[0]=="REV_NO":
+                            list_type.append(col2[0])
+                for key1 in rec1:
+                    if rec1[key1]==None:
+                        list_type1.append(key1)
+                for k5 in list_type1:
+                    rec1.pop(k5)
+                #converting LOCATION ,REV_NO AND ERR_SEQ_NO to INTEGER  if DECIMAL
+                for col3 in list_type:
+                    if col3 in rec1:
+                        rec1[col3]=int(rec1[col3])
+                #converting LOCATION ,REV_NO AND ERR_SEQ_NO to INTEGER  if DECIMAL
+                for i in col_list:
+                    if i in json_object:
+                        json_object[i]=float(json_object[i])
+                #Removing the same values from input to TRN_DATA_HISTORY table.
+                remove=[]
+                rec1["TRN_DATE"]=str(rec1["TRN_DATE"])
+                for key in json_object:
+                    if json_object[key]==rec1[key]:
+                        remove.append(key) 
+                for p in remove:
+                    json_object.pop(p)
+                ARCHIEVE_DATETIME=l_dict["ARCHIEVE_DATETIME"]
+                R_keys11=[]
+                #fetching columns names
+                mycursor.execute("desc trn_data_rev")
+                d_type=mycursor.fetchall()
+                list_type=[]
+                list_val1=[]
+                for col2 in d_type:
+                    list_val1.append(col2[0])
+                    if col2[0] not in rec1:
+                        list_type.append(col2[0])
+                for h1 in list_type:
+                    list_val1.remove(h1)
+                for i1 in json_object:
+                    if len(i1)>0:
+                        sample_list.append(rec1)
+                json_object["TRAN_SEQ_NO"]=TRANS_NO
+                list2.append(json_object)
+            D_keys=[]
+            for row in sample_list:
+                #print("row:   ",row)
+                #Removing extra columns from trn_data_history table when compared with  table
+                for f11 in row:
+                    if f11 not in list_val1:
+                        R_keys11.append(f11)       
+                for f21 in R_keys11:
+                    row.pop(f21)
+                R_keys11.clear()
+                #Removing NULL and Empty columns.
+                for k1 in row:
+                    if row[k1]=="" or (row[k1])=="NULL" or row[k1]==None:
+                        D_keys.append(k1) 
+                for k1 in D_keys:
+                    row.pop(k1)
+                D_keys.clear()
+                #inserting the data.
+                row["UPDATE_DATETIME"]=ARCHIEVE_DATETIME
+                row["CREATE_ID"]=CREATE_ID
+                cols=",".join(map(str, row.keys()))
+                v_list=[]
+                val=') VALUES('
+                for v in row.values():
+                    if v== None:
+                        val=val+'NULL,'
+                    else:
+                        v_list.append(v)
+                        val=val+'%s,'
+                val=val[:-1]+')'
+                query="insert into trn_data_rev(" +cols + val
+                mycursor.execute(query,v_list)
+            for json_object in list2:
+                count1=count1+1
+                #Taking a record from STG_TRN_DATA of 1 record.
+                TRANS_NO=json_object.get("TRAN_SEQ_NO", None)
+                json_object.pop("TRAN_SEQ_NO")
+                if len(json_object)>0:
+                    my_data = pd.read_sql("SELECT * FROM trn_data_history WHERE TRAN_SEQ_NO={};".format(TRANS_NO),connection)
+                    res_list=[]
+                    #Converting the Queryset into the json format
+                    for val in my_data.values:
+                        count=0
+                        l_dict={}
+                        for col in my_data.columns:
+                            l_dict[col]=val[count]
+                            count=count+1
+                        res_list.append(l_dict)
+                    if mycursor.rowcount>0 and connection:
+                        my_data = pd.read_sql("SELECT * FROM STG_TRN_DATA LIMIT 1;",connection)
+                        result5=[]
+                        #Converting the Queryset into the json format
+                        for val in my_data.values:
+                            count=0
+                            l_dict={}
+                            for col in my_data.columns:
+                                l_dict[col]=val[count]
+                                count=count+1
+                            result5.append(l_dict)
+                        rec2=result5[0] 
+                        rec3=res_list[0]
+                        D_keys1=[]
+                        f_keys1=[]
+                        R_keys1=[]
+                        #Removing extra columns from STG_TRN_DATA table when compared with TRN_DATA_HISTORY table
+                        for f1 in rec2:
+                            if f1 not in rec3:
+                                f_keys1.append(f1)
+                        for f2 in f_keys1:
+                            rec2.pop(f2)
+                        l_counter=0 
+                        for item in res_list:
+                            
+                            #Removing extra columns from TRN_DATA_HISTORY table when compared with STG_TRN_DATA table
+                            for f3 in item:
+                                if f3 not in rec2:
+                                    R_keys1.append(f3)
+                            for f5 in R_keys1:
+                                item.pop(f5)
+                            R_keys1.clear()
+                            #Removing NULL and Empty columns.
+                            for k2 in item:
+                                if item[k2]=="" or (item[k2])=="NULL":
+                                    D_keys1.append(k2)        
+                            for k2 in D_keys1:
+                                item.pop(k2)
+                            D_keys1.clear()
+                            for key in json_object:
+                                item[key]=json_object[key]
+                            #Creating a new TRAN_SEQ_NO number
+                            l_counter=l_counter+1
+                            d= str(datetime.now()).replace('-',"").replace(':',"").replace(' ',"").replace('.',"")
+                            unique_id=d+str(l_counter)+'TDR'
+                            item["TRAN_SEQ_NO"]=unique_id
+                            item["REV_NO"]=(int(item["REV_NO"])+1)
+                            item["REV_TRN_NO"]=TRANS_NO
+                            item["CREATE_DATETIME"]=str(datetime.now())
+                            item["CREATE_ID"]=CREATE_ID
+                            #Values for inserting into the table
+                            cols=",".join(map(str, item.keys()))
+                            v_list=[]
+                            val=') VALUES('
+                            for v in item.values():
+                                if v== None:
+                                    val=val+'NULL,'
+                                else:
+                                    v_list.append(v)
+                                    val=val+'%s,'
+                            val=val[:-1]+')'
+                            query1="insert into STG_TRN_DATA(" +cols + val
+                            mycursor.execute(query1,v_list)
+                            #Taking a record from TRN_DATA_HISTORY table based on TRAN_SEQ_NO.
+                            if mycursor.rowcount>0 and connection:
+                                my_data1 = pd.read_sql("SELECT * FROM trn_data_history WHERE TRAN_SEQ_NO={};".format(TRANS_NO),connection)
+                                val_list=[]
+                                #Converting the Queryset into the json format
+                                for val in my_data1.values:
+                                    count=0
+                                    l_dict={}
+                                    for col in my_data1.columns:
+                                        l_dict[col]=val[count]
+                                        count=count+1
+                                    val_list.append(l_dict)
+                                D_keys2=[]
+                                R_keys2=[]
+                                l_counter=0
+                                for item1 in val_list:
+                                    #Removing extra columns from TRN_DATA_HISTORY table when compared with STG_TRN_DATA table
+                                    for f6 in item1:
+                                        if f6 not in rec2:
+                                            R_keys2.append(f6)       
+                                    for f7 in R_keys2:
+                                        item1.pop(f7)
+                                    R_keys2.clear()
+                                    #Removing NULL and Empty columns.
+                                    for k3 in item1:
+                                        if item1[k3]=="" or (item1[k3])=="NULL":
+                                            D_keys2.append(k3)       
+                                    for k3 in D_keys2:
+                                        item1.pop(k3)
+                                    D_keys2.clear()
+                                    #Creating a new TRAN_SEQ_NO number
+                                    l_counter=l_counter+1
+                                    d= str(datetime.now()).replace('-',"").replace(':',"").replace(' ',"").replace('.',"")
+                                    unique_id=d+str(l_counter)+'TDC'
+                                    item1["TRAN_SEQ_NO"]=unique_id
+                                    item1["REV_TRN_NO"]=TRANS_NO
+                                    item1["QTY"]=item1["QTY"]*(-1)
+                                    item1["CREATE_DATETIME"]=str(datetime.now())
+                                    item1["CREATE_ID"]=CREATE_ID
+                                    #Values for inserting into the table
+                                    cols=",".join(map(str, item1.keys()))
+                                    v_list=[]
+                                    val=') VALUES('
+                                    for v in item1.values():
+                                        if v== None:
+                                            val=val+'NULL,'
+                                        else:
+                                            v_list.append(v)
+                                            val=val+'%s,'
+                                    val=val[:-1]+')'
+                                    query3="insert into STG_TRN_DATA(" +cols + val
+                                    mycursor.execute(query3,v_list)
+                                    connection.commit()
+                                    mycursor.execute("DELETE FROM trn_data_history WHERE TRAN_SEQ_NO='{}'".format(TRANS_NO))
+                                    connection.commit()
+                    else:
+                        connection.rollback()
+                else:
+                    connection.rollback()
+            return JsonResponse({"status": 201, "message": "Data Inserted "f"{count1}"})
+        except Exception as error:
+            return JsonResponse({"status": 500, "message": str(error)})
+        except ValueError:
+            return JsonResponse({"status": 500, "message": "error"})
+        except IntegrityError:
+            return JsonResponse({"status": 500, "message": "TRAN_SEQ_NO must be unique"})
+        finally:
+             connection.close()
+
+
+#Transaction reversal(Fetch the record from TRN_DATA_HISTORY table, insert the original data in TRN_DATA_REV, insert the updated record values in STG_TRN_DATA table with new TRAN_SEQ_NO & call the another webservice(cancel_transaction))           
+@csrf_exempt             
+def trn_data_rev_1_table(request):
+    if request.method == 'POST':
+        try:
+            json_object_list = json.loads(request.body)
+            #json_object=json_object[0]
+            current_user = request.user
+            list1=[]
+            list2=[]
+            list3=[]
+            count1=0
+            mycursor = connection.cursor()
+            for json_object in json_object_list:
+                keys=[]
+                #Removing NULL and Empty columns.
+                for key in json_object:
+                    if json_object[key]=="NULL" or json_object[key]=="":
+                        json_object[key]=None
+                        keys.append(key)
+                    if key=="ITEM_DESC" or key=="HIER1_DESC" or key=="HIER2_DESC" or key=="HIER3_DESC" or key=="LOCATION_NAME" or key=="TRN_NAME" or key=="ARCHIVE_DATETIME":
+                        keys.append(key)
+                for k in keys:
+                    json_object.pop(k)
+                list1.append(json_object)
+            
+            for json_object in list1:
+                #Storing the value of TRAN_SEQ_NO column
+                TRANS_NO=json_object.get("TRAN_SEQ_NO", None)
+                if len(json_object)>0:
+                    #Taking a record from TRN_DATA_HISTORY table based on TRAN_SEQ_NO.
+                    my_data = pd.read_sql("SELECT * FROM trn_data_history WHERE TRAN_SEQ_NO={};".format(TRANS_NO),connection)
+                    res_list=[]
+                    #Converting the Queryset into the json format
+                    for val in my_data.values:
+                        count=0
+                        l_dict={}
+                        for col in my_data.columns:
+                            l_dict[col]=val[count]
+                            count=count+1
+                        res_list.append(l_dict)
+                    rec1=res_list[0]
+                    mycursor.execute("desc trn_data_history")
+                    d_type=mycursor.fetchall()
+                    list_type=[]
+                    list_type1=[]
+                    for col2 in d_type:
+                        if "decimal" in col2[1]:
+                            if col2=="LOCATION"or col2=="REV_NO":
+                                list_type.append(col2[0])
+                    for key1 in rec1:
+                        if rec1[key1]==None:
+                            list_type1.append(key1)
+                    for k5 in list_type1:
+                        rec1.pop(k5)
+                    #converting LOCATION ,REV_NO AND ERR_SEQ_NO to INTEGER  if DECIMAL
+                    for col3 in list_type:
+                        if col3 in rec1:
+                            rec1[col3]=int(rec1[col3])
+                    #converting LOCATION ,REV_NO AND ERR_SEQ_NO to INTEGER  if DECIMAL
+                    for col3 in list_type:
+                        if col3 in json_object:
+                            json_object[col3]=int(json_object[col3])
+                    #Removing the same values from input to TRN_DATA_HISTORY table.
+                    remove=[]
+                    rec1["TRN_DATE"]=str(rec1["TRN_DATE"])
+                    for key in json_object:
+                        if key in list_type:
+                            if Decimal(json_object[key])==rec1[key]:
+                                remove.append(key)   
+                        else:
+                            if json_object[key]==rec1[key]:
+                                remove.append(key)  
+                    for p in remove:
+                        json_object.pop(p)
+                json_object["TRAN_SEQ_NO"]=TRANS_NO
+                list2.append(json_object)
+            for json_object in list2:
+                #Storing the value of TRAN_SEQ_NO column
+                TRANS_NO=json_object.get("TRAN_SEQ_NO", None)
+                json_object.pop("TRAN_SEQ_NO")
+                if len(json_object)>0:
+                    D_keys=[]
+                    for row in res_list:
+                        #Removing NULL and Empty columns.
+                        for k1 in row:
+                            if row[k1]=="" or (row[k1])=="NULL":
+                                D_keys.append(k1) 
+                        for k1 in D_keys:
+                            row.pop(k1)
+                        D_keys.clear()
+                        json_object["TRAN_SEQ_NO"]=TRANS_NO
+                        #inserting the data.
+                        row["CREATE_ID"]=str(current_user)
+                        row["TRAN_SEQ_NO"]=TRANS_NO
+                        cols=",".join(map(str, row.keys()))
+                        v_list=[]
+                        val=') VALUES('
+                        for v in row.values():
+                            if v== None:
+                                val=val+'NULL,'
+                            else:
+                                v_list.append(v)
+                                val=val+'%s,'
+                        val=val[:-1]+')'
+                        query="insert into trn_data_rev(" +cols + val
+                        mycursor.execute(query,v_list)
+                    list3.append(json_object)
+            for json_object in list3:
+                count1=count1+1
+                #Taking a record from STG_TRN_DATA of 1 record.
+                TRANS_NO=json_object.get("TRAN_SEQ_NO", None)
+                my_data = pd.read_sql("SELECT * FROM trn_data_history WHERE TRAN_SEQ_NO={};".format(TRANS_NO),connection)
+                res_list=[]
+                #Converting the Queryset into the json format
+                for val in my_data.values:
+                    count=0
+                    l_dict={}
+                    for col in my_data.columns:
+                        l_dict[col]=val[count]
+                        count=count+1
+                    res_list.append(l_dict)
+                if mycursor.rowcount>0 and connection:
+                    my_data = pd.read_sql("SELECT * FROM STG_TRN_DATA LIMIT 1;",connection)
+                    result5=[]
+                    #Converting the Queryset into the json format
+                    for val in my_data.values:
+                        count=0
+                        l_dict={}
+                        for col in my_data.columns:
+                            l_dict[col]=val[count]
+                            count=count+1
+                        result5.append(l_dict)
+                    rec2=result5[0] 
+                    rec3=res_list[0]
+                    D_keys1=[]
+                    f_keys1=[]
+                    R_keys1=[]
+                    #Removing extra columns from STG_TRN_DATA table when compared with TRN_DATA_HISTORY table
+                    for f1 in rec2:
+                        if f1 not in rec3:
+                            f_keys1.append(f1)
+                    for f2 in f_keys1:
+                        rec2.pop(f2)
+                    l_counter=0 
+                    for item in res_list:
+                        #Removing extra columns from TRN_DATA_HISTORY table when compared with STG_TRN_DATA table
+                        for f3 in item:
+                            if f3 not in rec2:
+                                R_keys1.append(f3)
+                        for f5 in R_keys1:
+                            item.pop(f5)
+                        R_keys1.clear()
+                        #Removing NULL and Empty columns.
+                        for k2 in item:
+                            if item[k2]=="" or (item[k2])=="NULL":
+                                D_keys1.append(k2)        
+                        for k2 in D_keys1:
+                            item.pop(k2)
+                        D_keys1.clear()
+                        for key in json_object:
+                            item[key]=json_object[key]
+                        #Creating a new TRAN_SEQ_NO number
+                        l_counter=l_counter+1
+                        d= str(datetime.now()).replace('-',"").replace(':',"").replace(' ',"").replace('.',"")
+                        unique_id=d+str(l_counter)+'TDR'
+                        item["TRAN_SEQ_NO"]=unique_id
+                        item["REV_NO"]=(int(item["REV_NO"])+1)
+                        item["REV_TRN_NO"]=TRANS_NO
+                        item["CREATE_DATETIME"]=str(datetime.now())
+                        item["CREATE_ID"]=str(current_user)
+                        #Values for inserting into the table
+                        cols=",".join(map(str, item.keys()))
+                        v_list=[]
+                        val=') VALUES('
+                        for v in item.values():
+                            if v== None:
+                                val=val+'NULL,'
+                            else:
+                                v_list.append(v)
+                                val=val+'%s,'
+                        val=val[:-1]+')'
+                        query1="insert into STG_TRN_DATA(" +cols + val
+                        mycursor.execute(query1,v_list)
+                        connection.commit()
+                        return cancel_transaction(request)
+        except Exception as error:
+            return JsonResponse({"status": 500, "message": str(error)})
+        except ValueError:
+            return JsonResponse({"status": 500, "message": "error"})
+        except IntegrityError:
+            return JsonResponse({"status": 500, "message": "TRAN_SEQ_NO must be unique"})
+        finally:
+             mycursor.close()
+             connection.close()
+
+
+#Fetching the data from TRN_TYPE_DTL based on the input parameters:
+@csrf_exempt            
+def trn_type_dtl_list(request):
+    if request.method == 'POST':
+        try:
+            json_object = json.loads(request.body)
+            key_list=[]
+            json_object=json_object[0]
+            for key in json_object:
+                if isinstance(json_object[key], list):
+                    if len(json_object[key])==0:
+                        key_list.append(key)
+                if json_object[key]=="" or json_object[key]=="NULL":
+                    key_list.append(key)
+            for k in key_list:
+                json_object.pop(k)
+            #checking the inputs are mutliple or not
+            count=0
+            for keys_2 in json_object:
+                if isinstance(json_object[keys_2], list):
+                    count=1
+            if count==1:
+                for keys1 in json_object:
+                    if isinstance(json_object[keys1], list):
+                        if len(json_object[keys1])>1:
+                            json_object[keys1]=str(tuple(json_object[keys1]))
+                    else:
+                        json_object[keys1]=("('"+str(json_object[keys1])+"')")
+                query="SELECT * FROM trn_type_dtl TTD WHERE {}".format(' '.join('TTD.{} IN ({}) AND'.format(k,str(json_object[k])[1:-1]) for k in json_object))
+            else:
+                query="SELECT * FROM trn_type_dtl TTD WHERE {}".format(' '.join('TTD.{} LIKE "%{}%" AND'.format(k,json_object[k]) for k in json_object))
+            if len(json_object)==0:
+                query=query[:-6]+' order by TTD.TRN_NAME;'
+                results55=pd.read_sql(query,connection)
+            else:
+                query=query[:-4]+' order by TTD.TRN_NAME;'
+                results55=pd.read_sql(query,connection)
+            results55 = results55.replace(np.NaN,"NULL", regex=True)
+            res_list=[]
+            rec={}
+            for val2 in results55.values:
+                count=0
+                for col4 in results55.columns:
+                    rec[col4]=val2[count]
+                    count=count+1
+                res_list.append(rec.copy())
+            with open("trn_type.json","w") as f:
+                f.write(json.dumps(res_list))
+            if len(res_list)==0:
+                return JsonResponse({"status": 500, "message": "NO DATA FOUND"})
+            else:
+                return JsonResponse(res_list, content_type="application/json",safe=False)
+        except Exception as error:
+            return JsonResponse({"status": 500, "message": str(error)})
+        except ValueError:
+            return JsonResponse({"status": 500, "message": "error"})
+
+
+
+@csrf_exempt            
+def trn_type_dtl_table(request):
+    if request.method == 'POST':
+        try:
+            # with open(r"../WEBSERVICES/trn_type.json", 'r') as openfile:
+            #     json_object_val = json.load(openfile)
+            #     if len(json_object_val)==0:
+            #         return JsonResponse({"status": 500, "message": "NO DATA FOUND"})
+            #     else:
+            #         return JsonResponse(json_object_val, content_type="application/json",safe=False)
+            json_object_val = [{"VAL":0}]  
+            return JsonResponse(json_object_val, content_type="application/json",safe=False)
+        except ValueError:
+            return JsonResponse({"status": 500, "message": "error"})
+        
+
+@csrf_exempt            
+def trn_hist_data(request):
+    if request.method == 'POST':
+        try:
+            params          = json.loads(request.body)
+            params          = params[0]
+            
+
+            I_hier1         = params["HIER1"]                if len(str(params["HIER1"]))>0            else "NULL"
+            I_hier2         = params["HIER2"]                if len(str(params["HIER2"]))>0            else "NULL"
+            I_hier3         = params["HIER3"]                if len(str(params["HIER3"]))>0            else "NULL"
+            I_start_date    = "'"+ params["START_DATE"] +"'" if len(str(params["START_DATE"]))>0       else "NULL"
+            I_year_interval = params["YEAR_INTERVAL"]        if len(str(params["YEAR_INTERVAL"]))>0    else "NULL"
+            I_weeks         = params["WEEKS"]                if len(str(params["WEEKS"]))>0            else "NULL"
+            
+
+            if len(str(params["HIER1"]))==0 and len(str(params["HIER2"]))==0 and len(str(params["HIER3"]))==0: 
+                return JsonResponse({"status": 500, "message":"ERROR - trn_hist_data : Provide a value for at least one of the hierarchy parameters: HIER1, HIER2, or HIER3."})
+
+            res_list, err_msg = wrapper_process_sales_qty(connection,
+                                                          I_hier1,       
+                                                          I_hier2,        
+                                                          I_hier3,        
+                                                          I_start_date,   
+                                                          I_year_interval,
+                                                          I_weeks)        
+            if len(res_list)==0:
+                if len(err_msg)>0:
+                        return JsonResponse({"status": 500, "message":str(err_msg)})
+                return JsonResponse({"status": 500, "message":"NO DATA FOUND"}) 
+            else:
+                res_list =  res_list.replace(np.NaN, "", regex=True)
+                res_list =  res_list.to_dict("records")
+                return JsonResponse(res_list, content_type="application/json",safe=False)
+        except ValueError:
+            return JsonResponse({"status": 500, "message": "error"})

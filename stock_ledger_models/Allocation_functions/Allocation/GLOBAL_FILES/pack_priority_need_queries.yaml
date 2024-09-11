@@ -1,0 +1,412 @@
+pack_priority_need:
+
+  Q_cre_st_wh_avail_qty: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_st_wh_avail_qty(alloc_no     INT(15),   
+                                                                                     tran_item     VARCHAR(25),
+                                                                                     wh_id         INT(10),
+                                                                                     to_loc        INT(10),
+                                                                                     avail_qty     FLOAT(12,4));"
+
+  Q_doc_type: "SELECT alloc_criteria FROM alloc_itm_search_dtl WHERE alloc_no= %s limit 1;"
+
+  Q_mer_1: "WITH src 
+                  AS
+                  (WITH wks AS (SELECT alloc_no, COUNT(1) counts
+                                  FROM alloc_calc_need_dates
+                                 WHERE alloc_no = %s
+                                 GROUP BY alloc_no)
+                   SELECT DISTINCT api.alloc_no,
+                          api.item item,
+                          api.to_loc to_loc,
+                          GREATEST(
+                              COALESCE(MIN,0)*som_qty,            
+                                   COALESCE(MIN_NEED,0),           
+                                   (CASE
+                                      WHEN COALESCE (((api.gross_need
+                                                  + COALESCE (api.gross_need*(COALESCE(trend,0)/ 100),0))
+                                                  / CASE
+                                                      WHEN ql.wos IS NOT NULL
+                                                      THEN
+                                                         COALESCE (wks.counts,0)
+                                                      ELSE
+                                                         1
+                                                     END)
+                                                   * COALESCE (ql.wos, 1),0) = 0
+                                      THEN
+                                         api.gross_need
+                                      ELSE
+                                         ((api.gross_need
+                                           + COALESCE (api.gross_need*(COALESCE (trend,0)/ 100),0))
+                                           / CASE
+                                               WHEN ql.wos IS NOT NULL
+                                               THEN
+                                                  COALESCE (wks.counts,0)
+                                               ELSE
+                                                  1
+                                             END)
+                                           * COALESCE (ql.wos, 1)
+                                   END)) 
+                          - CASE 
+                            WHEN ar.net_need_ind = 'Y' AND ar.exact_ind = 'Y' 
+                            THEN
+                               COALESCE(api.soh,0)
+                            ELSE 0
+                            END  eff_gross_need,
+                            CASE 
+                            WHEN ar.net_need_ind = 'Y' AND ar.exact_ind = 'Y' 
+                            THEN
+                               COALESCE(api.soh,0)
+                            ELSE 0
+                            END soh, 
+                            GREATEST(                     
+                            CASE WHEN ql.max IS NOT NULL  
+                            THEN (ql.max*ql.som_qty)
+                                 - CASE 
+                                   WHEN ar.net_need_ind = 'Y' AND ar.exact_ind = 'Y' 
+                                   THEN
+                                      COALESCE(api.soh,0)
+                                   ELSE 0
+                                   END						
+                            ELSE NULL 
+                            END,0) max_qty                            
+                     FROM pack_item_loc_need  api
+                          LEFT JOIN wks ON api.alloc_no = wks.alloc_no,
+                          alloc_rule                       ar,
+                     alloc_quantity_limits_temp ql   
+                    WHERE api.alloc_no = %s
+                      AND api.alloc_no = ar.alloc_no
+                      AND ql.alloc_no = api.alloc_no
+                      AND ql.location_id = api.to_loc
+                      and ql.item_id = api.item)
+               UPDATE pack_item_loc_need tgt,src
+                  SET tgt.eff_gross_need = CASE WHEN src.max_qty IS NOT NULL AND src.max_qty <= GREATEST(src.eff_gross_need,0) THEN src.max_qty ELSE GREATEST(src.eff_gross_need,0) END,
+                      tgt.orig_gross_need = CASE WHEN src.max_qty IS NOT NULL AND src.max_qty <= GREATEST(src.eff_gross_need,0) THEN src.max_qty ELSE GREATEST(src.eff_gross_need,0) END,  
+                      tgt.gross_need = src.eff_gross_need + src.soh
+                WHERE tgt.alloc_no = src.alloc_no
+                  AND tgt.item = src.item
+                  AND tgt.to_loc = src.to_loc;"
+
+  Q_mer_2: "WITH 
+             src 
+               AS (SELECT DISTINCT api.alloc_no,
+                          api.item item,
+                          api.to_loc to_loc,
+                          gross_need  
+                     FROM pack_item_loc_need  api         
+                    WHERE api.alloc_no = %s)
+               UPDATE alloc_comp_inv tgt, src
+                  SET tgt.gross_need = src.gross_need
+                WHERE tgt.alloc_no = src.alloc_no
+                  AND tgt.tran_item = src.item
+                  AND tgt.to_loc = src.to_loc;"
+
+  Q_wh_str_rel_ind: "SELECT wh_store_rel_ind FROM alloc_head WHERE alloc_no = %s;"
+
+  Q_del_st_wh_avail_qty: "DELETE FROM alloc_st_wh_avail_qty WHERE alloc_no = %s;"
+
+  Q_ins_st_wh_avail_qty: "INSERT INTO alloc_st_wh_avail_qty(alloc_no,
+                                                           tran_item,
+                                                           wh_id, 
+                                                           to_loc,
+                                                           avail_qty )
+                                                    SELECT DISTINCT its.alloc_no,
+                                                           its.item_id,
+                                                           its.wh_id,
+                                                           dt.to_loc,
+                                                           its.avail_qty
+                                                      FROM alloc_calc_destination_temp  dt, 
+                                                           (SELECT alloc_no,
+                                                                   item_id,
+                                                                   CASE WHEN %s = 'F' AND avail_qty IS NULL
+                                                                 THEN
+                                                                   NULL
+                                                                 ELSE      
+                                                                GREATEST (
+                                                                         COALESCE(avail_qty,0)
+                                                                       - (CASE
+                                                                              WHEN     hold_back_pct_flag =
+                                                                                       'Y'
+                                                                                   AND hold_back_value
+                                                                                           IS NOT NULL
+                                                                              THEN
+                                                                                  ROUND (
+                                                                                        avail_qty
+                                                                                      * (  hold_back_value
+                                                                                         / 100))
+                                                                              WHEN     hold_back_pct_flag =
+                                                                                       'N'
+                                                                                   AND hold_back_value
+                                                                                           IS NOT NULL
+                                                                              THEN
+                                                                                  hold_back_value
+                                                                              ELSE
+                                                                                  0
+                                                                          END),
+                                                                       0)
+                                                              END  avail_qty, 
+                                                                   wh_id
+                                                              FROM alloc_item_source_dtl
+                                                             WHERE alloc_no = %s) its 
+                                                     WHERE its.alloc_no=dt.alloc_no
+                                                       AND ((%s = 'Y' AND its.wh_id = dt.assign_default_wh)
+                                                             OR (%s = 'N'))
+                                                       AND its.item_id= dt.tran_item;"
+
+  Q_rec_priority: "WITH tmp AS (SELECT DISTINCT tmp.alloc_no,
+                                                tmp.tran_item,
+                                                (SELECT COUNT(DISTINCT pb.item) FROM packitem_breakout pb where tmp.alloc_no = %s AND tmp.item_type = 'NSFSP' AND tmp.tran_item = pb.pack_no) sku_count,
+                                                SUM(pb.item_qty) OVER (PARTITION BY tran_item,to_loc) pack_qty 
+                                            FROM alloc_calc_destination_temp tmp,
+                                                 packitem_breakout pb 
+                                            WHERE tmp.alloc_no = %s 
+                                            AND tmp.item_type = 'NSFSP'
+                                            AND tmp.tran_item = pb.pack_no)
+                                            SELECT alloc_no,
+                                                    tran_item
+                                            FROM tmp
+                                            ORDER BY sku_count DESC,pack_qty DESC,tran_item;"
+  
+  Q_del_1: "DELETE FROM alloc_pack_allocation WHERE alloc_no = %s;"
+  
+  Q_rec_get_loc: "SELECT DISTINCT tran_item,
+                                    to_loc
+                        FROM alloc_calc_destination_temp dt
+                        WHERE dt.alloc_no  = %s
+                        AND dt.tran_item = %s;"
+  
+  Q_ins_df_get_loc1: "INSERT INTO alloc_pack_allocation(alloc_no,
+                                                            pack_no,
+                                                            item,
+                                                            to_loc,
+                                                            item_qty,
+                                                            ori_eff_gross_need,
+                                                            pack_allocated,
+                                                            rev_eff_gross_need,
+                                                            assign_default_wh) 
+                                                        SELECT DISTINCT tmp.alloc_no,
+                                                            tmp.pack_no,
+                                                            tmp.item,
+                                                            tmp.to_loc,
+                                                            tmp.item_qty,
+                                                            tmp.eff_gross_need ori_eff_gross_need,
+                                                            CASE WHEN tmp.pack_allocated > ql.max THEN ql.max ELSE tmp.pack_allocated END pack_allocated,
+                                                            GREATEST ((tmp.eff_gross_need - ((CASE WHEN tmp.pack_allocated > ql.max THEN ql.max ELSE tmp.pack_allocated END)*tmp.item_qty)),0) rev_eff_gross_need,
+                                                            tmp.assign_default_wh
+                                                        FROM     (SELECT aapi.alloc_no,
+                                                                    pb.pack_no,
+                                                                    aapi.item,
+                                                                    aapi.to_loc,
+                                                                    pb.item_qty,
+                                                                    aapi.eff_gross_need,
+                                                                    ROUND(ROUND(MIN(COALESCE(aapi.eff_gross_need,0)/pb.item_qty) OVER(PARTITION BY aapi.alloc_no,pb.pack_no,aapi.to_loc),0)/ais.som_qty)*ais.som_qty pack_allocated, 
+                                                                 aapi.assign_default_wh 															 
+                                                                FROM pack_item_loc_need aapi,
+                                                                    packitem_breakout pb,
+                                                                    alloc_item_source_dtl   ais                 
+                                                                WHERE aapi.alloc_no     =  %s
+                                                                AND aapi.item         =  pb.item
+                                                                AND aapi.to_loc       =  %s
+                                                                AND pb.pack_no        =  %s
+                                                                AND ais.alloc_no      =  aapi.alloc_no    
+                                                                AND ais.item_id       =  %s) tmp,
+                                                                alloc_calc_qty_limits_temp ql
+                                                                WHERE tmp.alloc_no = %s
+                                                                AND ql.alloc_no = tmp.alloc_no
+                                                                AND tmp.pack_no = ql.tran_item
+                                                                AND tmp.to_loc = ql.store;"
+  
+  Q_get_rec_alloc_qty: "SELECT DISTINCT pack_no,
+                                CASE WHEN %s = 'Y' THEN assign_default_wh ELSE 1 END wh_loc		
+                            FROM alloc_pack_allocation 
+                            WHERE alloc_no = %s
+                            ORDER BY wh_loc;"
+  
+  Q_get_wh_avail_qty: "SELECT wh_id, 
+                              GREATEST(avail_qty,0) avail_qty
+                         FROM alloc_st_wh_avail_qty
+                            WHERE tran_item = %s 
+                            AND ((%s ='Y' AND wh_id = %s) OR (%s = 'N' ))  
+                            ORDER BY avail_qty DESC;"
+  
+  Q_pack_allocated: "SELECT SUM(pack_allocated) total_pack_allocated
+                     FROM (SELECT DISTINCT tmp.pack_no,
+                                  tmp.to_loc,
+                                  tmp.pack_allocated
+                             FROM alloc_pack_allocation tmp,
+                                  alloc_st_wh_avail_qty qty
+                            WHERE tmp.alloc_no = %s
+                              AND tmp.alloc_no = qty.alloc_no
+                              AND tmp.pack_no = qty.tran_item
+                              AND ((%s = 'Y' AND qty.wh_id = tmp.assign_default_wh AND tmp.assign_default_wh = %s) 
+                                   OR (%s ='N'))
+                              AND tmp.to_loc = qty.to_loc) tmp;"
+                
+  Q_mer_3: "WITH 
+                    src 
+                    AS(SELECT DISTINCT tmp.alloc_no,
+                            pack_no,
+                            to_loc,
+                            ROUND(pack_allocated/ais.som_qty,0)*ais.som_qty pack_allocated 
+                        FROM (SELECT alloc_no,
+                                    pack_no,
+                                    to_loc,
+                                    ROUND(pack_allocated*%s,0) pack_allocated
+                                FROM (SELECT alloc_no,
+                                            pack_no,
+                                            to_loc,
+                                            (pack_allocated/%s) pack_allocated 
+                                        FROM alloc_pack_allocation 
+                                        WHERE alloc_no = %s 
+                                        AND ((%s='Y' AND assign_default_wh = %s)
+                                                OR (%s='N')))temp) tmp,                     
+                          alloc_item_source_dtl ais
+                    WHERE tmp.alloc_no = ais.alloc_no
+                      AND tmp.pack_no = ais.item_id)
+                    UPDATE alloc_pack_allocation tgt,  src
+                    SET tgt.pack_allocated = src.pack_allocated
+                    WHERE tgt.alloc_no      = src.alloc_no
+                    AND tgt.pack_no = src.pack_no 
+                    AND tgt.to_loc    = src.to_loc;"
+  
+  Q_get_som_qty: "SELECT som_qty 
+                    FROM alloc_item_source_dtl ais,    
+                         alloc_pack_allocation temp
+                   WHERE ais.alloc_no = %s
+                     AND ais.alloc_no = temp.alloc_no
+                     AND ais.item_id  = temp.pack_no;"
+  
+  Q_get_loop_rec: "SELECT %s,
+                            pack_no,
+                            to_loc,
+                            pack_allocated 
+                        FROM alloc_pack_allocation
+                        WHERE alloc_no = %s
+                        ORDER BY pack_allocated,to_loc DESC;"
+  
+  Q_upd_pck_alloc_temp: "UPDATE alloc_pack_allocation 
+                                SET pack_allocated = pack_allocated - %s    
+                                WHERE alloc_no = %s 
+                                AND pack_no = %s 
+                                AND to_loc = %s;"
+  
+  Q_mer_4: "WITH 
+                    src 
+                    AS 
+                    (SELECT DISTINCT tmp.alloc_no,
+                            qty.pack_no,
+                            tmp.item,
+                            qty.to_loc,
+                            GREATEST ((tmp.eff_gross_need - ((CASE WHEN qty.pack_allocated > ql.max THEN ql.max ELSE qty.pack_allocated END)*qty.item_qty)),0) rev_eff_gross_need
+                        FROM pack_item_loc_need tmp,
+                            alloc_calc_qty_limits_temp ql,
+                            (SELECT DISTINCT alloc_no,
+                                    pack_no,
+                                    item,
+                                    to_loc,
+                                    pack_allocated,
+                                    item_qty
+                                FROM alloc_pack_allocation
+                                WHERE alloc_no = %s) qty
+                        WHERE tmp.alloc_no  = %s
+                        AND tmp.alloc_no = qty.alloc_no
+                        AND ql.alloc_no = tmp.alloc_no
+                        AND ql.tran_item = qty.pack_no
+                        AND tmp.item = qty.item
+                        AND tmp.to_loc = ql.store
+                        AND ql.store = qty.to_loc
+                        AND tmp.to_loc = qty.to_loc ) 
+                    UPDATE alloc_pack_allocation tgt, src
+                            SET tgt.rev_eff_gross_need = src.rev_eff_gross_need
+                            WHERE tgt.alloc_no = src.alloc_no
+                            AND tgt.pack_no = src.pack_no
+                            AND tgt.item = src.item
+                            AND tgt.to_loc = src.to_loc;"
+            
+  Q_mer_5: "WITH             src 
+                  AS 
+                  (SELECT DISTINCT tmp.alloc_no,
+                                    tmp.item,
+                                    tmp.to_loc,
+                                    CASE WHEN GREATEST(tmp.ori_eff_gross_need-tmp.rev_eff_gross_need,0) >= (ql.max*ql.som_qty) AND ql.max IS NOT NULL
+                                        THEN 0
+                                        ELSE tmp.rev_eff_gross_need
+                                        END rev_eff_gross_need
+                        FROM alloc_pack_allocation tmp,
+                            alloc_quantity_limits_temp ql
+                            WHERE tmp.alloc_no = %s
+                            AND tmp.alloc_no = ql.alloc_no
+                            AND tmp.item = ql.item_id
+                            AND tmp.to_loc = ql.location_id ) 
+                UPDATE pack_item_loc_need tgt, src 
+                  SET tgt.eff_gross_need = src.rev_eff_gross_need
+                    WHERE tgt.alloc_no   = src.alloc_no
+                    AND tgt.item   = src.item 
+                    AND tgt.to_loc = src.to_loc;"
+  
+  Q_mer_6: "WITH 
+                src 
+                  AS 
+                  (SELECT DISTINCT alloc_no,
+                            pack_no,
+                            to_loc,
+                            pack_allocated
+                        FROM alloc_pack_allocation
+                            WHERE alloc_no = %s)
+                    UPDATE alloc_calc_destination_temp tgt,src
+                        SET tgt.need_value = src.pack_allocated
+                        WHERE tgt.alloc_no      = src.alloc_no
+                        AND tgt.tran_item = src.pack_no 
+                        AND tgt.to_loc    = src.to_loc;"
+  
+  Q_mer_7: "WITH 
+             src 
+                AS
+                (SELECT DISTINCT tmp.alloc_no,
+                      tmp.item,
+                      tmp.to_loc,
+                      tmp.eff_gross_need +
+                      CASE 
+                         WHEN ar.net_need_ind = 'Y' AND ar.exact_ind = 'Y' 
+                         THEN
+                            COALESCE(tmp.soh,0)
+                         ELSE 0
+                      END eff_gross_need 
+                 FROM pack_item_loc_need tmp,
+                  alloc_rule ar              
+                WHERE tmp.alloc_no = %s
+              AND tmp.alloc_no = ar.alloc_no)
+           UPDATE alloc_calc_destination_temp tgt, src
+              SET tgt.need_value = CASE WHEN src.eff_gross_need <= 0 THEN 0 ELSE src.eff_gross_need END
+                WHERE tgt.alloc_no  = src.alloc_no
+                AND tgt.tran_item = src.item 
+                AND tgt.to_loc    = src.to_loc;"
+  
+  Q_mer_8: "WITH 
+             src 
+              AS 
+              (SELECT DISTINCT tmp.alloc_no,
+                      tmp.item,
+                      tmp.to_loc,
+                      GREATEST(orig_gross_need-eff_gross_need,0) alloc_qty
+                 FROM pack_item_loc_need tmp 
+                WHERE tmp.alloc_no = %s) 
+           UPDATE alloc_calc_qty_limits_temp tgt, src 
+              SET tgt.max = GREATEST(tgt.max-src.alloc_qty,0)
+              WHERE tgt.alloc_no = src.alloc_no
+                AND tgt.tran_item = src.item 
+                AND tgt.store     = src.to_loc
+                AND tgt.max IS NOT NULL;"
+  
+  Q_mer_9: "WITH 
+               src 
+                AS 
+                (SELECT DISTINCT tmp.alloc_no,
+                        tmp.item,
+                        tmp.to_loc
+                   FROM pack_item_loc_need tmp 
+                  WHERE tmp.alloc_no = %s) 
+             UPDATE alloc_calc_qty_limits_temp tgt, src
+                SET tgt.min       = NULL,
+                    tgt.min_need  = NULL
+              WHERE tgt.alloc_no  = src.alloc_no
+                AND tgt.tran_item = src.item 
+                AND tgt.store     = src.to_loc;"

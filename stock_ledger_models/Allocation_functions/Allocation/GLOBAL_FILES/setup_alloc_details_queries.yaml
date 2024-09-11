@@ -1,0 +1,1194 @@
+
+#############################################################
+#Created By - Proxima360                             #                
+#File Name  - setup_alloc_details_queries.yaml              #
+#Purpose    - All queries for allocation details functions  #
+#############################################################
+
+retreive_alloc_details: 
+  C_temp_tbl1: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_item_header_temp
+               (ALLOC_NO                    NUMERIC(15),    
+                SOURCE_ITEM                 VARCHAR(25),  
+                SOURCE_ITEM_DESC            VARCHAR(250), 
+                DIFF_ID                     VARCHAR(10),  
+                PO_NO                       VARCHAR(40),  
+                RULE_TYPE                   VARCHAR(10),  
+                GROSS_NEED                  NUMERIC(12),  
+                STOCK_ON_HAND               NUMERIC(12),  
+                FUTURE_FULFILL_QTY          NUMERIC(12),  
+                NET_NEED                    NUMERIC(12),  
+                CALC_QTY                    NUMERIC(12),  
+                AVAIL_QTY                   NUMERIC(12),  
+                ALLOC_QTY                   NUMERIC(12),  
+                REMAIN_QTY                  NUMERIC(12),  
+                SPREAD_QTY                  NUMERIC(12),  
+                SOM_QTY                     NUMERIC(12),  
+                PACK_IND                    VARCHAR(1));"
+  
+  C_temp_tbl2: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_item_details_temp
+                (ALLOC_NO                    NUMERIC(15),    
+                 WH_ID                       VARCHAR(40),  
+                 SOURCE_ITEM                 VARCHAR(25),  
+                 SOURCE_ITEM_DESC            VARCHAR(250), 
+                 DIFF_ID                     VARCHAR(10),  
+                 PO_NO                       VARCHAR(40),  
+                 RULE_TYPE                   VARCHAR(10),  
+                 GROSS_NEED                  NUMERIC(12),  
+                 STOCK_ON_HAND               NUMERIC(12),  
+                 FUTURE_FULFILL_QTY          NUMERIC(12),  
+                 NET_NEED                    NUMERIC(12),  
+                 CALC_QTY                    NUMERIC(12),  
+                 AVAIL_QTY                   NUMERIC(12),  
+                 ALLOC_QTY                   NUMERIC(12),  
+                 REMAIN_QTY                  NUMERIC(12),  
+                 SPREAD_QTY                  NUMERIC(12),  
+                 SOM_QTY                     NUMERIC(12));"
+  
+  C_temp_tbl3: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_item_loc_dtls_prv_temp
+                (ALLOC_NO                    NUMERIC(15),    
+                 WH_ID                       VARCHAR(40),  
+                 SOURCE_ITEM                 VARCHAR(25),  
+                 SOURCE_ITEM_DESC            VARCHAR(250), 
+                 DIFF_ID                     VARCHAR(10),  
+                 PO_NO                       VARCHAR(40),  
+                 LOCATION_ID                 VARCHAR(40),  
+                 LOCATION_DESC               VARCHAR(150), 
+                 GROUP_ID                    VARCHAR(40),  
+                 GROUP_DESC                  VARCHAR(600),
+                 ASSIGN_DEFAULT_WH           NUMERIC(10),    
+                 RULE_TYPE                   VARCHAR(10),  
+                 SOM_QTY                     NUMERIC(20),  
+                 GROSS_NEED                  NUMERIC(12),  
+                 STOCK_ON_HAND               NUMERIC(12),  
+                 FUTURE_FULFILL_QTY          NUMERIC(12),  
+                 NET_NEED                    NUMERIC(12),  
+                 CALC_QTY                    NUMERIC(12),  
+                 ALLOC_QTY                   NUMERIC(12),  
+                 VARIANCE_PCT                NUMERIC(12),  
+                 SEL_IND                     VARCHAR(1));"
+                
+  C_temp_tbl4: "CREATE TEMPORARY TABLE IF NOT EXISTS  alloc_item_loc_details_temp
+                (ALLOC_NO                    NUMERIC(15),    
+                 WH_ID                       VARCHAR(40),  
+                 SOURCE_ITEM                 VARCHAR(25),  
+                 SOURCE_ITEM_DESC            VARCHAR(250), 
+                 DIFF_ID                     VARCHAR(10),  
+                 PO_NO                       VARCHAR(40),  
+                 LOCATION_ID                 VARCHAR(40),  
+                 LOCATION_DESC               VARCHAR(150), 
+                 GROUP_ID                    VARCHAR(40),  
+                 GROUP_DESC                  VARCHAR(600), 
+                 ASSIGN_DEFAULT_WH           NUMERIC(10),    
+                 RULE_TYPE                   VARCHAR(10),  
+                 SOM_QTY                     NUMERIC(20),  
+                 GROSS_NEED                  NUMERIC(12),  
+                 STOCK_ON_HAND               NUMERIC(12),  
+                 FUTURE_FULFILL_QTY          NUMERIC(12),  
+                 NET_NEED                    NUMERIC(12),  
+                 CALC_QTY                    NUMERIC(12),  
+                 ALLOC_QTY                   NUMERIC(12),  
+                 VARIANCE_PCT                NUMERIC(12),  
+                 SEL_IND                     VARCHAR(1),   
+                 ITEM_PARENT                 VARCHAR(25),  
+                 PACK_NO                     VARCHAR(25),  
+                 COMP_CALC_QTY               NUMERIC(12));"              
+                
+  C_alloc_level:  "SELECT COALESCE(MAX(alloc_level),'$') alloc_level,
+                          COALESCE(MAX(alloc_criteria),'$') alloc_criteria
+                     FROM alloc_head
+                    WHERE alloc_no = %s;"
+
+  # C_alloc_criteria: "SELECT COALESCE(MAX(alloc_criteria),'$') alloc_criteria
+                        # FROM alloc_itm_search_dtl
+                       # WHERE alloc_no = %s;"  
+
+  L_del_1: "DELETE FROM alloc_item_header_temp
+             WHERE alloc_no = %s;"                               
+                          
+  L_del_2: "DELETE FROM alloc_item_details_temp
+             WHERE alloc_no = %s;"
+  
+  L_del_3: "DELETE FROM alloc_item_loc_dtls_prv_temp
+             WHERE alloc_no = %s;"
+  
+  L_del_4: "DELETE FROM alloc_item_loc_details_temp
+             WHERE alloc_no = %s;"                       
+                
+  L_ins_1: "INSERT INTO alloc_item_loc_dtls_prv_temp (alloc_no,
+                                                      wh_id,
+                                                      source_item,
+                                                      source_item_desc,
+                                                      diff_id,
+                                                      po_no,
+                                                      location_id,
+                                                      location_desc,
+                                                      GROUP_ID,
+                                                      group_desc,
+                                                      assign_default_wh,
+                                                      rule_type,
+                                                      som_qty,
+                                                      gross_need,
+                                                      stock_on_hand,
+                                                      future_fulfill_qty,
+                                                      net_need,
+                                                      calc_qty,
+                                                      alloc_qty,
+                                                      variance_pct,
+                                                      sel_ind)
+            SELECT alloc_no,
+                   wh_id,
+                   source_item,
+                   source_item_desc,
+                   diff_id,
+                   po_no,
+                   location_id,
+                   location_desc,
+                   group_id,
+                   group_desc,
+                   assign_default_wh,
+                   rule_type,
+                   som_qty,
+                   gross_need,
+                   stock_on_hand,
+                   future_fulfill_qty,
+                   net_need,
+                   calc_qty,
+                   alloc_qty,
+                   variance_pct,
+                   sel_ind
+              FROM alloc_item_loc_details_temp
+             WHERE alloc_no = %s;" 
+  #Changes by Shubham Start#
+  # L_ins_2: "INSERT INTO alloc_item_details_temp (alloc_no,
+                                                 # wh_id,
+                                                 # source_item,
+                                                 # source_item_desc,
+                                                 # diff_id,
+                                                 # gross_need,
+                                                 # stock_on_hand,
+                                                 # future_fulfill_qty,
+                                                 # net_need,
+                                                 # calc_qty,
+                                                 # avail_qty,
+                                                 # alloc_qty,
+                                                 # remain_qty,
+                                                 # som_qty)
+            
+              # SELECT DISTINCT tmp.alloc_no,
+                     # tmp.wh_id,
+                     # tmp.source_item,
+                     # im.item_desc
+                     # source_item_desc,
+                     # tmp.diff_id,          
+                     # SUM(tmp.gross_need_no_own_ship)
+                        # OVER(PARTITION BY tmp.alloc_no,
+                                          # tmp.wh_id,
+                                          # tmp.source_item,
+                                          # tmp.diff_id) AS gross_need,
+                     # NULL AS stock_on_hand,
+                     # GREATEST((  SUM( COALESCE (tmp.wh_on_order_qty, 0)
+                               # + COALESCE(tmp.wh_on_alloc_qty,COALESCE(ils.expected_qty,0))
+                               # + COALESCE(ils.shipped_qty,0)) 
+                              # OVER(PARTITION BY tmp.alloc_no,
+                                                 # tmp.wh_id,
+                                                 # tmp.source_item,
+                                                 # tmp.diff_id)
+                              # /COUNT(tmp.to_loc)  
+                                   # OVER(PARTITION BY tmp.alloc_no,
+                                                     # tmp.wh_id,
+                                                     # tmp.source_item,
+                                                     # tmp.diff_id)),0) AS future_fulfill_qty,
+                     # SUM(  tmp.gross_need_no_own_ship
+                         # - COALESCE(tmp.stock_on_hand, 0))
+                        # OVER(PARTITION BY tmp.alloc_no,
+                                          # tmp.wh_id,
+                                          # tmp.source_item,
+                                          # tmp.diff_id) AS net_need,
+                     # SUM(tmp.orig_sku_calc_qty)
+                       # OVER(PARTITION BY tmp.alloc_no,
+                                     # tmp.wh_id,
+                                     # tmp.source_item,
+                                     # tmp.diff_id)
+                       # calc_qty,
+                      # /*SUM(tmp.avail_qty)*/
+                      # MAX(tmp.avail_qty)
+                        # OVER(PARTITION BY tmp.alloc_no,
+                                          # tmp.wh_id,
+                                          # tmp.source_item,
+                                          # tmp.diff_id) AS avail_qty,                        
+                     # SUM(tmp.sku_calc_qty)
+                        # OVER(PARTITION BY tmp.alloc_no,
+                                          # tmp.wh_id,
+                                          # tmp.source_item,
+                                          # tmp.diff_id) AS alloc_qty,
+                      # /*GREATEST(SUM(tmp.avail_qty)*/   
+                      # GREATEST(MAX(tmp.avail_qty)   
+                         # OVER(PARTITION BY tmp.alloc_no,
+                                       # tmp.wh_id,
+                                       # tmp.source_item,
+                                       # tmp.diff_id)
+                     # - SUM(tmp.sku_calc_qty)
+                         # OVER(PARTITION BY tmp.alloc_no,
+                                       # tmp.wh_id,
+                                       # tmp.source_item,
+                                       # tmp.diff_id),0) AS remain_qty,                     
+                     # tmp.som_qty
+                # FROM alloc_calc_item_loc tmp, 
+                     # item_dtl im,
+                     # item_location ils
+               # WHERE tmp.alloc_no = %s 
+                 # AND tmp.source_item = im.item
+                 # AND ils.location=tmp.wh_id 
+                 # AND ils.item=tmp.tran_item
+               # GROUP BY tmp.alloc_no,
+                        # tmp.wh_id,
+                        # tmp.source_item,
+                        # tmp.diff_id,
+                        # tmp.order_no,
+                        # tmp.to_loc;"
+                        
+  L_ins_2: "INSERT INTO alloc_item_details_temp (alloc_no,
+                                                 wh_id,
+                                                 source_item,
+                                                 source_item_desc,
+                                                 diff_id,
+                                                 gross_need,
+                                                 stock_on_hand,
+                                                 future_fulfill_qty,
+                                                 net_need,
+                                                 calc_qty,
+                                                 avail_qty,
+                                                 alloc_qty,
+                                                 remain_qty,
+                                                 som_qty)  
+                   SELECT DISTINCT
+                          tmp.alloc_no,
+                          tmp.wh_id,
+                          tmp.source_item,
+                          im.item_desc
+                          source_item_desc,
+                          tmp.diff_id,         
+                          SUM(tmp.gross_need_no_own_ship)
+                             OVER (PARTITION BY tmp.alloc_no,
+                                           tmp.wh_id,
+                                           tmp.source_item,
+                                           tmp.diff_id)
+                             gross_need,
+                          NULL
+                             stock_on_hand,
+                             (SUM( COALESCE (tmp.wh_on_order_qty, 0)
+                             + COALESCE(tmp.wh_on_alloc_qty,COALESCE(ils.expected_qty,0))
+                                   + COALESCE(ils.shipped_qty,0)
+                                  ) 
+                             OVER (PARTITION BY tmp.alloc_no,
+                                           tmp.wh_id,
+                                           tmp.source_item,
+                                           tmp.diff_id)/(SELECT count(distinct tmp.to_loc) 
+                                                           FROM alloc_calc_item_loc tmp 
+                                                          WHERE tmp.alloc_no = %s 
+                                                            AND tmp.source_item = im.item 
+                                                            AND ils.location=tmp.wh_id  
+                                                            AND ils.item=tmp.tran_item 
+                                                          GROUP BY tmp.alloc_no,tmp.wh_id,tmp.source_item,tmp.diff_id)
+                            )
+                             future_fulfill_qty,					 
+                          SUM(
+                              tmp.gross_need_no_own_ship
+                             - COALESCE (tmp.stock_on_hand, 0))
+                             OVER (PARTITION BY tmp.alloc_no,
+                                           tmp.wh_id,
+                                           tmp.source_item,
+                                           tmp.diff_id)
+                             net_need,
+                          SUM(tmp.orig_sku_calc_qty)
+                             OVER (PARTITION BY tmp.alloc_no,
+                                           tmp.wh_id,
+                                           tmp.source_item,
+                                           tmp.diff_id)
+                             calc_qty,
+                          (SELECT SUM(DISTINCT tmp.avail_qty) 
+                             FROM alloc_calc_item_loc tmp 
+                            WHERE tmp.alloc_no = %s 
+                              AND tmp.source_item = im.item 
+                              AND ils.location=tmp.wh_id  
+                              AND ils.item=tmp.tran_item 
+                            GROUP BY tmp.alloc_no,tmp.wh_id,tmp.source_item,tmp.diff_id) avail_qty,					
+                          SUM(tmp.sku_calc_qty)
+                             OVER (PARTITION BY tmp.alloc_no,
+                                           tmp.wh_id,
+                                           tmp.source_item,
+                                           tmp.diff_id)
+                             alloc_qty, 
+                           GREATEST((SELECT SUM(DISTINCT tmp.avail_qty)
+                                      FROM alloc_calc_item_loc tmp 
+                                     WHERE tmp.alloc_no = %s 
+                                       AND tmp.source_item = im.item 
+                                       AND ils.location=tmp.wh_id  
+                                       AND ils.item=tmp.tran_item 
+                                     GROUP BY tmp.alloc_no,tmp.wh_id,tmp.source_item,tmp.diff_id)							   
+                          - SUM(tmp.sku_calc_qty)
+                              OVER (PARTITION BY tmp.alloc_no,
+                                            tmp.wh_id,
+                                            tmp.source_item,
+                                            tmp.diff_id),0)      
+                             remain_qty,					 
+                          tmp.som_qty
+                      FROM alloc_calc_item_loc tmp, 
+                           item_dtl im,
+                          item_location ils
+                     WHERE alloc_no = %s 
+                       AND tmp.source_item = im.item
+                       AND ils.location=tmp.wh_id 
+                       AND ils.item=tmp.tran_item;"
+
+  L_ins_2_style: "INSERT INTO alloc_item_details_temp (alloc_no,
+                                                       wh_id,
+                                                       source_item,
+                                                       source_item_desc,
+                                                       diff_id,
+                                                       gross_need,
+                                                       stock_on_hand,
+                                                       future_fulfill_qty,
+                                                       net_need,
+                                                       calc_qty,
+                                                       avail_qty,
+                                                       alloc_qty,
+                                                       remain_qty,
+                                                       som_qty)		  
+                           SELECT DISTINCT
+                                  tmp.alloc_no,
+                                  tmp.wh_id,
+                                  tmp.source_item,
+                                  im.item_desc
+                                     source_item_desc,
+                                  tmp.diff_id,
+                                  SUM(tmp.gross_need_no_own_ship)
+                                     OVER (PARTITION BY tmp.alloc_no,
+                                                   tmp.wh_id,
+                                                   tmp.source_item,
+                                                   tmp.diff_id)
+                                     gross_need,
+                                  NULL
+                                     stock_on_hand,
+                                     (SUM( COALESCE (tmp.wh_on_order_qty, 0) 
+                                      + COALESCE(tmp.wh_on_alloc_qty,COALESCE(ils.expected_qty,0)) 
+                                           + COALESCE(ils.shipped_qty,0)
+                                          ) 
+                                     OVER (PARTITION BY tmp.alloc_no,
+                                                   tmp.wh_id,
+                                                   tmp.source_item,
+                                                   tmp.diff_id)/(SELECT count(distinct tmp.to_loc) 
+                                                                   FROM alloc_calc_item_loc tmp 
+                                                                  WHERE tmp.alloc_no = %s 
+                                                                    AND tmp.source_item = im.item 
+                                                                    AND ils.location=tmp.wh_id  
+                                                                    AND ils.item=tmp.tran_item 
+                                                                  GROUP BY tmp.alloc_no,tmp.wh_id,tmp.source_item,tmp.diff_id))
+                                     future_fulfill_qty,
+                                  SUM(
+                                      tmp.gross_need_no_own_ship
+                                     - COALESCE (tmp.stock_on_hand, 0))
+                                     OVER (PARTITION BY tmp.alloc_no,
+                                                   tmp.wh_id,
+                                                   tmp.source_item,
+                                                   tmp.diff_id)  
+                                     net_need,
+                                  SUM(tmp.orig_sku_calc_qty)
+                                     OVER (PARTITION BY tmp.alloc_no,
+                                                   tmp.wh_id,
+                                                   tmp.source_item,
+                                                   tmp.diff_id)
+                                     calc_qty,                  
+                                  (SELECT SUM(DISTINCT tmp.avail_qty) 
+                                     FROM alloc_calc_item_loc tmp 
+                                    WHERE tmp.alloc_no = %s 
+                                      AND tmp.source_item = im.item 
+                                      AND ils.location=tmp.wh_id  
+                                      AND ils.item=tmp.tran_item 
+                                    GROUP BY tmp.alloc_no,tmp.wh_id,tmp.source_item,tmp.diff_id) avail_qty,					 
+                                  SUM(tmp.sku_calc_qty)
+                                     OVER (PARTITION BY tmp.alloc_no,
+                                                   tmp.wh_id,
+                                                   tmp.source_item,
+                                                   tmp.diff_id)
+                                     alloc_qty,
+                                  (SELECT SUM(DISTINCT tmp.avail_qty) 
+                                     FROM alloc_calc_item_loc tmp 
+                                    WHERE tmp.alloc_no = %s 
+                                      AND tmp.source_item = im.item 
+                                      AND ils.location=tmp.wh_id  
+                                      AND ils.item=tmp.tran_item 
+                                    GROUP BY tmp.alloc_no,tmp.wh_id,tmp.source_item,tmp.diff_id)
+                                  - SUM(tmp.sku_calc_qty)
+                                      OVER (PARTITION BY tmp.alloc_no,
+                                                    tmp.wh_id,
+                                                    tmp.source_item,
+                                                    tmp.diff_id)
+                                     remain_qty,
+                                  tmp.som_qty
+                              FROM alloc_calc_item_loc tmp, item_dtl im,
+                                  item_location ils
+                             WHERE alloc_no = %s 
+                               AND tmp.source_item = im.item
+                               AND ils.item_parent=tmp.source_item 
+                               AND ils.location=tmp.wh_id 
+                               AND ils.item=tmp.tran_item;" 
+  #Changes by Shubham End#
+  L_ins_4: "INSERT INTO alloc_item_header_temp (alloc_no,
+                                             source_item,
+                                             source_item_desc,
+                                             diff_id,
+                                             gross_need,
+                                             stock_on_hand,
+                                             future_fulfill_qty,
+                                             net_need,
+                                             calc_qty,
+                                             avail_qty,
+                                             alloc_qty,
+                                             remain_qty,
+                                             som_qty)
+              SELECT alloc_no,
+                     source_item,
+                     MAX(source_item_desc)       source_item_desc,
+                     diff_id,
+                     SUM(gross_need)             gross_need,
+                     SUM(stock_on_hand)          stock_on_hand,
+                     SUM(future_fulfill_qty)     future_fulfill_qty,
+                     SUM(net_need)               net_need,
+                     SUM(calc_qty)               calc_qty,
+                     SUM(avail_qty)              avail_qty,
+                     SUM(alloc_qty)              alloc_qty,
+                     SUM(remain_qty)             remain_qty,
+                     MAX(som_qty)                som_qty
+                FROM alloc_item_details_temp
+               WHERE alloc_no = %s
+            GROUP BY alloc_no, source_item, diff_id;"
+
+  #Changes by Shubham Start#
+  # L_ins_5: "INSERT INTO alloc_item_loc_details_temp ( alloc_no,
+                                                      # wh_id,
+                                                      # po_no,
+                                                      # location_id,
+                                                      # location_desc,
+                                                      # GROUP_ID,
+                                                      # group_desc,
+                                                      # assign_default_wh,
+                                                      # source_item,
+                                                      # source_item_desc,
+                                                      # diff_id,
+                                                      # som_qty,
+                                                      # gross_need,
+                                                      # stock_on_hand,
+                                                      # future_fulfill_qty,
+                                                      # net_need,
+                                                      # calc_qty,
+                                                      # alloc_qty,
+                                                      # variance_pct,
+                                                      # sel_ind)
+               # SELECT DISTINCT tmp.alloc_no,
+                      # tmp.wh_id,
+                      # tmp.order_no,
+                      # tmp.to_loc,
+                      # lc.location_desc                      store_name,
+                      # CASE
+                          # WHEN lgd.group_type = '7' 
+                          # THEN NULL
+                          # ELSE lgd.group_id
+                       # END                                   location_group_id,
+                      # CASE
+                          # WHEN lgd.group_type = '7' THEN NULL
+                          # ELSE lgd.group_desc
+                       # END                                   location_group_desc,
+                      # tmp.assign_default_wh,
+                      # tmp.source_item,
+                      # im.item_desc                          source_item_desc,
+                      # tmp.diff_id,
+                      # tmp.som_qty,
+                      # SUM(tmp.gross_need_no_own_ship)
+                          # OVER(PARTITION BY tmp.alloc_no,
+                                            # tmp.wh_id,
+                                            # tmp.source_item,
+                                            # tmp.diff_id,
+                                            # tmp.order_no,
+                                            # tmp.to_loc)    gross_need,
+                      # SUM(
+                          # GREATEST(  COALESCE(tmp.stock_on_hand, 0)
+                                   # - COALESCE(tmp.on_order, 0)
+                                   # - COALESCE(tmp.on_alloc, 0)
+                                   # - COALESCE(tmp.in_transit_qty, 0),
+                                  # 0)
+                          # )
+                          # OVER(PARTITION BY tmp.alloc_no,
+                                            # tmp.wh_id,
+                                            # tmp.source_item,
+                                            # tmp.diff_id,
+                                            # tmp.order_no,
+                                            # tmp.to_loc)    stock_on_hand,
+                      # SUM(  COALESCE(tmp.on_order, 0)
+                          # + COALESCE(tmp.on_alloc, 0)
+                          # + COALESCE(tmp.in_transit_qty, 0))
+                          # OVER(PARTITION BY tmp.alloc_no,
+                                            # tmp.wh_id,
+                                            # tmp.source_item,
+                                            # tmp.diff_id,
+                                            # tmp.order_no,
+                                            # tmp.to_loc)    future_fulfill_qty,
+                      # SUM(  tmp.gross_need_no_own_ship
+                          # - COALESCE(tmp.stock_on_hand, 0))
+                          # OVER(PARTITION BY tmp.alloc_no,
+                                            # tmp.wh_id,
+                                            # tmp.source_item,
+                                            # tmp.diff_id,
+                                            # tmp.order_no,
+                                            # tmp.to_loc)     net_need,
+                      # SUM(tmp.orig_sku_calc_qty)
+                          # OVER(PARTITION BY tmp.alloc_no,
+                                             # tmp.wh_id,
+                                             # tmp.source_item,
+                                             # tmp.diff_id,
+                                             # tmp.order_no,
+                                             # tmp.to_loc)    calc_qty,
+                      # SUM(tmp.sku_calc_qty)
+                          # OVER(PARTITION BY tmp.alloc_no,
+                                            # tmp.wh_id,
+                                            # tmp.source_item,
+                                            # tmp.diff_id,
+                                            # tmp.order_no,
+                                            # tmp.to_loc)    alloc_qty,
+                      # COALESCE((  SUM(tmp.sku_calc_qty)
+                                    # OVER(PARTITION BY tmp.alloc_no,
+                                                      # tmp.wh_id,
+                                                      # tmp.source_item,
+                                                      # tmp.diff_id,
+                                                      # tmp.order_no,
+                                                      # tmp.to_loc)
+                                # - SUM(  tmp.gross_need_no_own_ship
+                                      # - COALESCE(tmp.stock_on_hand, 0))
+                                    # OVER(PARTITION BY tmp.alloc_no,
+                                                      # tmp.wh_id,
+                                                      # tmp.source_item,
+                                                      # tmp.diff_id,
+                                                      # tmp.order_no,
+                                                      # tmp.to_loc)
+                                # )
+                              # / NULLIF(SUM(tmp.gross_need_no_own_ship)
+                                         # OVER(PARTITION BY tmp.alloc_no,
+                                                           # tmp.wh_id,
+                                                           # tmp.source_item,
+                                                           # tmp.diff_id,
+                                                           # tmp.order_no,
+                                                           # tmp.to_loc),0)
+                              # * 100,0) AS variance_pct,
+                      # 'Y' sel_ind
+                 # FROM item_dtl               im,
+                      # alloc_calc_item_loc    tmp,
+                      # alloc_location         lc,
+                      # alloc_loc_group_detail lgd
+                # WHERE tmp.alloc_no     = %s
+                  # AND tmp.source_item  = im.item
+                  # AND lgd.loc_group_id = lc.loc_group_id
+                  # AND lgd.alloc_no     = tmp.alloc_no
+                  # AND lc.location_id   = tmp.to_loc
+               # GROUP BY tmp.alloc_no,
+                        # tmp.wh_id,
+                        # tmp.source_item,
+                        # tmp.diff_id,
+                        # tmp.order_no,
+                        # tmp.to_loc;"  
+  
+  L_ins_5: "INSERT INTO alloc_item_loc_details_temp (alloc_no,
+                                                     wh_id,
+                                                     po_no,
+                                                     location_id,
+                                                     location_desc,
+                                                     GROUP_ID,
+                                                     group_desc,
+                                                     assign_default_wh,
+                                                     source_item,
+                                                     source_item_desc,
+                                                     diff_id,
+                                                     som_qty,
+                                                     gross_need,
+                                                     stock_on_hand,
+                                                     future_fulfill_qty,
+                                                     net_need,
+                                                     calc_qty,
+                                                     alloc_qty,
+                                                     variance_pct,
+                                                     sel_ind)
+            SELECT DISTINCT
+                   TMP.alloc_no,
+                   TMP.WH_ID,
+                   TMP.ORDER_NO,
+                   TMP.TO_LOC,
+                   LC.LOCATION_DESC                      STORE_NAME,
+                   CASE
+                       WHEN LD.GROUP_TYPE = '7' THEN NULL
+                       ELSE LD.GROUP_ID
+                   END                                   LOCATION_GROUP_ID,
+                   CASE
+                       WHEN LD.GROUP_TYPE = '7' THEN NULL
+                       ELSE LD.GROUP_DESC
+                   END                                   LOCATION_GROUP_DESC,
+                   TMP.ASSIGN_DEFAULT_WH,
+                   TMP.SOURCE_ITEM,
+                   IM.ITEM_DESC                          SOURCE_ITEM_DESC,
+                   TMP.DIFF_ID,
+                   TMP.SOM_QTY,
+                   SUM(TMP.GROSS_NEED_NO_OWN_SHIP)
+                       OVER (PARTITION BY TMP.alloc_no,
+                                          TMP.WH_ID,
+                                          TMP.SOURCE_ITEM,
+                                          TMP.DIFF_ID,
+                                          TMP.ORDER_NO,
+                                          TMP.TO_LOC)    GROSS_NEED,
+                   SUM(
+                       GREATEST (
+                             COALESCE (TMP.STOCK_ON_HAND, 0)
+                           - COALESCE (TMP.ON_ORDER, 0)
+                           - COALESCE (TMP.ON_ALLOC, 0)
+                           - COALESCE (TMP.IN_TRANSIT_QTY, 0),
+                           0))
+                       OVER (PARTITION BY TMP.alloc_no,
+                                          TMP.WH_ID,
+                                          TMP.SOURCE_ITEM,
+                                          TMP.DIFF_ID,
+                                          TMP.ORDER_NO,
+                                          TMP.TO_LOC)    STOCK_ON_HAND,
+                   SUM(
+                         COALESCE (TMP.ON_ORDER, 0)
+                       + COALESCE (TMP.ON_ALLOC, 0)
+                       + COALESCE (TMP.IN_TRANSIT_QTY, 0))
+                       OVER (PARTITION BY TMP.alloc_no,
+                                          TMP.WH_ID,
+                                          TMP.SOURCE_ITEM,
+                                          TMP.DIFF_ID,
+                                          TMP.ORDER_NO,
+                                          TMP.TO_LOC)    FUTURE_FULFILL_QTY,
+                   SUM(
+                         TMP.GROSS_NEED_NO_OWN_SHIP
+                       - COALESCE (TMP.STOCK_ON_HAND, 0))
+                       OVER (PARTITION BY TMP.alloc_no,
+                                          TMP.WH_ID,
+                                          TMP.SOURCE_ITEM,
+                                          TMP.DIFF_ID,
+                                          TMP.ORDER_NO,
+                                          TMP.TO_LOC)
+                                                         NET_NEED,
+                   SUM(TMP.ORIG_SKU_CALC_QTY)
+                       OVER (PARTITION BY TMP.alloc_no,
+                                          TMP.WH_ID,
+                                          TMP.SOURCE_ITEM,
+                                          TMP.DIFF_ID,
+                                          TMP.ORDER_NO,
+                                          TMP.TO_LOC)    CALC_QTY,
+                   SUM(TMP.SKU_CALC_QTY)
+                       OVER (PARTITION BY TMP.alloc_no,
+                                          TMP.WH_ID,
+                                          TMP.SOURCE_ITEM,
+                                          TMP.DIFF_ID,
+                                          TMP.ORDER_NO,
+                                          TMP.TO_LOC)    ALLOC_QTY,
+                   COALESCE (
+                         (  SUM(TMP.SKU_CALC_QTY)
+                                OVER (PARTITION BY TMP.alloc_no,
+                                                   TMP.WH_ID,
+                                                   TMP.SOURCE_ITEM,
+                                                   TMP.DIFF_ID,
+                                                   TMP.ORDER_NO,
+                                                   TMP.TO_LOC)
+                                - SUM(
+                                      TMP.GROSS_NEED_NO_OWN_SHIP
+                                    - COALESCE (TMP.STOCK_ON_HAND, 0))
+                                    OVER (PARTITION BY TMP.alloc_no,
+                                                       TMP.WH_ID,
+                                                       TMP.SOURCE_ITEM,
+                                                       TMP.DIFF_ID,
+                                                       TMP.ORDER_NO,
+                                                       TMP.TO_LOC)
+                        )
+                       / NULLIF (SUM(TMP.GROSS_NEED_NO_OWN_SHIP)
+                                     OVER (PARTITION BY TMP.alloc_no,
+                                                        TMP.WH_ID,
+                                                        TMP.SOURCE_ITEM,
+                                                        TMP.DIFF_ID,
+                                                        TMP.ORDER_NO,
+                                                        TMP.TO_LOC),
+                                 0)
+                       * 100,
+                       0)                                VARIANCE_PCT,
+                   'Y'                                   SEL_IND
+              FROM item_dtl                 IM,
+                   alloc_calc_item_loc  TMP,
+                   alloc_loc_group_detail        LD,
+                   alloc_location                LC
+             WHERE     TMP.alloc_no = %s 
+                   AND TMP.SOURCE_ITEM = IM.ITEM
+                   AND LD.alloc_no = TMP.alloc_no
+                   AND LD.LOC_GROUP_ID = LC.LOC_GROUP_ID
+                   AND LD.GROUP_ID = LC.GROUP_ID     /*Fix for CE-1798*/
+                   AND LC.LOCATION_ID = TMP.TO_LOC;"
+     
+  Q_create_item_details_temp_1: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_item_details_temp_1 SELECT * FROM alloc_item_details_temp WHERE alloc_no=%s;"
+  
+  Q_drop_item_details_temp_1: "DROP TEMPORARY TABLE alloc_item_details_temp_1;"
+
+  # L_mer_1: "WITH src AS
+              # (SELECT gtt.alloc_no,
+                      # gtt.wh_id,
+                      # gtt.source_item,
+                      # gtt.diff_id,
+                      # SUM(
+                        # GREATEST(
+                            # (GREATEST((ils.item_soh), 0))
+                           # - (GREATEST(ils.reserved_qty, 0)
+                            # + GREATEST(ils.rtv_qty, 0)
+                            # + GREATEST(ils.non_sellable_qty, 0)
+                            # + GREATEST(ils.cust_resv_qty, 0)),
+                           # 0))    item_soh                        
+                   # FROM alloc_item_details_temp1 gtt,
+                        # (SELECT alloc_no ,
+                                # tran_item,
+                                # source_item,
+                                # diff_id,
+                                # assign_default_wh wh_id
+                           # FROM alloc_calc_item_loc aacil 
+                          # WHERE alloc_no = %s) tmp,
+                        # item_location            ils
+                  # WHERE gtt.alloc_no = %s
+                    # AND ils.item = tmp.tran_item
+                    # AND ils.location = tmp.wh_id
+                    # AND gtt.source_item = tmp.source_item
+                  # GROUP BY gtt.alloc_no,
+                        # gtt.wh_id,
+                        # gtt.source_item,
+                        # gtt.diff_id)    
+            
+            # UPDATE alloc_item_details_temp tgt, src 
+               # SET tgt.stock_on_hand = src.item_soh 
+             # WHERE tgt.alloc_no = src.alloc_no
+               # AND tgt.source_item = src.source_item
+               # AND coalesce(tgt.diff_id,'$') = coalesce(src.diff_id,'$');" 
+               
+  L_mer_1: "WITH 
+			    src 
+			    AS(SELECT gtt.alloc_no,
+                          gtt.wh_id,
+                          gtt.source_item,
+                          gtt.diff_id,
+                          SUM(
+                            GREATEST(
+                                (GREATEST((ils.item_soh), 0))
+                               - (  GREATEST(ils.reserved_qty, 0)
+                                + GREATEST(ils.rtv_qty, 0)
+                                + GREATEST(ils.non_sellable_qty, 0)
+                                + GREATEST(ils.cust_resv_qty, 0)),
+                               0))    stock_on_hand                        
+                       FROM alloc_item_details_temp_1 gtt,
+                            (SELECT DISTINCT alloc_no ,
+                                    tran_item,
+                                    source_item,
+                                    diff_id,
+                                    assign_default_wh wh_id
+                               FROM alloc_calc_item_loc aacil 
+                              WHERE alloc_no = %s) tmp,
+                            item_location            ils
+                      WHERE gtt.alloc_no = %s
+                        AND ils.item = tmp.tran_item
+                        AND ils.location = tmp.wh_id
+                        AND gtt.source_item = tmp.source_item
+                      GROUP BY gtt.alloc_no,
+                            gtt.wh_id,
+                            gtt.source_item,
+                            gtt.diff_id)
+              UPDATE alloc_item_details_temp tgt, src 
+			    SET tgt.stock_on_hand = src.stock_on_hand
+			  WHERE tgt.alloc_no = src.alloc_no
+                AND tgt.source_item = src.source_item
+                AND COALESCE(tgt.diff_id,'$') = COALESCE(src.diff_id,'$');"  
+
+  # L_mer_2: "WITH src AS
+               # (SELECT gtt.alloc_no,
+                       # gtt.wh_id,
+                       # gtt.source_item,
+                       # gtt.diff_id,
+                       # ff.future_fulfill_qty                        
+                  # FROM alloc_item_details_temp1 gtt,
+                       # (SELECT dr.diff_id,
+                               # dr.source_item,
+                               # SUM(future_fulfill_qty) 
+                               # OVER(PARTITION BY dr.source_item,
+                                       # dr.diff_id) future_fulfill_qty 
+                          # FROM (SELECT alloc_no,
+                                       # assign_default_wh,
+                                       # source_item,
+                                       # source_item_desc,
+                                       # diff_id,
+                                   # SUM(future_fulfill_qty) future_fulfill_qty                                       
+                                  # FROM (SELECT tmp.alloc_no,
+                                               # tmp.assign_default_wh,
+                                               # tmp.source_item,
+                                               # im.item_desc source_item_desc,
+                                               # tmp.diff_id,
+                                               # tmp.tran_item,
+                                               # SUM( COALESCE (tmp.wh_on_order_qty, 0)
+                                                   # + COALESCE(ils.expected_qty,0) 
+                                                   # + COALESCE(ils.shipped_qty,0)
+                                                   # ) 
+                                                  # OVER(PARTITION BY tmp.alloc_no,
+                                                                 # tmp.assign_default_wh,
+                                                                 # tmp.source_item,
+                                                                 # tmp.diff_id,
+                                                                 # tran_item)
+                                               # /COUNT(tmp.to_loc)  OVER(PARTITION BY tmp.alloc_no,
+                                                                                     # tmp.assign_default_wh,
+                                                                                     # tmp.source_item,
+                                                                                     # tmp.diff_id,
+                                                                                     # tran_item) future_fulfill_qty
+                                          # FROM alloc_calc_item_loc tmp, 
+                                               # item_dtl im,
+                                               # item_location ils
+                                         # WHERE alloc_no = %s 
+                                           # AND tmp.source_item = im.item
+                                           # AND ils.item=tmp.source_item  
+                                           # AND ils.location=tmp.assign_default_wh 
+                                           # AND ils.item=tmp.tran_item)st
+                                # GROUP BY alloc_no,
+                                         # assign_default_wh,
+                                         # source_item,
+                                         # source_item_desc,
+                                         # diff_id)dr) ff
+                 # WHERE gtt.alloc_no = %s
+                   # AND gtt.source_item = ff.source_item
+                   # AND COALESCE(gtt.diff_id,'$') = COALESCE(ff.diff_id,'$'))                           
+    
+            # UPDATE     alloc_item_details_temp tgt, src 
+               # SET tgt.future_fulfill_qty = src.future_fulfill_qty, 
+                   # tgt.wh_id = NULL 
+             # WHERE tgt.alloc_no = src.alloc_no
+               # AND tgt.source_item = src.source_item                
+               # AND COALESCE(tgt.diff_id,'$') = COALESCE(src.diff_id,'$');"
+               
+  L_mer_2: "WITH 
+			    src 
+			    AS(SELECT gtt.alloc_no,
+                           gtt.wh_id,
+                           gtt.source_item,
+                           gtt.diff_id,
+                           ff.future_fulfill_qty                        
+                       FROM alloc_item_details_temp_1 gtt,
+                           (SELECT DISTINCT dr.diff_id,
+                                 dr.source_item,
+                                 SUM(future_fulfill_qty) 
+                                 OVER (PARTITION BY dr.source_item,
+                                           dr.diff_id) future_fulfill_qty 
+                             FROM (SELECT alloc_no,
+                                       assign_default_wh,
+                                       source_item,
+                                       source_item_desc,
+                                       diff_id,
+                                       SUM(future_fulfill_qty) future_fulfill_qty                                       
+                                   FROM (SELECT DISTINCT tmp.alloc_no,
+                                             tmp.assign_default_wh,
+                                             tmp.source_item,
+                                             im.item_desc source_item_desc,
+                                             tmp.diff_id,
+                                             tmp.tran_item,
+                                             SUM( COALESCE (tmp.wh_on_order_qty, 0)
+                                                + COALESCE(ils.expected_qty,0) 
+                                                + COALESCE(ils.shipped_qty,0)
+                                                ) 
+                                             OVER (PARTITION BY tmp.alloc_no,
+                                                           tmp.assign_default_wh,
+                                                           tmp.source_item,
+                                                           tmp.diff_id,
+                                                           tran_item)/(SELECT COUNT(DISTINCT tmp.to_loc) 
+														                 FROM alloc_calc_item_loc tmp 
+																		WHERE alloc_no = %s 
+																		  AND tmp.source_item = im.item
+																		  AND ils.item=tmp.source_item  
+																		  AND ils.location=tmp.assign_default_wh 
+																		  AND ils.item=tmp.tran_item 
+																		GROUP BY tmp.alloc_no,
+																			  tmp.assign_default_wh,
+																			  tmp.source_item,
+																			  tmp.diff_id,
+																			  tran_item) future_fulfill_qty														   
+                                         FROM alloc_calc_item_loc tmp,       
+                                             item_dtl im,
+                                             item_location ils
+                                        WHERE alloc_no = %s 
+                                          AND tmp.source_item = im.item
+                                          AND ils.item=tmp.source_item  
+                                          AND ils.location=tmp.assign_default_wh 
+                                          AND ils.item=tmp.tran_item) temp
+                                    GROUP BY alloc_no,
+                                         assign_default_wh,
+                                         source_item,
+                                         source_item_desc,
+                                         diff_id)dr) ff
+                      WHERE gtt.alloc_no = %s
+                        AND gtt.source_item = ff.source_item
+                        AND COALESCE(gtt.diff_id,'$') = COALESCE(ff.diff_id,'$'))
+                   UPDATE alloc_item_details_temp tgt, src 
+				      SET tgt.future_fulfill_qty = src.future_fulfill_qty,
+                          tgt.WH_ID = NULL
+					WHERE tgt.alloc_no = src.alloc_no
+                      AND tgt.source_item = src.source_item
+                      AND COALESCE(tgt.diff_id,'$') = COALESCE(src.diff_id,'$');"
+
+  L_mer_1_style: "WITH 
+                    src 
+                    AS(SELECT gtt.alloc_no,
+                          gtt.wh_id,
+                          gtt.source_item,
+                          gtt.diff_id,
+                          SUM(
+                            GREATEST (
+                                (GREATEST ((ils.item_soh), 0))
+                               - (  GREATEST (ils.reserved_qty, 0)
+                                + GREATEST (ils.rtv_qty, 0)
+                                + GREATEST (ils.non_sellable_qty, 0)
+                                + GREATEST (ils.cust_resv_qty, 0)),
+                               0))    stock_on_hand                        
+                       FROM alloc_item_details_temp_1 gtt,
+                          (SELECT DISTINCT alloc_no ,tran_item,
+                                    source_item,
+                                    diff_id,
+                                    assign_default_wh wh_id
+                            FROM alloc_calc_item_loc aacil 
+                            WHERE alloc_no = %s) tmp,
+                          item_dtl     im,
+                          item_location            ils
+                       WHERE     gtt.alloc_no = %s
+                          AND im.item_parent = gtt.source_item
+                          AND im.aggr_diff_id = gtt.diff_id
+                          AND ils.item = im.item
+                          AND ils.location = tmp.wh_id
+                          AND gtt.source_item = tmp.source_item
+                          AND gtt.diff_id = tmp.diff_id
+                          AND ils.item=tmp.tran_item
+                     GROUP BY gtt.alloc_no,
+                          gtt.wh_id,
+                          gtt.source_item,
+                          gtt.diff_id)
+                UPDATE alloc_item_details_temp tgt, src 
+                   SET tgt.stock_on_hand = src.stock_on_hand
+                 WHERE tgt.alloc_no = src.alloc_no
+                   AND tgt.source_item = src.source_item
+                   AND tgt.diff_id = src.diff_id;"  
+  
+  L_mer_2_style: "WITH 
+                   src 
+                   AS(SELECT gtt.alloc_no,
+                             gtt.wh_id,
+                             gtt.source_item,
+                             gtt.diff_id,
+                             ff.future_fulfill_qty                        
+                        FROM alloc_item_details_temp_1 gtt,
+                           (SELECT DISTINCT dr.diff_id,
+                                  dr.source_item,
+                                  SUM(future_fulfill_qty) 
+                                    OVER (PARTITION BY dr.source_item,
+                                                  dr.diff_id) future_fulfill_qty 
+                              FROM (SELECT alloc_no,
+                                        assign_default_wh,
+                                        source_item,
+                                        source_item_desc,
+                                        diff_id,
+                                        SUM(future_fulfill_qty) future_fulfill_qty
+                                    FROM (SELECT DISTINCT tmp.alloc_no,
+                                              tmp.assign_default_wh,
+                                              tmp.source_item,
+                                              im.item_desc source_item_desc,
+                                              tmp.diff_id,
+                                              tmp.tran_item,
+                                              SUM( COALESCE (tmp.wh_on_order_qty, 0)
+                                                   + COALESCE(ils.expected_qty,0) 
+                                                   + COALESCE(ils.shipped_qty,0)
+                                                  ) 
+                                                OVER (PARTITION BY tmp.alloc_no,
+                                                       tmp.assign_default_wh,
+                                                       tmp.source_item,
+                                                       tmp.diff_id,
+                                                       tran_item)/(SELECT COUNT(DISTINCT tmp.to_loc) 
+                                                                     FROM alloc_calc_item_loc tmp 
+                                                                    WHERE alloc_no = %s 
+                                                                      AND tmp.source_item = im.item
+                                                                      AND ils.item_parent=tmp.source_item 
+                                                                      AND ils.location=tmp.assign_default_wh 
+                                                                      AND ils.item=tmp.tran_item
+                                                                    GROUP BY tmp.alloc_no,
+                                                                          tmp.assign_default_wh,
+                                                                          tmp.source_item,
+                                                                          tmp.diff_id,
+                                                                          tran_item) future_fulfill_qty												   
+                                                    FROM alloc_calc_item_loc tmp, 
+                                                       item_dtl im,
+                                                       item_location ils
+                                                   WHERE alloc_no = %s 
+                                                    AND tmp.source_item = im.item
+                                                    AND ils.item_parent=tmp.source_item 
+                                                    AND ils.location=tmp.assign_default_wh 
+                                                    AND ils.item=tmp.tran_item) temp
+                                                   GROUP BY alloc_no,
+                                                       assign_default_wh,
+                                                       source_item,
+                                                       source_item_desc,
+                                                       diff_id) dr) ff
+                        WHERE gtt.alloc_no = %s
+                         AND gtt.source_item = ff.source_item
+                         AND gtt.diff_id = ff.diff_id)
+                   UPDATE alloc_item_details_temp tgt, src
+                      SET tgt.future_fulfill_qty = src.future_fulfill_qty,
+                          tgt.WH_ID = NULL
+                    WHERE tgt.alloc_no = src.alloc_no
+                      AND tgt.source_item = src.source_item
+                      AND tgt.diff_id = src.diff_id;"  
+
+  # L_mer_5: "WITH src AS
+              # (SELECT gtt.alloc_no,
+                      # gtt.wh_id,
+                      # gtt.source_item,
+                      # gtt.diff_id,
+                      # SUM(
+                          # GREATEST(
+                                # (GREATEST((ils.item_soh), 0))
+                              # - (  GREATEST(ils.reserved_qty, 0)
+                                 # + GREATEST(ils.rtv_qty, 0)
+                                 # + GREATEST(ils.non_sellable_qty, 0)
+                                 # + GREATEST(ils.cust_resv_qty, 0)),
+                              # 0))    stock_on_hand
+                 # FROM alloc_item_details_temp1 gtt,
+                      # item_location  ils
+                # WHERE gtt.alloc_no = %s
+                  # AND ils.item = gtt.source_item
+                  # AND ils.location = gtt.wh_id
+                # GROUP BY gtt.alloc_no,
+                         # gtt.wh_id,
+                         # gtt.source_item,
+                         # gtt.diff_id)                 
+             
+            # UPDATE alloc_item_details_temp tgt, src 
+               # SET tgt.stock_on_hand = src.stock_on_hand 
+             # WHERE tgt.alloc_no = src.alloc_no
+               # AND tgt.wh_id = src.wh_id
+               # AND tgt.source_item = src.source_item
+               # AND COALESCE(tgt.diff_id,'$') = COALESCE(src.diff_id,'$');"
+               
+  L_mer_5: "WITH 
+			 src 
+			   AS(SELECT gtt.alloc_no,
+                         gtt.wh_id,
+                         gtt.source_item,
+                         gtt.diff_id,
+                         SUM(
+                             GREATEST (
+                                   (GREATEST ((ils.item_soh), 0))
+                                 - (  GREATEST (ils.reserved_qty, 0)
+                                    + GREATEST (ils.rtv_qty, 0)
+                                    + GREATEST (ils.non_sellable_qty, 0)
+                                    + GREATEST (ils.cust_resv_qty, 0)),
+                                 0))    stock_on_hand
+                    FROM alloc_item_details_temp_1 gtt,
+                         item_location            ils
+                   WHERE gtt.alloc_no = %s
+                     AND ils.item = gtt.source_item
+                     AND ils.location = gtt.wh_id
+                   GROUP BY gtt.alloc_no,
+                         gtt.wh_id,
+                         gtt.source_item,
+                         gtt.diff_id)
+          UPDATE alloc_item_details_temp tgt, src
+			 SET tgt.stock_on_hand = src.stock_on_hand
+		   WHERE tgt.alloc_no = src.alloc_no
+             AND tgt.wh_id = src.wh_id
+             AND tgt.source_item = src.source_item
+             AND COALESCE(tgt.diff_id,'$') = COALESCE(src.diff_id,'$')"
+             
+  L_mer_5_style: "WITH 
+                    src 
+                     AS(SELECT gtt.alloc_no,
+                               gtt.wh_id,
+                               gtt.source_item,
+                               gtt.diff_id,
+                               SUM(
+                                  GREATEST (
+                                       (GREATEST ((ils.item_soh), 0))
+                                     - (  GREATEST (ils.reserved_qty, 0)
+                                        + GREATEST (ils.rtv_qty, 0)
+                                        + GREATEST (ils.non_sellable_qty, 0)
+                                        + GREATEST (ils.cust_resv_qty, 0)),
+                                     0))    stock_on_hand
+                            FROM alloc_item_details_temp_1 gtt,
+                               item_dtl     im,
+                               item_location            ils
+                           WHERE     gtt.alloc_no = %s
+                               AND im.item_parent = gtt.source_item
+                               AND COALESCE(im.aggr_diff_id,'$') = COALESCE(gtt.diff_id,'$')   
+                               AND ils.item = im.item
+                               AND ils.location = gtt.wh_id
+                         GROUP BY gtt.alloc_no,
+                               gtt.wh_id,
+                               gtt.source_item,
+                               gtt.diff_id)
+                   UPDATE alloc_item_details_temp tgt, src
+                      SET tgt.stock_on_hand = src.stock_on_hand
+                    WHERE tgt.alloc_no = src.alloc_no
+                      AND tgt.wh_id = src.wh_id
+                      AND tgt.source_item = src.source_item
+                      AND COALESCE(tgt.diff_id,'$') = COALESCE(src.diff_id,'$');"             
+  
+  # L_mer_7: "WITH src AS
+               # (SELECT DISTINCT alloc_no,
+                                # wh_id,
+                                # po_no,
+                                # location_id,
+                                # source_item,
+                                # diff_id,
+                                # sel_ind
+                  # FROM alloc_item_loc_dtls_prv_temp
+                 # WHERE alloc_no = %s)
+
+            # UPDATE alloc_item_loc_details_temp tgt, src
+               # SET tgt.sel_ind = src.sel_ind 
+             # WHERE  tgt.alloc_no = src.alloc_no
+               # AND tgt.wh_id = src.wh_id
+               # AND COALESCE (tgt.po_no, '$') = COALESCE (src.po_no, COALESCE (tgt.po_no, '$'))
+               # AND tgt.location_id = src.location_id
+               # AND tgt.source_item = src.source_item
+               # AND COALESCE(tgt.diff_id,'$') = COALESCE(src.diff_id,'$');"
+               
+  L_mer_7: "WITH 
+               src 
+                AS (SELECT DISTINCT alloc_no,
+                                    wh_id,
+                                    po_no,
+                                    location_id,
+                                    source_item,
+                                    diff_id,
+                                    sel_ind
+                      FROM alloc_item_loc_dtls_prv_temp
+                     WHERE alloc_no = %s)
+            UPDATE alloc_item_loc_details_temp tgt, src 
+               SET tgt.sel_ind = src.sel_ind
+            WHERE tgt.alloc_no = src.alloc_no
+               AND tgt.wh_id = src.wh_id
+               AND COALESCE (tgt.po_no, '$') = COALESCE (src.po_no, COALESCE (tgt.po_no, '$'))
+               AND tgt.location_id = src.location_id
+               AND tgt.source_item = src.source_item
+               AND COALESCE(tgt.diff_id,'$') = COALESCE(src.diff_id,'$')"
+  #Changes by Shubham End#               
+
+  Q_item_hdr_data: " SELECT * FROM alloc_item_header_temp WHERE alloc_no = %s; "
+
+  Q_item_loc_data: " SELECT * FROM alloc_item_loc_details_temp WHERE alloc_no = %s; "
+
+  Q_item_dtls_data: " SELECT * FROM alloc_item_details_temp WHERE alloc_no = %s; "
+
+update_alloc_qty_dtl:
+  Q_upd_sku_calc_qty: "UPDATE alloc_calc_item_loc
+                          SET sku_calc_qty = alloc_sku_calc_qty, 
+                              alloc_sku_calc_qty = NULL
+                        WHERE alloc_no = %s 
+                          AND alloc_sku_calc_qty IS NOT NULL;"

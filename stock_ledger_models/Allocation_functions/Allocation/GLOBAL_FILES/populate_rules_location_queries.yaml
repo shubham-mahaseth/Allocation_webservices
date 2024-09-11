@@ -1,0 +1,352 @@
+#############################################################
+# Created By - Priyanshu Pandey                             #
+# File Name - populate_store_queries.yaml                   #
+# Purpose - contains all queries populating stores          #
+#############################################################
+
+populate_store: 
+   Q_cre_temp_tbl: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_location_temp
+                                                                           (ALLOC_NO             INT    
+                                                                           ,LOC                  VARCHAR(25) 
+                                                                           ,LOC_DESC             VARCHAR(150) 
+                                                                           ,LOC_TYPE             VARCHAR(1)   
+                                                                           ,DEFAULT_WH           NUMERIC(4)     
+                                                                           ,GROUP_ID             VARCHAR(40)  
+                                                                           ,GROUP_DESC           VARCHAR(600) 
+                                                                           ,LIKE_LOC             NUMERIC(10)    
+                                                                           ,LIKE_LOC_DESC        VARCHAR(150) 
+                                                                           ,WEIGHT_PCT           NUMERIC(12)  
+                                                                           ,CLEARANCE_IND        VARCHAR(1)   
+                                                                           ,ITEM_LOC_STATUS      VARCHAR(1)   
+                                                                           ,RELEASE_DATE         DATE          
+                                                                           ,DEL_IND              VARCHAR(1)
+                                                                           ,CONSTRAINT chk_clear_ind1 CHECK (CLEARANCE_IND IN ('Y','N','L'))
+                                                                           ,CONSTRAINT pk_loc PRIMARY KEY (ALLOC_NO,LOC));"
+
+   Q_cre_store_temp: "CREATE TEMPORARY TABLE IF NOT EXISTS store_temp (ALLOC_NO INT,
+                                                                       LOCATION VARCHAR(25),
+                                                                       CONSTRAINT pk_loc PRIMARY KEY (ALLOC_NO,LOCATION));"
+
+   Q_ins_store_tmp: "INSERT IGNORE INTO store_temp (alloc_no,
+                                                    location)
+                            SELECT alloc_no,
+                                   loc location
+                              FROM alloc_location_temp
+                             WHERE alloc_no = %s;"
+
+   Q_rtv_store_tmp: "INSERT IGNORE INTO store_temp (alloc_no,
+                                                    location)
+                            /*SELECT alg.alloc_no,
+                                   al.location_id location
+                              FROM alloc_location al,
+                                   alloc_loc_group_detail alg
+                             WHERE alg.alloc_no = ''
+                               AND alg.loc_group_id = al.loc_group_id;*/
+                            SELECT alloc_no,
+                                   loc location
+                              FROM alloc_location_temp
+                             WHERE alloc_no = %s;"
+
+   Q_del_store_temp: "DELETE FROM store_temp WHERE alloc_no =%s;"
+
+   Q_fetch_loc: "SELECT * FROM alloc_location_temp WHERE alloc_no = %s;"
+   
+   Q_del_loc: "DELETE FROM alloc_location_temp
+                     WHERE alloc_no = %s;"
+   
+   Q_ins_store: "INSERT IGNORE INTO alloc_location_temp (alloc_no,
+                                                         loc,
+                                                         loc_desc,
+                                                         loc_type,
+                                                         default_wh,
+                                                         group_id,
+                                                         group_desc,
+                                                         like_loc,
+                                                         like_loc_desc,
+                                                         weight_pct,
+                                                         clearance_ind,
+                                                         item_loc_status,
+                                                         release_date,
+                                                         del_ind)
+                        SELECT {} alloc_no,
+                               st.store,
+                               st.store_desc,
+                               'L' loc_type,
+                               st.def_wh,
+                               NULL group_id,
+                               NULL group_desc,
+                               NULL like_loc,
+                               NULL like_loc_desc,
+                               NULL weight_pct,
+                               'N'  clearance_ind,
+                               '{}'  item_loc_status,
+                               NULL release_date,
+                               'N' del_ind
+                          FROM store st
+                         WHERE st.store IN {}
+                           AND st.store NOT IN {}   /*exclude loc*/
+                           AND st.status IN ('A')
+                           AND st.stock_holding_ind = 'Y'
+                           AND(   st.close_ord_date IS NULL
+                               OR st.close_ord_date>=curdate())
+                           AND st.open_date<=curdate()
+                           AND st.def_wh IS NOT NULL
+                           AND NOT EXISTS(SELECT 1
+                                            FROM store_temp tmp
+                                           WHERE tmp.alloc_no = {} 
+                                             AND st.store    = tmp.location);"
+   
+   Q_ins_store_list: "INSERT IGNORE INTO alloc_location_temp (alloc_no,
+                                                              loc,
+                                                              loc_desc,
+                                                              loc_type,
+                                                              default_wh,
+                                                              group_id,
+                                                              group_desc,
+                                                              like_loc,
+                                                              like_loc_desc,
+                                                              weight_pct,
+                                                              clearance_ind,
+                                                              item_loc_status,
+                                                              release_date,
+                                                              del_ind)
+                             SELECT {} alloc_no,
+                                    st.store,
+                                    st.store_desc,
+                                    'M' loc_type,
+                                    st.def_wh,
+                                    sl.loc_list group_id,
+                                    sl.loc_list_desc group_desc,
+                                    NULL like_loc, 
+                                    NULL like_loc_desc,
+                                    NULL weight_pct,
+                                    'N'  clearance_ind,
+                                    '{}'  item_loc_status,
+                                    NULL release_date,
+                                    'N' del_ind
+                               FROM store st,
+                                    store_list sl
+                              WHERE sl.loc_list  IN {}
+                                AND st.store NOT IN {}   /*exclude loc*/
+                                AND st.store = sl.location
+                                AND st.status IN ('A')
+                                AND st.stock_holding_ind = 'Y'
+                                AND(   st.close_ord_date IS NULL
+                                    OR st.close_ord_date>=curdate())
+                                AND st.open_date<=curdate()
+                                AND st.def_wh IS NOT NULL
+                                AND NOT EXISTS(SELECT 1
+                                                 FROM store_temp al
+                                                WHERE al.alloc_no = {} 
+                                                  AND st.store    = al.location
+                                                  AND al.location = sl.location);"
+   
+   Q_ins_store_trait: "INSERT IGNORE INTO alloc_location_temp (alloc_no,
+                                                               loc,
+                                                               loc_desc,
+                                                               loc_type,
+                                                               default_wh,
+                                                               group_id,
+                                                               group_desc,
+                                                               like_loc,
+                                                               like_loc_desc,
+                                                               weight_pct,
+                                                               clearance_ind,
+                                                               item_loc_status,
+                                                               release_date,
+                                                               del_ind)
+                             SELECT {} alloc_no,
+                                    st.store,
+                                    st.store_desc,
+                                    'T' loc_type,
+                                    st.def_wh,
+                                    str.loc_trait  group_id,
+                                    str.trait_desc group_desc,
+                                    NULL like_loc, 
+                                    NULL like_loc_desc,
+                                    NULL weight_pct,
+                                    'N'  clearance_ind,
+                                    '{}'  item_loc_status,
+                                    NULL release_date,
+                                    'N' del_ind
+                               FROM store st,
+                                    store_traits str
+                              WHERE str.loc_trait  IN {}
+                                AND st.store   NOT IN {}   /*exclude loc*/
+                                AND st.store = str.store
+                                AND st.status IN ('A')
+                                AND st.stock_holding_ind = 'Y'
+                                AND(   st.close_ord_date IS NULL
+                                    OR st.close_ord_date>=curdate())
+                                AND st.open_date<=curdate()
+                                AND st.def_wh IS NOT NULL
+                                AND NOT EXISTS(SELECT 1
+                                                 FROM store_temp al
+                                                WHERE al.alloc_no = {} 
+                                                  AND st.store    = al.location
+                                                  AND al.location = str.store);"
+   
+   Q_ins_all_store: "INSERT IGNORE INTO alloc_location_temp (alloc_no,
+                                                             loc,
+                                                             loc_desc,
+                                                             loc_type,
+                                                             default_wh,
+                                                             group_id,
+                                                             group_desc,
+                                                             like_loc,
+                                                             like_loc_desc,
+                                                             weight_pct,
+                                                             clearance_ind,
+                                                             item_loc_status,
+                                                             release_date,
+                                                             del_ind)
+                             SELECT {} alloc_no,
+                                    st.store,
+                                    st.store_desc,
+                                    'A' loc_type,
+                                    st.def_wh,
+                                    'ALL' group_id,
+                                    'ALL STORES' group_desc,
+                                    NULL like_loc, 
+                                    NULL like_loc_desc,
+                                    NULL weight_pct,
+                                    'N'  clearance_ind,
+                                    '{}' item_loc_status,
+                                    NULL release_date,
+                                    'N' del_ind
+                               FROM store st
+                              WHERE st.store NOT IN {}
+                                AND st.status IN ('A')
+                                AND st.stock_holding_ind = 'Y'
+                                AND (   st.close_ord_date IS NULL
+                                     OR st.close_ord_date>=curdate())
+                                AND st.open_date<=curdate()
+                                AND st.def_wh IS NOT NULL
+                                AND NOT EXISTS(SELECT 1
+                                                 FROM store_temp al
+                                                WHERE al.alloc_no = {}
+                                                  AND st.store    = al.location);"
+
+   Q_get_alloc_criteria: "SELECT MAX(alloc_criteria) ALLOC_CRITERIA 
+                           FROM alloc_head
+                          WHERE alloc_no = %s;"
+
+
+
+retrieve_rule:
+   Q_cre_tmp_tbl: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_rule_temp(RULE_NO                       DECIMAL(40,0)
+                                                                        ,ALLOC_NO                     DECIMAL(20,0)
+                                                                        ,TEMPLATE_NO                  DECIMAL(20,0)
+                                                                        ,RULE_TYPE                    VARCHAR(1)
+                                                                        ,RULE_LEVEL                   VARCHAR(5)
+                                                                        ,EXACT_IND                    VARCHAR(1)
+                                                                        ,SIZE_PROFILE_IND             VARCHAR(1)
+                                                                        ,CASCADE_IND                  VARCHAR(1)
+                                                                        ,NET_NEED_IND                 VARCHAR(1)
+                                                                        ,USE_RULE_LEVEL_ON_HAND_IND   VARCHAR(1)
+                                                                        ,INCLUDE_CLEARANCE_STOCK_IND  VARCHAR(1)
+                                                                        ,REGULAR_SALES_IND            VARCHAR(1)
+                                                                        ,PROMO_SALES_IND              VARCHAR(1)
+                                                                        ,CLEARANCE_SALES_IND          VARCHAR(1)
+                                                                        ,INCLUDE_INV_IN_MIN_IND       VARCHAR(1)
+                                                                        ,INCLUDE_INV_IN_MAX_IND       VARCHAR(1)
+                                                                        ,ON_ORDER_COMMIT_DATE         DATE
+                                                                        ,ON_ORDER_COMMIT_WEEKS        DECIMAL(12,4)
+                                                                        ,IWOS_WEEKS                   DECIMAL(12,4)
+                                                                        ,WEEKS_THIS_YEAR              DECIMAL(2,0)
+                                                                        ,WEEKS_LAST_YEAR              DECIMAL(2,0)
+                                                                        ,WEEKS_FUTURE                 DECIMAL(4,0)
+                                                                        ,START_DATE1                  DATE
+                                                                        ,END_DATE1                    DATE
+                                                                        ,START_DATE2                  DATE
+                                                                        ,END_DATE2                    DATE
+                                                                        ,CORPORATE_RULE_ID            DECIMAL(10,0)
+                                                                        ,INCLUDE_MID_TIER_ON_HAND_IND VARCHAR(1)
+                                                                        ,ENFORCE_PRES_MIN_IND         VARCHAR(1)
+                                                                        ,LEAD_TIME_NEED_IND           VARCHAR(1)
+                                                                        ,LEAD_TIME_NEED_RULE_TYPE     VARCHAR(1)
+                                                                        ,LEAD_TIME_NEED_START_DATE    DATE
+                                                                        ,LEAD_TIME_NEED_END_DATE      DATE
+                                                                        ,CONVERT_TO_PACK              VARCHAR(1));"
+
+   Q_ins_rule: "INSERT INTO alloc_rule_temp(rule_no                      
+                                            ,alloc_no                    
+                                            ,template_no                 
+                                            ,rule_type                   
+                                            ,rule_level                  
+                                            ,exact_ind                   
+                                            ,size_profile_ind            
+                                            ,cascade_ind                 
+                                            ,net_need_ind                
+                                            ,use_rule_level_on_hand_ind  
+                                            ,include_clearance_stock_ind 
+                                            ,regular_sales_ind           
+                                            ,promo_sales_ind             
+                                            ,clearance_sales_ind         
+                                            ,include_inv_in_min_ind      
+                                            ,include_inv_in_max_ind      
+                                            ,on_order_commit_date        
+                                            ,on_order_commit_weeks       
+                                            ,iwos_weeks                  
+                                            ,weeks_this_year             
+                                            ,weeks_last_year             
+                                            ,weeks_future                
+                                            ,start_date1                 
+                                            ,end_date1                   
+                                            ,start_date2                 
+                                            ,end_date2                   
+                                            ,corporate_rule_id           
+                                            ,include_mid_tier_on_hand_ind
+                                            ,enforce_pres_min_ind        
+                                            ,lead_time_need_ind          
+                                            ,lead_time_need_rule_type    
+                                            ,lead_time_need_start_date   
+                                            ,lead_time_need_end_date     
+                                            ,convert_to_pack)
+                  SELECT rule_no                      
+                         ,alloc_no                    
+                         ,template_no                 
+                         ,rule_type                   
+                         ,rule_level                  
+                         ,exact_ind                   
+                         ,size_profile_ind            
+                         ,cascade_ind                 
+                         ,net_need_ind                
+                         ,use_rule_level_on_hand_ind  
+                         ,include_clearance_stock_ind 
+                         ,regular_sales_ind           
+                         ,promo_sales_ind             
+                         ,clearance_sales_ind         
+                         ,include_inv_in_min_ind      
+                         ,include_inv_in_max_ind      
+                         ,on_order_commit_date        
+                         ,on_order_commit_weeks       
+                         ,iwos_weeks                  
+                         ,weeks_this_year             
+                         ,weeks_last_year             
+                         ,weeks_future                
+                         ,start_date1                 
+                         ,end_date1                   
+                         ,start_date2                 
+                         ,end_date2                   
+                         ,corporate_rule_id           
+                         ,include_mid_tier_on_hand_ind
+                         ,enforce_pres_min_ind        
+                         ,lead_time_need_ind          
+                         ,lead_time_need_rule_type    
+                         ,lead_time_need_start_date   
+                         ,lead_time_need_end_date     
+                         ,convert_to_pack
+                    FROM alloc_rule
+                   WHERE alloc_no =%s;"
+
+   Q_del_rule: "DELETE FROM alloc_rule_temp WHERE alloc_no =%s;"
+
+   Q_fetch_alloc_rule: "SELECT ar.*,
+                               ah.WH_STORE_REL_IND,
+                               ah.DEF_AUTO_PRE_MIN_IND
+                          FROM alloc_rule ar,
+                               alloc_head ah
+                         WHERE ar.alloc_no = %s
+                           AND ar.alloc_no = ah.alloc_no;"
+

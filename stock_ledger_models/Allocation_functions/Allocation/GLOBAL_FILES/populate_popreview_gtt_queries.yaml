@@ -1,0 +1,138 @@
+populate_popreview_gtt:
+  Q_create_wi_summary_tbl: "CREATE TEMPORARY TABLE IF NOT EXISTS alloc_whatif_summary_temp (MULTI_WH 	 		VARCHAR(1),
+																                            PO_TYPE	     		VARCHAR(3),
+																                            ALLOC_NO	 		NUMERIC(15,0),
+																                            TRAN_ITEM	 		VARCHAR(25),
+																                            SOURCE_ITEM	 		VARCHAR(25),
+																                            ITEM_DESC	 		VARCHAR(250),
+																                            DIFF_ID	     		VARCHAR(10),
+																                            LOC	            	NUMERIC(10,0),
+																                            LOC_TYPE	    	VARCHAR(1),
+																                            RELEASE_DATE		DATE,
+																                            SUPPLIER	   		NUMERIC(10,0),
+																                            ORIG_COUNTRY		VARCHAR(3),
+																                            FINAL_ALLOCATION	DECIMAL(12,4),
+																                            SOH					DECIMAL(12,4),
+																                            FUTURE_FULFILL		DECIMAL(12,4),
+																                            PO_QTY				DECIMAL(12,4),
+																                            ORDER_NO			VARCHAR(50),
+																                            ERROR_DESC			VARCHAR(1000));"
+
+  Q_del_whatif_temp: "DELETE FROM alloc_whatif_summary_temp;"
+
+  Q_ins_temp: "INSERT INTO alloc_whatif_summary_temp(multi_wh,
+                                                     po_type,
+                                                     alloc_no,
+                                                     tran_item,
+                                                     source_item,
+                                                     diff_id,
+                                                     loc,
+                                                     loc_type,
+                                                     release_date,
+                                                     supplier,
+                                                     orig_country,
+                                                     final_allocation,
+                                                     soh,
+                                                     future_fulfill,
+                                                     po_qty,
+                                                     order_no,
+                                                     item_desc)
+                                              SELECT awst.multi_wh,
+                                                     awst.po_type,
+                                                     awst.alloc_no,
+                                                     awst.tran_item,
+                                                     awst.source_item,
+                                                     awst.diff_id,
+                                                     awst.loc,
+                                                     awst.loc_type,
+                                                     awst.release_date,
+                                                     awst.supplier,
+                                                     awst.orig_country,
+                                                     awst.final_allocation,
+                                                     awst.soh,
+                                                     awst.future_fulfill,
+                                                     ROUND((CASE WHEN awst.po_qty >0 THEN awst.po_qty ELSE 0 END)/supp_pack_size)*supp_pack_size, 
+                                                     awst.order_no,
+                                                     awst.item_desc
+                                                FROM alloc_whatif_summary awst,
+                                                     item_sup_location isc 
+                                               WHERE awst.sel_ind = 'Y' 
+                                                 AND awst.alloc_no = %s 
+                                                 AND ROUND((CASE WHEN awst.po_qty >0 THEN awst.po_qty ELSE 0 END)/supp_pack_size) > 0 
+                                                 AND isc.item = awst.tran_item
+                                                 AND isc.supplier = awst.supplier 
+                                                 AND isc.origin_country_id = awst.orig_country;"
+
+
+  Q_sel_rec: "SELECT DISTINCT supplier,
+                              release_date,
+                              orig_country,
+                              loc,
+                              CASE
+                              WHEN loc_type='W'
+                                      AND multi_wh ='Y'
+                              THEN -1
+                              ELSE loc
+                                END eff_loc
+                        FROM alloc_whatif_summary_temp;"
+
+
+  Q_upd_records: "UPDATE alloc_whatif_summary_temp
+                              SET order_no = CONCAT('New', %s)
+                              WHERE supplier = %s
+                                  AND release_date = %s
+                                  AND orig_country = %s
+                                  AND loc = IF(%s  = -1, loc, %s)
+                                  AND order_no IS NULL;"
+
+  Q_fetch_gtt: "select * from alloc_whatif_summary_temp where alloc_no = %s"
+
+populate_popreview_temp:
+  Q_upd_wi_summary: "UPDATE alloc_whatif_summary AS tgt
+                             INNER JOIN (
+                                 SELECT DISTINCT multi_wh,
+                                        po_type,
+                                        alloc_no,
+                                        tran_item,
+                                        loc,
+                                        loc_type,
+                                        CASE WHEN order_no LIKE 'New%%' THEN NULL ELSE order_no END order_no,
+                                        CASE WHEN order_no LIKE 'New%%' THEN NULL ELSE po_qty END po_qty
+                                 FROM alloc_whatif_summary_temp
+                                 WHERE alloc_no = %s) AS src 
+                                 ON (tgt.alloc_no = src.alloc_no
+                                       AND tgt.tran_item = src.tran_item
+                                       AND tgt.loc = src.loc
+                                       AND tgt.loc_type = src.loc_type)
+                             SET tgt.multi_wh = src.multi_wh,
+                                 tgt.po_type = src.po_type,
+                                 tgt.order_no = src.order_no,
+                                 tgt.final_po_qty = src.po_qty;"
+
+  Q_upd_wi_summary_hdr_gtt: "UPDATE alloc_wisummary_hdr_tmp AS tgt
+                                      INNER JOIN (SELECT DISTINCT CASE WHEN order_no LIKE 'New%%' THEN 'Y' ELSE 'N' END sel_ind,
+                                      									    po_type,
+                                      									    alloc_no,
+                                      									    source_item,
+                                      									    diff_id,
+                                      									    loc,
+                                      									    loc_type,
+                                      									    supplier,
+                                      									    orig_country,
+                                      									    order_no,
+                                      									    CASE WHEN order_no LIKE 'New%%' THEN NULL ELSE po_qty END final_po_qty
+                                          FROM alloc_whatif_summary_temp
+                                          WHERE alloc_no = %s) AS src 
+                                          ON (tgt.alloc_no = src.alloc_no
+                                                AND tgt.source_item = src.source_item
+                                                AND IFNULL(tgt.diff_id,'$') = IFNULL(src.diff_id,'$')  
+                                                AND tgt.wh_id = src.loc
+                                                AND tgt.loc_type = src.loc_type
+                                                AND tgt.supplier = src.supplier
+                                                AND tgt.origin_country_id = src.orig_country)
+                                      SET tgt.sel_ind = src.sel_ind,
+                                          tgt.order_type = src.po_type,
+                                          tgt.order_no = src.order_no,
+                                          tgt.final_po_qty = src.final_po_qty;"
+  
+  
