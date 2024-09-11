@@ -21,6 +21,7 @@ CLOUD_DATABASE = 'proxima360_dev'
 #Changes for google  cloud end
 #import mysqlx                                    #Changes for google cloud
 
+
 # initialize Connector object                     #Changes for google cloud
 connector = Connector()                           #Changes for google cloud
 
