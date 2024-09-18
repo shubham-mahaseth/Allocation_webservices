@@ -800,8 +800,8 @@ calculate_new:
                                               AND h.tsf_type            <> 'CO'
                                               AND d.item                 = gtt.tran_item
                                               AND d.TRANSFERED_QTY       > COALESCE(d.SHIPPED_QTY, 0) + COALESCE(d.CANCELLED_QTY, 0)
-                                              AND DATE(h.approval_date) >= COALESCE(%s,DATE(h.approval_date))
-                                              AND DATE(h.approval_date) <= COALESCE(%s, DATE(h.approval_date))
+                                              AND DATE(h.approval_datetime) >= COALESCE(%s,DATE(h.approval_datetime))
+                                              AND DATE(h.approval_datetime) <= COALESCE(%s, DATE(h.approval_datetime))
                                      GROUP BY
                                               gtt.tran_item
                                             , gtt.assign_default_wh)

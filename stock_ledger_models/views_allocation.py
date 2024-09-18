@@ -277,8 +277,8 @@ def update_CreateGrid_Avail_table(data):
         D_keys=[]
         for row in data:
             for col in row:
-                ALLOC_NO = row["ALLOC_NO"]
-                if row[col]==None or row[col]=="NULL" or row[col]=="NaN" or row[col]=="":
+                ALLOC_NO = row["ALLOC_NO"]    
+                if (row[col]==None or row[col]=="NULL" or row[col]=="NaN" or row[col]=="") and  col != 'AVAIL_QTY':
                     D_keys.append(col)
             for key in D_keys:
                 row.pop(key)
@@ -307,15 +307,20 @@ def update_CreateGrid_Avail_table(data):
                     if json_object[col]=="ASN":
                         json_object[col]="A"
 
-        O_status = 2                   
+        O_status = 2   
         for row in data:
             if "AVAIL_QTY" in row:
-                query="update alloc_itm_search_dtl set AVAIL_QTY = '{}'".format(row["AVAIL_QTY"])+" where "
+                avail_qty = row["AVAIL_QTY"]
+                if avail_qty in ["NULL", "NaN", None, ""]:
+                    avail_qty = "null"
+                else:
+                    avail_qty = "'{}'".format(avail_qty)
+                query="update alloc_itm_search_dtl set AVAIL_QTY = {}".format(avail_qty)+" where "
                 for col in row:
                     if col != "AVAIL_QTY":
+                        
                         query=query+ col +" = '"+ str(row[col]) +"' and "
                 query = query[:-4]+";"
-                #print(query)
                 mycursor.execute(query)
         connection.commit()
         return True
@@ -353,7 +358,6 @@ def update_CreateGrid_table(data):
             for k in list1:
                 row.pop(k)
             list1.clear()
-
         for json_object in data:
             for col in json_object:
                 if col=="ALLOC_CRITERIA":
@@ -407,7 +411,7 @@ def update_CreateGrid_table(data):
                 list1.clear()
                 for col in row:
                     query=query+ col +" = '"+ str(row[col]) +"' and "
-                query = query[:-4]+";"
+                query = query[:-4]+";"             
                 mycursor.execute(query)
                 connection.commit()
         return True
@@ -1220,7 +1224,7 @@ def calculation(request):
                         if (ALLOC_CRITERIA["ALLOC_CRITERIA"][0] == "F"):
                             print("EXECUTING DO_WHATIF_CALC")
                             result,err_msg2 = do_whatif_calc(connection,data["ALLOC_NO"])
-                            print("EXECUTED DO_WHATIF_CALC")
+                            print("EXECUTED DO_WHATIF_CALC",result,err_msg2)
                             if result:
                                 return JsonResponse({"status": 201, "message": str(data["ALLOC_NO"])+":Calculation Successful."})
                             else:
@@ -1230,7 +1234,7 @@ def calculation(request):
                         else:
                             print("EXECUTING DO_CALCULATION")
                             result,err_msg3 = do_calculation(connection,data["ALLOC_NO"])
-                            print("EXECUTED DO_CALCULATION : ",result)
+                            print("EXECUTED DO_CALCULATION : ",result,err_msg3)
                             if result:
                                 return JsonResponse({"status": 201, "message": str(data["ALLOC_NO"])+":Calculation Successful."})
                             else:
@@ -1848,8 +1852,8 @@ def Report(request):
                             release_date BETWEEN CURDATE() - INTERVAL 7 DAY AND CURDATE()
                       GROUP BY item_id;
                         """
-            #query1 ="SELECT * FROM alloc_xref;"
-            res_df=(pd.read_sql(query,connection)).to_dict("records")
+            query1 ="SELECT * FROM alloc_xref;"
+            res_df=(pd.read_sql(query1,connection)).to_dict("records")
             
             return JsonResponse(res_df, content_type="application/json",safe=False) 
         except Exception as error:
