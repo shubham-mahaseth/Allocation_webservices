@@ -39,7 +39,7 @@ func_load_split_data:
                                                                                 REF_2                VARCHAR(150),
                                                                                 ERR_IND              VARCHAR(1),
                                                                                 ERR_MESSAGE          VARCHAR(500),
-                                                                                CREATE_ID            VARCHAR(20),
+                                                                                CREATE_ID            VARCHAR(60),
                                                                                 CREATE_DATETIME      DATE,
                                                                                 LAST_UPDATE_ID       VARCHAR(25),
                                                                                 LAST_UPDATE_DATETIME DATE); "

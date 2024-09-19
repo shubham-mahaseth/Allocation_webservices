@@ -54,7 +54,7 @@ update_inv:
                                                                                     ,PO_TYPE              varchar(10)
                                                                                     ,ERR_IND              varchar(1)
                                                                                     ,ERR_MESSAGE          varchar(50)
-                                                                                    ,CREATE_ID            varchar(20)
+                                                                                    ,CREATE_ID            varchar(60)
                                                                                     ,CREATE_DATETIME      date
                                                                                     ,LAST_UPDATE_ID       varchar(25)
                                                                                     ,LAST_UPDATE_DATETIME datetime);"
