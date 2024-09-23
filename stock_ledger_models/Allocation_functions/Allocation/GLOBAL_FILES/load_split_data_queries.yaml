@@ -42,7 +42,7 @@ func_load_split_data:
                                                                                 ERR_MESSAGE          VARCHAR(50),
                                                                                 CREATE_ID            VARCHAR(60),
                                                                                 CREATE_DATETIME      DATE,
-                                                                                LAST_UPDATE_ID       VARCHAR(25),
+                                                                                LAST_UPDATE_ID       VARCHAR(60),
                                                                                 LAST_UPDATE_DATETIME DATE); "
   
   Q_chck_tbl: " SELECT count(1) chk

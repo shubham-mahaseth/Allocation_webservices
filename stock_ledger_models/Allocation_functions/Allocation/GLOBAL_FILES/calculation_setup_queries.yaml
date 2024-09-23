@@ -1716,9 +1716,9 @@ seed_calc_need:
                                                                                      LIKE_PACK_NO           VARCHAR(25) ,
                                                                                      LIKE_WEIGHT            DECIMAL(20,4) ,
                                                                                      LIKE_SIZE_PROF_IND     VARCHAR(1) ,
-                                                                                     CREATE_ID              VARCHAR(30) ,
+                                                                                     CREATE_ID              VARCHAR(60) ,
                                                                                      CREATE_DATETIME        DATE ,
-                                                                                     LAST_UPDATE_ID         VARCHAR(30) ,
+                                                                                     LAST_UPDATE_ID         VARCHAR(60) ,
                                                                                      LAST_UPDATE_DATETIME   DATE);
   Q_del_calc_need: "DELETE FROM alloc_calc_need_temp WHERE alloc_no = %s;"
 

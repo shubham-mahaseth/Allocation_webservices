@@ -56,7 +56,7 @@ update_inv:
                                                                                     ,ERR_MESSAGE          varchar(50)
                                                                                     ,CREATE_ID            varchar(60)
                                                                                     ,CREATE_DATETIME      date
-                                                                                    ,LAST_UPDATE_ID       varchar(25)
+                                                                                    ,LAST_UPDATE_ID       varchar(60)
                                                                                     ,LAST_UPDATE_DATETIME datetime);"
 
   Q_del_rfrs_tmp: "DELETE FROM alloc_itm_srch_rfrs_temp
@@ -736,9 +736,9 @@ setup_location:
                                                                                              LIKE_ITEM_WEIGHT       NUMERIC(20) ,
                                                                                              LOC_CLEARANCE_IND      VARCHAR(1) ,
                                                                                              LOC_STATUS_IND         VARCHAR(1) ,
-                                                                                             CREATE_ID              VARCHAR(30) ,
+                                                                                             CREATE_ID              VARCHAR(60) ,
                                                                                              CREATE_DATETIME        DATE ,
-                                                                                             LAST_UPDATE_ID         VARCHAR(30) ,
+                                                                                             LAST_UPDATE_ID         VARCHAR(60) ,
                                                                                              LAST_UPDATE_DATETIME   TIMESTAMP,
                                                                                              LIKE_SIZE_PROF_IND     VARCHAR(1) ,
                                                                                              SOM_QTY                NUMERIC(12) ,

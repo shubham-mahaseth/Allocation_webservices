@@ -1858,3 +1858,25 @@ def Report(request):
             return JsonResponse(res_df, content_type="application/json",safe=False) 
         except Exception as error:
             return JsonResponse({"status": 500, "message":str(error)})
+
+@csrf_exempt
+def update_alloc_status(request):
+    if request.method == 'POST':
+        try:
+            json_object   = json.loads(request.body)
+            data          = json_object[0]            
+            alloc_no      = data["ALLOC_NO"]
+            status        = data["STATUS"]
+            mycursor      = connection.cursor()            
+            I_query       = "UPDATE alloc_head SET status = %s WHERE ALLOC_NO = %s; "           
+            mycursor.execute(I_query,(status,alloc_no,))
+            
+            if mycursor.rowcount == 0 :
+                return JsonResponse({"status": 500, "message": "ALLOC STATUS NOT UPDATED"})
+            
+            return JsonResponse({"status": 200, "message": "Allocation Submitted Successfully" if status =="SUB" 
+                                 else str(alloc_no)+": Allocation Status is changed Successful."})
+        except Exception as error:
+            return JsonResponse({"status": 500, "message": str(error)})
+        finally:
+            connection.commit()        

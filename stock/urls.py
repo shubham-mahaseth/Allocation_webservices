@@ -99,7 +99,8 @@ from stock_ledger_models.views_allocation import (
     log_active_session,
     delete_active_session,
     update_actv_session,
-    Report
+    Report,
+    update_alloc_status,
 )
 
 from stock_ledger_models.views_header import (
@@ -224,6 +225,11 @@ from stock_ledger_models.views_SeedData import (
     insert_into_hier2,
     insert_into_hier3,
     insert_into_item_dtl
+)
+from stock_ledger_models.views_admin_roles import (
+    fetch_users_data,
+    fetch_roles_data,
+    fetch_user_role,
 )
 
 urlpatterns = [
@@ -388,6 +394,7 @@ urlpatterns = [
     path("delSession/",delete_active_session),
     path("resetSession/",update_actv_session),
     path("genReport/",Report),
+    path("updStatus/",update_alloc_status),
 
     # ********************************#
     #       ALLOCATION CRITERIA      #
@@ -523,4 +530,11 @@ urlpatterns = [
     path("insHier2/",insert_into_hier2),
     path("insHier3/",insert_into_hier3),
     path("insItmDtl/",insert_into_item_dtl),
+    
+    # ********************************************#
+    #            ALLOCATION ROLES                 #
+    # ********************************************#
+    path('userList/',fetch_users_data),
+    path('rolesList/',fetch_roles_data),
+    path('currrole/',fetch_user_role),
 ]                         
