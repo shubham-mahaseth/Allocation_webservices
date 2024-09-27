@@ -45,7 +45,7 @@ def update_alloc_detail_diff_qty(conn,
             df_chck_pack_data  = pd.read_sql(Q_chck_pack_data,conn,params=(I_alloc_no,I_item_id,I_location))
             if L_chck_alloc_level == 'T' and len(df_chck_pack_data) == 0:
 
-                return 0,True
+                return no_data,True
             else:
                 L_adj_qty = pd.read_sql(Q_round_adj_qty,conn,params=(I_adj_qty,))
                 I_adj_qty = L_adj_qty.adj_qty[0]
