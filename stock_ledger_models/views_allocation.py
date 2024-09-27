@@ -47,7 +47,6 @@ from .Allocation_functions.Allocation.INVENTORY_SETUP.update_latest_inv_wrapper 
 from .Allocation_functions.Allocation.SCHEDULE.retreive_schedule_data_wrapper import retreive_schedule_data
 from .Allocation_functions.Allocation.CREATE_SCREEN.split_button_wrapper import split_func
 
-
 conn_global =None
 conn_dict = {}
 '''
@@ -1853,7 +1852,7 @@ def Report(request):
                       GROUP BY item_id;
                         """
             query1 ="SELECT * FROM alloc_xref;"
-            res_df=(pd.read_sql(query1,connection)).to_dict("records")
+            res_df=list((pd.read_sql(query,connection)).to_dict("records"))
             
             return JsonResponse(res_df, content_type="application/json",safe=False) 
         except Exception as error:

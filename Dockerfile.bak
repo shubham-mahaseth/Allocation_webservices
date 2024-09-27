@@ -15,7 +15,6 @@ RUN python3 -m pip install PyMySQL
 RUN pip install --upgrade google-cloud-speech
 RUN pip install google-cloud
 RUN pip install storage
-RUN pip install bcrypt
 COPY . .
 CMD python manage.py runserver 0.0.0.0:8000
 
