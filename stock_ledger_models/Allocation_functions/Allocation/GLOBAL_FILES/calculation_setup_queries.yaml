@@ -4782,7 +4782,7 @@ setup_hier1_sales_fcst_need:
                                                  tmp.to_loc,
                                                  tmp.hier1,
                                                  tmp.eow_date,
-                                                 SUM(COALESCE (dsh.fcst_sales, 0)
+                                                 SUM(COALESCE (dsh.forecast_sales, 0)
                                                      * IF (tmp.weight IS NULL, 1.0, tmp.weight)
                                                      ) sales
                                             FROM hier1_sales_forecast dsh, alloc_calc_need_temp_1 tmp
@@ -4814,7 +4814,7 @@ setup_hier1_sales_fcst_need:
                                                      tmp.to_loc,
                                                      tmp.hier1,
                                                      tmp.eow_date,
-                                                     SUM(COALESCE (dsh.fcst_sales, 0)
+                                                     SUM(COALESCE (dsh.forecast_sales, 0)
                                                          * IF (tmp.weight IS NULL, 1.0,tmp.weight)
                                                          * IF (tmp.sister_store_weight IS NULL, 1.0,tmp.sister_store_weight)
                                                          ) sales
@@ -4852,7 +4852,7 @@ setup_hier2_sales_fcst_need:
                                              tmp.hier2,
                                              tmp.eow_date,
                                              SUM(
-                                                   COALESCE (dsh.fcst_sales, 0)
+                                                   COALESCE (dsh.forecast_sales, 0)
                                                  * IF (tmp.weight IS NULL, 1.0, tmp.weight))    sales
                                         FROM hier2_sales_forecast dsh,
                                              alloc_calc_need_temp_1 tmp
@@ -4889,7 +4889,7 @@ setup_hier2_sales_fcst_need:
                                                      tmp.hier2,
                                                      tmp.eow_date,
                                                      SUM(
-                                                           COALESCE (dsh.fcst_sales, 0)
+                                                           COALESCE (dsh.forecast_sales, 0)
                                                          * IF (tmp.weight IS NULL, 1.0,tmp.weight)
                                                          * IF (tmp.sister_store_weight IS NULL, 1.0,tmp.sister_store_weight)
                                                          )    sales
@@ -4931,7 +4931,7 @@ setup_hier3_sales_fcst_need:
                                                  tmp.hier3,
                                                  tmp.eow_date,
                                                  SUM(
-                                                       COALESCE (dsh.fcst_sales, 0)
+                                                       COALESCE (dsh.forecast_sales, 0)
                                                      * IF (tmp.weight IS NULL, 1.0, tmp.weight)
                                                      )    sales
                                             FROM hier3_sales_forecast dsh,
@@ -4973,7 +4973,7 @@ setup_hier3_sales_fcst_need:
                                                      tmp.hier3,
                                                      tmp.eow_date,
                                                      SUM(
-                                                           COALESCE (dsh.fcst_sales, 0)
+                                                           COALESCE (dsh.forecast_sales, 0)
                                                          * IF (tmp.weight IS NULL, 1.0,tmp.weight)
                                                          * IF (tmp.sister_store_weight IS NULL, 1.0,tmp.sister_store_weight)
                                                          ) sales
@@ -5018,7 +5018,7 @@ setup_sku_sales_fcst_need:
                                                tmp.tran_item,
                                                tmp.eow_date,
                                                SUM(
-                                                     COALESCE (dsh.fcst_sales, 0)
+                                                     COALESCE (dsh.forecast_sales, 0)
                                                    * IF (tmp.weight IS NULL, 1.0, tmp.weight))
                                                    OVER (PARTITION BY tmp.alloc_no,
                                                                       tmp.rule_many_to_one_id,
@@ -5055,7 +5055,7 @@ setup_sku_sales_fcst_need:
                                                tmp.tran_item,
                                                tmp.eow_date,
                                                SUM(
-                                                     COALESCE (dsh.fcst_sales, 0)
+                                                     COALESCE (dsh.forecast_sales, 0)
                                                    * IF (tmp.weight IS NULL, 1.0, tmp.weight)
                                                    * IF (tmp.like_weight IS NULL, 1.0,tmp.like_weight))
                                                    OVER (PARTITION BY tmp.alloc_no,
@@ -5093,7 +5093,7 @@ setup_sku_sales_fcst_need:
                                                    tmp.tran_item,
                                                    tmp.eow_date,
                                                    SUM(
-                                                         COALESCE (dsh.fcst_sales, 0)
+                                                         COALESCE (dsh.forecast_sales, 0)
                                                        * IF (tmp.weight IS NULL, 1.0,tmp.weight)
                                                        * IF (tmp.sister_store_weight IS NULL, 1.0,tmp.sister_store_weight))
                                                        OVER (
@@ -5133,7 +5133,7 @@ setup_sku_sales_fcst_need:
                                                    tmp.tran_item,
                                                    tmp.eow_date,
                                                    SUM(
-                                                         COALESCE (dsh.fcst_sales, 0)
+                                                         COALESCE (dsh.forecast_sales, 0)
                                                        * IF (tmp.weight IS NULL, 1.0,tmp.weight)
                                                        * IF (tmp.like_weight IS NULL, 1.0,tmp.like_weight)
                                                        * IF (tmp.sister_store_weight IS NULL, 1.0,tmp.sister_store_weight))
@@ -5174,7 +5174,7 @@ setup_style_sales_fcst_need:
                                                         tmp.tran_item,
                                                         tmp.eow_date,
                                                         SUM(
-                                                              COALESCE (dsh.fcst_sales, 0)
+                                                              COALESCE (dsh.forecast_sales, 0)
                                                             * IF (tmp.weight IS NULL, 1.0, tmp.weight))
                                                             OVER (
                                                                 PARTITION BY tmp.alloc_no,
@@ -5211,7 +5211,7 @@ setup_style_sales_fcst_need:
                                                         tmp.tran_item,
                                                         tmp.eow_date,
                                                         SUM(
-                                                              COALESCE (dsh.fcst_sales, 0)
+                                                              COALESCE (dsh.forecast_sales, 0)
                                                             * IF (tmp.weight IS NULL, 1.0,tmp.weight)
                                                             * IF (tmp.like_weight IS NULL, 1.0,tmp.like_weight))
                                                             OVER (
@@ -5250,7 +5250,7 @@ setup_style_sales_fcst_need:
                                                    tmp.tran_item,
                                                    tmp.eow_date,
                                                    SUM(
-                                                         COALESCE (dsh.fcst_sales, 0)
+                                                         COALESCE (dsh.forecast_sales, 0)
                                                        * IF (tmp.weight IS NULL, 1.0,tmp.weight)
                                                        * IF (tmp.sister_store_weight IS NULL, 1.0,tmp.sister_store_weight))
                                                        OVER (
@@ -5290,7 +5290,7 @@ setup_style_sales_fcst_need:
                                                    tmp.tran_item,
                                                    tmp.eow_date,
                                                    SUM(
-                                                         COALESCE (dsh.fcst_sales, 0)
+                                                         COALESCE (dsh.forecast_sales, 0)
                                                        * IF (tmp.weight IS NULL, 1.0,tmp.weight)
                                                        * IF (tmp.like_weight IS NULL, 1.0,tmp.like_weight)
                                                        * IF (tmp.sister_store_weight IS NULL, 1.0,tmp.sister_store_weight))
