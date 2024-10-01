@@ -102,10 +102,13 @@ def decrypt_userdata(request):
                                 WHERE  au.user_id = %s;
                                 """
                 result = pd.read_sql(query,connection,params=(user_name,))
-                
                 if len(result) > 0:
                     result_list = result.to_dict("records")
                     result_dict = result_list[0]
+                    user_val    = result_dict["role_id"]
+                    print("user_val :",user_val)
+                    if user_val == 0 :
+                        return JsonResponse({"status": 500, "message": "This user has not been mapped to any roles."})
                     encrypted_password = result_dict.pop('PASSWORD')
                     print(result_dict)
                     if bcrypt.checkpw(password.encode('utf-8'), encrypted_password.encode('utf-8')):                        
@@ -190,3 +193,32 @@ def fetch_user_role(request):
                 return JsonResponse({"status": 500, "message": "No Data Found"})  
         except Exception as error:
             return JsonResponse({"status": 500, "message":str(error)})
+
+@csrf_exempt
+def userRegistration(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            data = data[0]     
+            username  = data['USERNAME']
+            fname     = data['FNAME']
+            lname     = data['LNAME']
+            mail      = data['MAIL']
+            password  = decrypt_password(data['PASSWORD'])
+            
+            mycursor = connection.cursor()
+            encrypted_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+                    
+            encrypted_password_str = encrypted_password.decode('utf-8')
+
+            query = '''INSERT INTO alloc_users(USER_ID,USER_NAME,FIRST_NAME,LAST_NAME,MAIL,PASSWORD,ROLE_ID,CREATE_ID) 
+                                        VALUES(%s,%s,%s,%s,%s,%s,'0','SYSTEM'); 
+                    '''
+            mycursor.execute(query,(username,username,fname,lname,mail,encrypted_password_str))
+
+            return JsonResponse({"status": 200, "message": "USER REGISTERED SUCCESSFULLY"}, content_type="application/json", status=200,safe=False)
+
+        except Exception as error:
+            return JsonResponse({"status": 500, "message": str(error)})
+        finally:
+            connection.commit()        
