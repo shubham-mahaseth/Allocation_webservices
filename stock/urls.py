@@ -233,6 +233,7 @@ from stock_ledger_models.views_admin_roles import (
     encrypt_userdata,
     decrypt_userdata,
     userRegistration,
+    resetInfo,
     
 )
 
@@ -544,4 +545,5 @@ urlpatterns = [
     path('updpwd_usr/',encrypt_userdata),
     path('logAuth/', decrypt_userdata),
     path('usrRegt/',userRegistration),
+    path('resetInfo/',resetInfo),
 ]                         

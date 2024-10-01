@@ -76,7 +76,53 @@ def encrypt_userdata(request):
         except Exception as error:
             return JsonResponse({"status": 500, "message":str(error)})
         
-
+@csrf_exempt
+def resetInfo(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            data = data[0]
+            username  = data['USERNAME']
+            fname     = data['FNAME']
+            lname     = data['LNAME']
+            mail      = data['MAIL']
+            password  = decrypt_password(data['PASSWORD'])
+            mycursor = connection.cursor()
+            
+            query = """
+                    SELECT 
+                        1
+                    FROM 
+                        alloc_users 
+                    WHERE 
+                        user_name = %s AND
+                        first_name = %s AND
+                        last_name = %s AND
+                        mail = %s;
+                    """
+            mycursor.execute(query,(username,fname,lname,mail))
+            
+            if mycursor.rowcount > 0:
+                print("DETAILS FOUND.")
+                encrypted_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+                    
+                encrypted_password_str = encrypted_password.decode('utf-8')
+                
+                query = 'update alloc_users set password = "{}"'.format(str(encrypted_password_str))+" where user_id = '{}' ;".format(username)
+                mycursor.execute(query)
+            
+                return JsonResponse({"status": 200, "message": "Password Changed!"}) 
+            else:
+                return JsonResponse({"status": 500, "message": "User information not found."})  
+            
+            # salt = bcrypt.gensalt()
+            # hashed_password = bcrypt.hashpw(password.encode('utf-8'), salt)
+            
+            # # Encrypt the password
+            # encrypted_password = make_password(password)
+            
+        except Exception as error:
+            return JsonResponse({"status": 500, "message":str(error)})
 @csrf_exempt
 def decrypt_userdata(request):
     if request.method == 'POST':
@@ -121,9 +167,11 @@ def decrypt_userdata(request):
                     else:
                         return JsonResponse([{"AUTH": False,"INFO":[]}], content_type="application/json",safe=False)
                 else:
-                    return JsonResponse({"status": 500, "message": "NO DATA FOUND"})  
+                     return JsonResponse([{"AUTH": False,"INFO":[]}], content_type="application/json",safe=False)
+                    # return JsonResponse({"status": 500, "message": "NO DATA FOUND"})  
             else:
-                return JsonResponse({"status": 500, "message": "NO DATA FOUND"})              
+                 return JsonResponse([{"AUTH": False,"INFO":[]}], content_type="application/json",safe=False)
+                # return JsonResponse({"status": 500, "message": "NO DATA FOUND"})              
         except Exception as error:
             return JsonResponse({"status": 500, "message":str(error)})
 @csrf_exempt
@@ -207,6 +255,15 @@ def userRegistration(request):
             password  = decrypt_password(data['PASSWORD'])
             
             mycursor = connection.cursor()
+            query = """
+                    SELECT 1
+                      FROM alloc_users 
+                     WHERE user_name = %s OR
+                           mail = %s;
+                    """
+            mycursor.execute(query,(username,mail,))
+            if mycursor.rowcount:
+                return JsonResponse({"status": 500, "message": "User Information already exists."})
             encrypted_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
                     
             encrypted_password_str = encrypted_password.decode('utf-8')
